@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 720" role="img" aria-labelledby="title desc">
+  <title id="title">HomePiBoard</title>
+  <desc id="desc">House-shaped HomePiBoard logo with colorful dashboard bars</desc>
+  <rect width="720" height="720" rx="44" fill="#202731"/>
+  <g fill="none" stroke="#f5f7f8" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke-width="30" d="M166 252 360 97l194 155v273c0 20-16 36-36 36H202c-20 0-36-16-36-36z"/>
+    <path stroke-width="30" d="M166 252h-24l218-175 218 175h-24M244 211v-73h52"/>
+  </g>
+  <g fill="none" stroke-linecap="round">
+    <path stroke="#41b9d2" stroke-width="29" d="M260 233v55"/>
+    <path stroke="#a9dd52" stroke-width="29" d="M304 201v87"/>
+    <path stroke="#2eacc8" stroke-width="29" d="M348 201h55"/>
+    <path stroke="#b2e25d" stroke-width="29" d="M348 244h98"/>
+    <path stroke="#f8b679" stroke-width="29" d="M348 284h98"/>
+  </g>
+  <circle cx="458" cy="211" r="14" fill="#f8b679"/>
+  <g fill="#f5f7f8">
+    <path d="M249 337v108h50v-42h36v42h49V337h-49v39h-36v-39z"/>
+    <path d="M431 337h45v108h-45z"/>
+    <path d="M478 412h45v33h-45z"/>
+  </g>
+  <g fill="#8e969f">
+    <rect x="247" y="474" width="7" height="25" rx="3"/><rect x="262" y="468" width="7" height="31" rx="3"/><rect x="277" y="474" width="7" height="25" rx="3"/><rect x="292" y="468" width="7" height="31" rx="3"/><rect x="307" y="474" width="7" height="25" rx="3"/><rect x="322" y="468" width="7" height="31" rx="3"/><rect x="337" y="474" width="7" height="25" rx="3"/><rect x="352" y="468" width="7" height="31" rx="3"/>
+  </g>
+  <text x="360" y="610" fill="#f5f7f8" font-family="Arial, Helvetica, sans-serif" font-size="56" font-weight="700" text-anchor="middle">HomePiBoard</text>
+  <text x="360" y="650" fill="#9ba3ad" font-family="Arial, Helvetica, sans-serif" font-size="20" letter-spacing="4" text-anchor="middle">PI SIGNAGE DASHBOARD</text>
+</svg>

@@ -47,6 +47,7 @@ button, input { font: inherit; }
 
 .brand-mark, .header-status, .widget-heading { display: flex; align-items: center; }
 .brand-mark { gap: 10px; color: var(--ink); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+.brand-logo { display: block; width: 48px; height: 48px; border-radius: 7px; object-fit: cover; }
 .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--acid); box-shadow: 0 0 14px rgba(201, 242, 105, 0.75); }
 .header-status { gap: 16px; color: var(--muted); font-size: 0.78rem; letter-spacing: 0.04em; }
 .weather-status { color: var(--warm); white-space: nowrap; }
@@ -105,6 +106,7 @@ h1 em { color: var(--acid); font-style: normal; }
 .admin-shell { min-height: 100vh; padding: clamp(20px, 4vw, 56px); }
 .admin-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
 .admin-header a { color: inherit; }
+.admin-header .brand-logo { width: 60px; height: 60px; }
 .back-link { color: var(--muted) !important; font-size: 0.78rem; text-decoration: none; }
 .back-link:hover { color: var(--acid) !important; }
 .admin-content { width: min(980px, 100%); display: grid; grid-template-columns: 0.9fr 1fr; gap: clamp(48px, 10vw, 140px); margin: clamp(70px, 12vh, 150px) auto 0; }
@@ -118,6 +120,10 @@ h1 em { color: var(--acid); font-style: normal; }
 .admin-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 12px; }
 .widget-editors { display: flex; flex-direction: column; gap: 12px; }
 .widget-editor { display: flex; flex-direction: column; gap: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 3px; background: rgba(12, 14, 12, 0.45); }
+.widget-editor { cursor: grab; transition: border-color 160ms ease, opacity 160ms ease; }
+.widget-editor:active { cursor: grabbing; }
+.widget-editor.is-dragging { opacity: 0.45; }
+.widget-editor.is-drop-target { border-color: var(--acid); }
 .widget-editor label { font-size: 0.76rem; }
 .widget-editor-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 4px; color: var(--ink); }
 .remove-widget { border: 0; padding: 0; color: var(--muted); background: transparent; cursor: pointer; font-size: 0.72rem; }

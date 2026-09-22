@@ -16,7 +16,7 @@
 
 ## Als Nächstes
 
-- [ ] Echtes Drag-and-drop für freie Widget-Positionen ergänzen
+- [x] Drag-and-drop zum Sortieren der Widget-Reihenfolge ergänzen
 - [ ] Weitere kleine Header-Module ergänzen: Netzwerkstatus
 - [ ] Widget-Typen für Bilder, Text und Diashows ergänzen
 - [ ] Admin-Ansicht mit PIN-Schutz absichern

@@ -1,5 +1,7 @@
 # HomePiBoard
 
+![HomePiBoard Logo](/homepiboard-logo.svg)
+
 Eine schlanke Digital-Signage-Anzeige für zu Hause. Die Anwendung ist für einen Raspberry Pi 3B mit Chromium im Kiosk-Modus gedacht.
 
 ## Lokal starten
