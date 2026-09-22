@@ -109,9 +109,20 @@ function renderAdminPage() {
 
   function bindEditorInteractions() {
     editorList.querySelectorAll<HTMLButtonElement>('[data-remove-id]').forEach((button) => {
-      button.onclick = () => button.closest('.widget-editor')?.remove()
+      const editor = button.closest<HTMLElement>('.widget-editor')
+      if (!editor || editor.dataset.interactionsBound === 'true') return
+      button.onclick = (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        editor.remove()
+      }
     })
     editorList.querySelectorAll<HTMLElement>('.widget-editor').forEach((editor) => {
+      if (editor.dataset.interactionsBound === 'true') return
+      editor.dataset.interactionsBound = 'true'
+      editor.querySelectorAll<HTMLElement>('input, button, select').forEach((control) => {
+        control.addEventListener('pointerdown', (event) => event.stopPropagation())
+      })
       editor.addEventListener('dragstart', (event) => {
         editor.classList.add('is-dragging')
         event.dataTransfer?.setData('text/plain', editor.dataset.widgetId || '')
