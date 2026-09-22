@@ -60,7 +60,7 @@ function renderDisplayPage() {
   const widgets = settings.widgets.length ? settings.widgets.map((widget) => renderWidget(widget)).join('') : '<div class="empty-display"><span class="widget-kicker">Noch keine Widgets</span><a href="/admin">Admin öffnen <span>↗</span></a></div>'
   document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <main class="signage-shell">
-    <header class="header-bar"><div class="brand-mark"><img class="brand-logo" src="/homepiboard-logo.svg" alt="HomePiBoard" /></div><div class="header-status"><span>${escapeHtml(settings.location)}</span><span class="status-divider"></span><span class="weather-status" id="weather"></span><time id="date">--.--.----</time><strong id="clock">--:--</strong><a class="settings-button" href="/admin" aria-label="Anzeige konfigurieren">⚙</a></div></header>
+    <header class="header-bar"><div class="brand-mark"><img class="brand-logo" src="/homepiboard-logo.svg" alt="HomePiBoard" /></div><div class="header-status"><span class="weather-location">${escapeHtml(settings.weatherCity || settings.location)}</span><span class="status-divider"></span><span class="weather-status" id="weather"></span><time id="date">--.--.----</time><strong id="clock">--:--</strong><a class="settings-button" href="/admin" aria-label="Anzeige konfigurieren">⚙</a></div></header>
     <section class="widget-grid" aria-label="Anzeigen-Widgets">${widgets}</section>
   </main>`
 
@@ -83,9 +83,9 @@ async function loadWeather(city: string, target: HTMLElement) {
     const places = await search.json() as { results?: Array<{ latitude: number; longitude: number }> }
     const place = places.results?.[0]
     if (!place) return
-    const forecast = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,weather_code&timezone=auto`)
-    const data = await forecast.json() as { current?: { temperature_2m: number; weather_code: number } }
-    if (data.current) target.textContent = `${Math.round(data.current.temperature_2m)}° · ${weatherSymbol(data.current.weather_code)}`
+    const forecast = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,relative_humidity_2m,weather_code&timezone=auto`)
+    const data = await forecast.json() as { current?: { temperature_2m: number; relative_humidity_2m: number; weather_code: number } }
+    if (data.current) target.textContent = `${Math.round(data.current.temperature_2m)}° · ${weatherSymbol(data.current.weather_code)} · ${data.current.relative_humidity_2m}% Luftfeuchte`
   } catch {
     target.textContent = ''
   }
@@ -97,7 +97,7 @@ function renderWidgetEditor(widget: WebWidget, index: number) {
 
 function renderAdminPage() {
   const settings = loadSettings()
-  document.querySelector<HTMLDivElement>('#app')!.innerHTML = `<main class="admin-shell"><header class="admin-header"><a class="brand-mark" href="/"><img class="brand-logo" src="/homepiboard-logo.svg" alt="HomePiBoard" /></a><a class="back-link" href="/">Anzeige öffnen <span>↗</span></a></header><section class="admin-content"><div class="admin-intro"><div><span class="widget-kicker">Live-Layout</span><h1>Anzeige <em>bearbeiten.</em></h1></div><p>Widgets ziehen, Größe anpassen und Layout speichern.</p></div><form class="admin-form" id="admin-form"><div class="admin-global-fields"><label>Bezeichnung <span>Text im Header</span><input id="admin-location" maxlength="24" value="${escapeHtml(settings.location)}" /></label><label>Wetterort <span>Optional, zum Beispiel Berlin</span><input id="admin-weather-city" maxlength="40" value="${escapeHtml(settings.weatherCity)}" placeholder="Berlin" /></label></div><div class="widget-editors" id="widget-editors">${settings.widgets.map(renderWidgetEditor).join('')}</div><button class="add-widget" id="add-widget" type="button">+ Web-Widget hinzufügen</button><div class="admin-actions"><button class="reset-button" id="reset-button" type="button">Zurücksetzen</button><button class="save-button" type="submit">Speichern</button></div><p class="save-message" id="save-message" role="status"></p></form></section></main>`
+  document.querySelector<HTMLDivElement>('#app')!.innerHTML = `<main class="admin-shell"><header class="admin-header"><a class="brand-mark" href="/"><img class="brand-logo" src="/homepiboard-logo.svg" alt="HomePiBoard" /></a><a class="back-link" href="/">Anzeige öffnen <span>↗</span></a></header><section class="admin-content"><div class="admin-intro"><span class="widget-kicker">Edit Mode</span><h1>HomePiBoard <em>EDIT MODE</em></h1></div><form class="admin-form" id="admin-form"><div class="admin-global-fields"><label>Bezeichnung <span>Text im Header</span><input id="admin-location" maxlength="24" value="${escapeHtml(settings.location)}" /></label><label>Wetterort <span>Optional, zum Beispiel Berlin</span><input id="admin-weather-city" maxlength="40" value="${escapeHtml(settings.weatherCity)}" placeholder="Berlin" /></label></div><div class="widget-editors" id="widget-editors">${settings.widgets.map(renderWidgetEditor).join('')}</div><button class="add-widget" id="add-widget" type="button">+ Web-Widget hinzufügen</button><div class="admin-actions"><button class="reset-button" id="reset-button" type="button">Zurücksetzen</button><button class="save-button" type="submit">Speichern</button></div><p class="save-message" id="save-message" role="status"></p></form></section></main>`
 
   const editorList = document.querySelector<HTMLElement>('#widget-editors')!
   const message = document.querySelector<HTMLElement>('#save-message')!
