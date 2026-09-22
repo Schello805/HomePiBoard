@@ -12,6 +12,7 @@
 - [x] Separate Admin-Seite unter `/admin` ergänzen
 - [x] Mehrere Web-Widgets mit eigenen Titeln, URLs und Größen verwalten
 - [x] Widget-Breite und -Höhe frei über den Resize-Griff verändern
+- [x] Feineres 24×8-Resize-Raster für präzise Widget-Größen ergänzen
 - [x] Optionales Wetter-/Temperaturmodul für den kleinen Header ergänzen
 - [x] Mobile Darstellung und Raspberry-taugliche CSS-Struktur ergänzen
 

@@ -1,9 +1,9 @@
 import './style.css'
 
 type WebWidget = { id: string; title: string; url: string; columns: number; rows: number }
-type DisplaySettings = { location: string; weatherCity: string; widgets: WebWidget[] }
+type DisplaySettings = { version: 2; location: string; weatherCity: string; widgets: WebWidget[] }
 
-const defaultSettings: DisplaySettings = { location: 'Zuhause', weatherCity: '', widgets: [] }
+const defaultSettings: DisplaySettings = { version: 2, location: 'Zuhause', weatherCity: '', widgets: [] }
 const settingsKey = 'homeboard-settings'
 
 function loadSettings(): DisplaySettings {
@@ -12,18 +12,19 @@ function loadSettings(): DisplaySettings {
 
   try {
     const parsed = JSON.parse(storedSettings) as Partial<DisplaySettings> & { url?: string; size?: string }
+    const legacyLayout = parsed.version !== 2
     const widgets: WebWidget[] = Array.isArray(parsed.widgets)
       ? parsed.widgets.map((widget, index) => ({
           id: widget.id || `widget-${index + 1}`,
           title: widget.title || `Web-Widget ${index + 1}`,
           url: widget.url || '',
-          columns: Math.max(1, Math.min(12, Number(widget.columns) || 6)),
-          rows: Math.max(1, Math.min(4, Number(widget.rows) || 1)),
+          columns: Math.max(1, Math.min(24, (Number(widget.columns) || 6) * (legacyLayout ? 2 : 1))),
+          rows: Math.max(1, Math.min(8, (Number(widget.rows) || 1) * (legacyLayout ? 2 : 1))),
         }))
       : parsed.url
-        ? [{ id: 'widget-1', title: 'Web-Widget', url: parsed.url, columns: parsed.size === 'wide' ? 12 : 6, rows: parsed.size === 'tall' ? 2 : 1 }]
+        ? [{ id: 'widget-1', title: 'Web-Widget', url: parsed.url, columns: parsed.size === 'wide' ? 24 : 12, rows: parsed.size === 'tall' ? 4 : 2 }]
         : []
-    return { location: parsed.location || defaultSettings.location, weatherCity: parsed.weatherCity || '', widgets }
+    return { version: 2, location: parsed.location || defaultSettings.location, weatherCity: parsed.weatherCity || '', widgets }
   } catch {
     localStorage.removeItem(settingsKey)
     return { ...defaultSettings }
@@ -103,7 +104,7 @@ function renderAdminPage() {
   const message = document.querySelector<HTMLElement>('#save-message')!
   const weatherCityInput = document.querySelector<HTMLInputElement>('#admin-weather-city')!
   document.querySelector<HTMLButtonElement>('#add-widget')!.addEventListener('click', () => {
-    const nextWidget: WebWidget = { id: `widget-${Date.now()}`, title: `Web-Widget ${editorList.children.length + 1}`, url: '', columns: 6, rows: 1 }
+    const nextWidget: WebWidget = { id: `widget-${Date.now()}`, title: `Web-Widget ${editorList.children.length + 1}`, url: '', columns: 12, rows: 2 }
     editorList.insertAdjacentHTML('beforeend', renderWidgetEditor(nextWidget, editorList.children.length))
     bindEditorInteractions()
   })
@@ -146,15 +147,15 @@ function renderAdminPage() {
         event.stopPropagation()
         const startX = event.clientX
         const startY = event.clientY
-        const startColumns = Number(editor.dataset.columns) || 6
-        const startRows = Number(editor.dataset.rows) || 1
+        const startColumns = Number(editor.dataset.columns) || 12
+        const startRows = Number(editor.dataset.rows) || 2
         const gridStyle = getComputedStyle(editorList)
         const gap = Number.parseFloat(gridStyle.columnGap) || 16
-        const columnWidth = (editorList.clientWidth - gap * 11) / 12
-        const rowHeight = 316
+        const columnWidth = (editorList.clientWidth - gap * 23) / 24
+        const rowHeight = 166
         const move = (moveEvent: PointerEvent) => {
-          const columns = Math.max(1, Math.min(12, startColumns + Math.round((moveEvent.clientX - startX) / (columnWidth + gap))))
-          const rows = Math.max(1, Math.min(4, startRows + Math.round((moveEvent.clientY - startY) / rowHeight)))
+          const columns = Math.max(1, Math.min(24, startColumns + Math.round((moveEvent.clientX - startX) / (columnWidth + gap))))
+          const rows = Math.max(1, Math.min(8, startRows + Math.round((moveEvent.clientY - startY) / rowHeight)))
           editor.dataset.columns = String(columns)
           editor.dataset.rows = String(rows)
           editor.style.gridColumn = `span ${columns}`
@@ -178,10 +179,10 @@ function renderAdminPage() {
       id: editor.dataset.widgetId!,
       title: editor.querySelector<HTMLInputElement>('[data-field="title"]')!.value.trim() || 'Web-Widget',
       url: editor.querySelector<HTMLInputElement>('[data-field="url"]')!.value.trim(),
-      columns: Number(editor.dataset.columns) || 6,
-      rows: Number(editor.dataset.rows) || 1,
+      columns: Number(editor.dataset.columns) || 12,
+      rows: Number(editor.dataset.rows) || 2,
     }))
-    saveSettings({ location: document.querySelector<HTMLInputElement>('#admin-location')!.value.trim() || defaultSettings.location, weatherCity: weatherCityInput.value.trim(), widgets })
+    saveSettings({ version: 2, location: document.querySelector<HTMLInputElement>('#admin-location')!.value.trim() || defaultSettings.location, weatherCity: weatherCityInput.value.trim(), widgets })
     message.textContent = 'Gespeichert. Die Anzeige übernimmt die Widgets beim nächsten Öffnen.'
   })
 
