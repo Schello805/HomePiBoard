@@ -43,7 +43,7 @@ button, input { font: inherit; }
   border-bottom: 1px solid var(--line);
   padding-bottom: 18px;
   animation: rise-in 700ms ease both;
-  margin: 0 2vw;
+  margin: 0;
 }
 
 .brand-mark, .header-status, .widget-heading { display: flex; align-items: center; }
