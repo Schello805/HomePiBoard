@@ -29,10 +29,10 @@ button, input { font: inherit; }
 
 .signage-shell {
   min-height: 100vh;
-  padding: clamp(20px, 4vw, 56px);
+  padding: 10px 0.1vw 0.1vh;
   display: flex;
   flex-direction: column;
-  gap: clamp(24px, 4vw, 48px);
+  gap: 10px;
 }
 
 .header-bar {
@@ -43,6 +43,7 @@ button, input { font: inherit; }
   border-bottom: 1px solid var(--line);
   padding-bottom: 18px;
   animation: rise-in 700ms ease both;
+  margin: 0 2vw;
 }
 
 .brand-mark, .header-status, .widget-heading { display: flex; align-items: center; }
@@ -84,6 +85,9 @@ h1 em { color: var(--acid); font-style: normal; }
 .live-dot::before { content: ''; display: inline-block; width: 5px; height: 5px; margin: 0 7px 1px 0; border-radius: 50%; background: var(--acid); }
 .iframe-widget { display: flex; flex-direction: column; gap: 22px; }
 .kiosk-widget .widget-heading { display: none; }
+.kiosk-widget { padding: 0; border-radius: 2px; }
+.kiosk-widget .iframe-placeholder { border: 0; }
+.kiosk-widget .iframe-placeholder iframe { display: block; min-height: 0; }
 .iframe-placeholder { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; border: 1px dashed rgba(242, 238, 230, 0.22); color: var(--muted); text-align: center; }
 .iframe-placeholder strong { color: var(--ink); font-size: 1.05rem; font-weight: 500; }
 .placeholder-icon { color: var(--acid); font-size: 1.8rem; line-height: 1; }
@@ -151,7 +155,7 @@ h1 em { color: var(--acid); font-style: normal; }
 @keyframes rise-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (max-width: 720px) {
-  .signage-shell { padding: 18px; gap: 28px; }
+  .signage-shell { padding: 8px 0.1vw 0.1vh; gap: 8px; }
   .header-bar { align-items: flex-start; gap: 14px; }
   .header-status { flex-wrap: wrap; justify-content: flex-end; gap: 8px 12px; }
   .status-divider { display: none; }
