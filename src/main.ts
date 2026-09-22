@@ -52,22 +52,18 @@ function escapeHtml(value: string) {
 
 function renderWidget(widget: WebWidget) {
   const content = widget.url
-    ? `<iframe src="${escapeHtml(widget.url)}" title="${escapeHtml(widget.title)}" loading="lazy"></iframe>`
+    ? `<iframe src="${escapeHtml(widget.url)}" title="${escapeHtml(widget.title)}" loading="lazy" scrolling="no"></iframe>`
     : '<span class="placeholder-icon">↗</span><strong>URL fehlt</strong><span>In der Admin-Seite konfigurieren</span>'
   return `<article class="widget iframe-widget${widgetClass(widget.size)}"><div class="widget-heading"><span>${escapeHtml(widget.title)}</span><span class="live-dot">LIVE</span></div><div class="iframe-placeholder">${content}</div></article>`
 }
 
 function renderDisplayPage() {
   const settings = loadSettings()
-  const widgets = settings.widgets.length ? settings.widgets.map(renderWidget).join('') : '<article class="widget iframe-widget"><div class="widget-heading"><span>Web-Widget</span><span class="live-dot">BEREIT</span></div><div class="iframe-placeholder"><span class="placeholder-icon">↗</span><strong>Deine Inhalte</strong><span>URL in der Admin-Seite eintragen</span></div></article>'
+  const widgets = settings.widgets.length ? settings.widgets.map(renderWidget).join('') : '<div class="empty-display"><span class="widget-kicker">Noch keine Widgets</span><a href="/admin">Admin öffnen <span>↗</span></a></div>'
   document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <main class="signage-shell">
     <header class="header-bar"><div class="brand-mark"><img class="brand-logo" src="/homepiboard-logo.svg" alt="HomePiBoard" /></div><div class="header-status"><span>${escapeHtml(settings.location)}</span><span class="status-divider"></span><span class="weather-status" id="weather"></span><time id="date">--.--.----</time><strong id="clock">--:--</strong><a class="settings-button" href="/admin" aria-label="Anzeige konfigurieren">⚙</a></div></header>
-    <section class="widget-grid" aria-label="Anzeigen-Widgets">
-      <article class="widget widget-featured"><div class="widget-kicker">Heute</div><h1>Ein ruhiger<br><em>Überblick.</em></h1><p>Deine Startseite für Zuhause.</p><span class="widget-index">01 / ${String(settings.widgets.length + 2).padStart(2, '0')}</span></article>
-      ${widgets}
-      <article class="widget note-widget"><div class="widget-heading"><span>Notiz</span><span class="widget-menu">•••</span></div><p class="note-copy">Platz für einen kurzen Hinweis, eine Nachricht oder dein nächstes Vorhaben.</p><span class="note-date">Zuletzt bearbeitet · heute</span></article>
-    </section>
+    <section class="widget-grid" aria-label="Anzeigen-Widgets">${widgets}</section>
   </main>`
 
   const clock = document.querySelector<HTMLElement>('#clock')!
