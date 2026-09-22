@@ -77,6 +77,9 @@ h1 em { color: var(--acid); font-style: normal; }
 .widget-featured p { margin: 0 0 26px; color: var(--muted); font-size: 0.9rem; }
 .widget-index { align-self: flex-end; color: var(--acid); }
 .widget-heading { justify-content: space-between; }
+.admin-widget .widget-heading { gap: 12px; }
+.card-remove { margin-left: auto; border: 0; padding: 0 2px; color: var(--muted); background: transparent; cursor: pointer; font-size: 1.15rem; line-height: 1; }
+.card-remove:hover { color: var(--warm); }
 .live-dot { color: var(--acid); font-size: 0.65rem; letter-spacing: 0.12em; }
 .live-dot::before { content: ''; display: inline-block; width: 5px; height: 5px; margin: 0 7px 1px 0; border-radius: 50%; background: var(--acid); }
 .iframe-widget { display: flex; flex-direction: column; gap: 22px; }
