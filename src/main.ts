@@ -1,6 +1,7 @@
 import './style.css'
 
-type WebWidget = { id: string; title: string; url: string; columns: number; rows: number }
+type WidgetType = 'web' | 'calendar' | 'text' | 'image'
+type WebWidget = { id: string; type: WidgetType; title: string; url: string; columns: number; rows: number }
 type DisplaySettings = { version: 2; location: string; weatherCity: string; widgets: WebWidget[] }
 
 const defaultSettings: DisplaySettings = { version: 2, location: 'Zuhause', weatherCity: '', widgets: [] }
@@ -16,13 +17,14 @@ function loadSettings(): DisplaySettings {
     const widgets: WebWidget[] = Array.isArray(parsed.widgets)
       ? parsed.widgets.map((widget, index) => ({
           id: widget.id || `widget-${index + 1}`,
+          type: widget.type === 'calendar' || widget.type === 'text' || widget.type === 'image' ? widget.type : 'web',
           title: widget.title || `Web-Widget ${index + 1}`,
           url: widget.url || '',
           columns: Math.max(1, Math.min(24, (Number(widget.columns) || 6) * (legacyLayout ? 2 : 1))),
           rows: Math.max(1, Math.min(8, (Number(widget.rows) || 1) * (legacyLayout ? 2 : 1))),
         }))
       : parsed.url
-        ? [{ id: 'widget-1', title: 'Web-Widget', url: parsed.url, columns: parsed.size === 'wide' ? 24 : 12, rows: parsed.size === 'tall' ? 4 : 2 }]
+        ? [{ id: 'widget-1', type: 'web', title: 'Web-Widget', url: parsed.url, columns: parsed.size === 'wide' ? 24 : 12, rows: parsed.size === 'tall' ? 4 : 2 }]
         : []
     return { version: 2, location: parsed.location || defaultSettings.location, weatherCity: parsed.weatherCity || '', widgets }
   } catch {
@@ -47,11 +49,25 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]!)
 }
 
+function calendarMarkup() {
+  const now = new Date()
+  const month = now.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).getDay()
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  const offset = firstDay === 0 ? 6 : firstDay - 1
+  const cells = Array.from({ length: offset + daysInMonth }, (_, index) => index < offset ? '<span></span>' : `<span class="calendar-day${index - offset + 1 === now.getDate() ? ' today' : ''}">${index - offset + 1}</span>`).join('')
+  return `<div class="calendar-widget"><strong>${month}</strong><div class="calendar-weekdays"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div><div class="calendar-days">${cells}</div></div>`
+}
+
 function renderWidget(widget: WebWidget, editable = false, index = 0) {
-  const content = widget.url
-    ? `<iframe src="${escapeHtml(widget.url)}" title="${escapeHtml(widget.title)}" loading="lazy" scrolling="no"></iframe>`
-    : '<span class="placeholder-icon">↗</span><strong>URL fehlt</strong><span>In der Admin-Seite konfigurieren</span>'
-  const editor = editable ? `<div class="widget-edit-panel"><div class="widget-editor-top"><strong>⠿ Widget ${index + 1}</strong><span class="dimension-label">${widget.columns} × ${widget.rows}</span></div><label>Titel<input data-field="title" value="${escapeHtml(widget.title)}" maxlength="30" /></label><label>URL<input data-field="url" type="url" value="${escapeHtml(widget.url)}" placeholder="https://example.com" /></label></div><span class="resize-handle" title="Widget-Größe ziehen" aria-label="Widget-Größe ziehen"></span>` : ''
+  const content = widget.type === 'calendar'
+    ? widget.url ? `<iframe src="${escapeHtml(widget.url)}" title="${escapeHtml(widget.title)}" loading="lazy" scrolling="no"></iframe>` : calendarMarkup()
+    : widget.type === 'text'
+      ? `<p class="text-widget-content">${escapeHtml(widget.url || 'Deinen Text hier eintragen')}</p>`
+      : widget.type === 'image'
+        ? widget.url ? `<img class="image-widget-content" src="${escapeHtml(widget.url)}" alt="${escapeHtml(widget.title)}" />` : '<span class="placeholder-icon">▧</span><strong>Bild-URL fehlt</strong>'
+        : widget.url ? `<iframe src="${escapeHtml(widget.url)}" title="${escapeHtml(widget.title)}" loading="lazy" scrolling="no"></iframe>` : '<span class="placeholder-icon">↗</span><strong>URL fehlt</strong><span>Webseiten-URL eintragen</span>'
+  const editor = editable ? `<div class="widget-edit-panel"><div class="widget-editor-top"><strong>⠿ Widget ${index + 1}</strong><span class="dimension-label">${widget.columns} × ${widget.rows}</span></div><label>Typ<select data-field="type"><option value="web" ${widget.type === 'web' ? 'selected' : ''}>Webseite</option><option value="calendar" ${widget.type === 'calendar' ? 'selected' : ''}>Kalender</option><option value="text" ${widget.type === 'text' ? 'selected' : ''}>Text</option><option value="image" ${widget.type === 'image' ? 'selected' : ''}>Bild</option></select></label><label>Titel<input data-field="title" value="${escapeHtml(widget.title)}" maxlength="30" /></label><label>Inhalt / URL<input data-field="url" value="${escapeHtml(widget.url)}" placeholder="${widget.type === 'text' ? 'Text eingeben' : 'https://example.com'}" /></label></div><span class="resize-handle" title="Widget-Größe ziehen" aria-label="Widget-Größe ziehen"></span>` : ''
   const removeButton = editable ? `<button class="card-remove remove-widget" type="button" data-remove-id="${escapeHtml(widget.id)}" aria-label="Widget entfernen">×</button>` : ''
   return `<article class="widget iframe-widget${editable ? ' admin-widget widget-editor' : ' kiosk-widget'}" style="grid-column: span ${widget.columns}; grid-row: span ${widget.rows};"${editable ? ` draggable="true" data-widget-id="${escapeHtml(widget.id)}" data-columns="${widget.columns}" data-rows="${widget.rows}"` : ''}><div class="widget-heading"><span>${escapeHtml(widget.title)}</span><span class="live-dot">LIVE</span>${removeButton}</div><div class="iframe-placeholder">${content}</div>${editor}</article>`
 }
@@ -104,7 +120,7 @@ function renderAdminPage() {
   const message = document.querySelector<HTMLElement>('#save-message')!
   const weatherCityInput = document.querySelector<HTMLInputElement>('#admin-weather-city')!
   document.querySelector<HTMLButtonElement>('#add-widget')!.addEventListener('click', () => {
-    const nextWidget: WebWidget = { id: `widget-${Date.now()}`, title: `Web-Widget ${editorList.children.length + 1}`, url: '', columns: 12, rows: 2 }
+    const nextWidget: WebWidget = { id: `widget-${Date.now()}`, type: 'web', title: `Web-Widget ${editorList.children.length + 1}`, url: '', columns: 12, rows: 2 }
     editorList.insertAdjacentHTML('beforeend', renderWidgetEditor(nextWidget, editorList.children.length))
     bindEditorInteractions()
   })
@@ -177,13 +193,16 @@ function renderAdminPage() {
     event.preventDefault()
     const widgets = [...editorList.querySelectorAll<HTMLElement>('.widget-editor')].map((editor) => ({
       id: editor.dataset.widgetId!,
+      type: editor.querySelector<HTMLSelectElement>('[data-field="type"]')!.value as WidgetType,
       title: editor.querySelector<HTMLInputElement>('[data-field="title"]')!.value.trim() || 'Web-Widget',
       url: editor.querySelector<HTMLInputElement>('[data-field="url"]')!.value.trim(),
       columns: Number(editor.dataset.columns) || 12,
       rows: Number(editor.dataset.rows) || 2,
     }))
     saveSettings({ version: 2, location: document.querySelector<HTMLInputElement>('#admin-location')!.value.trim() || defaultSettings.location, weatherCity: weatherCityInput.value.trim(), widgets })
-    message.textContent = 'Gespeichert. Die Anzeige übernimmt die Widgets beim nächsten Öffnen.'
+    message.textContent = 'Gespeichert. Die Anzeige übernimmt die Änderungen beim nächsten Öffnen.'
+    message.classList.add('is-visible')
+    window.setTimeout(() => message.classList.remove('is-visible'), 4200)
   })
 
   document.querySelector<HTMLButtonElement>('#reset-button')!.addEventListener('click', () => {

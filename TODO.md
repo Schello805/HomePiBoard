@@ -13,6 +13,7 @@
 - [x] Mehrere Web-Widgets mit eigenen Titeln, URLs und Größen verwalten
 - [x] Widget-Breite und -Höhe frei über den Resize-Griff verändern
 - [x] Feineres 24×8-Resize-Raster für präzise Widget-Größen ergänzen
+- [x] Widget-Typen für Webseite, Kalender, Text und Bild ergänzen
 - [x] Optionales Wetter-/Temperaturmodul für den kleinen Header ergänzen
 - [x] Mobile Darstellung und Raspberry-taugliche CSS-Struktur ergänzen
 
@@ -20,7 +21,7 @@
 
 - [x] Drag-and-drop zum Sortieren der Widget-Reihenfolge ergänzen
 - [ ] Weitere kleine Header-Module ergänzen: Netzwerkstatus
-- [ ] Widget-Typen für Bilder, Text und Diashows ergänzen
+- [ ] Diashow-Widget ergänzen
 - [ ] Admin-Ansicht mit PIN-Schutz absichern
 - [ ] Konfiguration serverseitig auf dem Raspberry Pi speichern
 - [ ] Automatische iframe-Aktualisierung und Fehlerzustand ergänzen

@@ -92,6 +92,15 @@ h1 em { color: var(--acid); font-style: normal; }
 .iframe-placeholder strong { color: var(--ink); font-size: 1.05rem; font-weight: 500; }
 .placeholder-icon { color: var(--acid); font-size: 1.8rem; line-height: 1; }
 .iframe-placeholder iframe { width: 100%; height: 100%; min-height: 180px; border: 0; background: #fff; }
+.text-widget-content { max-width: 70ch; margin: 0; color: var(--ink); font-size: clamp(1.2rem, 2.6vw, 2.4rem); line-height: 1.15; white-space: pre-wrap; }
+.image-widget-content { width: 100%; height: 100%; min-height: 180px; object-fit: contain; }
+.calendar-widget { width: min(520px, 90%); color: var(--ink); }
+.calendar-widget > strong { display: block; margin-bottom: 18px; color: var(--acid); font-size: clamp(1.2rem, 2.4vw, 2rem); font-weight: 400; }
+.calendar-weekdays, .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; text-align: center; }
+.calendar-weekdays { margin-bottom: 8px; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; }
+.calendar-days { color: var(--ink); font-size: 0.95rem; }
+.calendar-days > span { display: grid; place-items: center; aspect-ratio: 1; }
+.calendar-days .today { border-radius: 50%; color: #151714; background: var(--acid); }
 .empty-display { display: flex; min-height: 260px; align-items: center; justify-content: center; gap: 18px; border: 1px dashed var(--line); color: var(--muted); }
 .empty-display a { color: var(--acid); text-decoration: none; }
 .empty-display a:hover { text-decoration: underline; }
@@ -150,7 +159,8 @@ h1 em { color: var(--acid); font-style: normal; }
 .add-widget:hover { border-color: var(--acid); background: rgba(201, 242, 105, 0.06); }
 .reset-button { border: 0; padding: 0; color: var(--muted); background: transparent; cursor: pointer; font-size: 0.78rem; }
 .reset-button:hover { color: var(--warm); }
-.save-message { min-height: 1.3em; margin: 0; color: var(--acid); font-size: 0.78rem; line-height: 1.4; }
+.save-message { position: fixed; top: 24px; right: 24px; z-index: 10; max-width: min(360px, calc(100vw - 48px)); margin: 0; padding: 14px 18px; border: 1px solid var(--acid); border-radius: 4px; color: #14170f; background: var(--acid); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35); font-size: 0.8rem; font-weight: 700; line-height: 1.35; opacity: 0; pointer-events: none; transform: translateY(-8px); transition: opacity 180ms ease, transform 180ms ease; }
+.save-message.is-visible { opacity: 1; transform: translateY(0); }
 
 @keyframes rise-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
