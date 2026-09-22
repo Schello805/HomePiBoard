@@ -46,6 +46,6 @@ Für den Raspberry Pi kann der erzeugte `dist/`-Ordner mit einem kleinen statisc
 chromium-browser --kiosk http://localhost:4173
 ```
 
-Die Einstellungen werden in der aktuellen Browser-Installation gespeichert. Unter `/admin` können Ort, Wetterort, iframe-URLs und Widget-Größen angepasst werden. Das optionale Wettermodul nutzt Open-Meteo und benötigt Internetzugang.
+Die Einstellungen werden in der aktuellen Browser-Installation gespeichert. Unter `/admin` können Ort, Wetterort und iframe-URLs angepasst werden. Widget-Breite und -Höhe lassen sich direkt an der unteren rechten Ecke jeder Karte ziehen. Das optionale Wettermodul nutzt Open-Meteo und benötigt Internetzugang.
 
 Die offenen Aufgaben stehen in [TODO.md](TODO.md).

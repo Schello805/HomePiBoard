@@ -1,7 +1,6 @@
 import './style.css'
 
-type WidgetSize = 'standard' | 'wide' | 'tall'
-type WebWidget = { id: string; title: string; url: string; size: WidgetSize }
+type WebWidget = { id: string; title: string; url: string; columns: number; rows: number }
 type DisplaySettings = { location: string; weatherCity: string; widgets: WebWidget[] }
 
 const defaultSettings: DisplaySettings = { location: 'Zuhause', weatherCity: '', widgets: [] }
@@ -12,16 +11,17 @@ function loadSettings(): DisplaySettings {
   if (!storedSettings) return { ...defaultSettings }
 
   try {
-    const parsed = JSON.parse(storedSettings) as Partial<DisplaySettings> & { url?: string; size?: WidgetSize }
+    const parsed = JSON.parse(storedSettings) as Partial<DisplaySettings> & { url?: string; size?: string }
     const widgets: WebWidget[] = Array.isArray(parsed.widgets)
       ? parsed.widgets.map((widget, index) => ({
           id: widget.id || `widget-${index + 1}`,
           title: widget.title || `Web-Widget ${index + 1}`,
           url: widget.url || '',
-          size: widget.size === 'wide' || widget.size === 'tall' ? widget.size : 'standard',
+          columns: Math.max(1, Math.min(12, Number(widget.columns) || 6)),
+          rows: Math.max(1, Math.min(4, Number(widget.rows) || 1)),
         }))
       : parsed.url
-        ? [{ id: 'widget-1', title: 'Web-Widget', url: parsed.url, size: parsed.size === 'wide' || parsed.size === 'tall' ? parsed.size : 'standard' }]
+        ? [{ id: 'widget-1', title: 'Web-Widget', url: parsed.url, columns: parsed.size === 'wide' ? 12 : 6, rows: parsed.size === 'tall' ? 2 : 1 }]
         : []
     return { location: parsed.location || defaultSettings.location, weatherCity: parsed.weatherCity || '', widgets }
   } catch {
@@ -42,10 +42,6 @@ function weatherSymbol(code: number) {
   return 'Gewitter'
 }
 
-function widgetClass(size: WidgetSize) {
-  return size === 'standard' ? '' : ` widget-${size}`
-}
-
 function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]!)
 }
@@ -54,8 +50,8 @@ function renderWidget(widget: WebWidget, editable = false, index = 0) {
   const content = widget.url
     ? `<iframe src="${escapeHtml(widget.url)}" title="${escapeHtml(widget.title)}" loading="lazy" scrolling="no"></iframe>`
     : '<span class="placeholder-icon">↗</span><strong>URL fehlt</strong><span>In der Admin-Seite konfigurieren</span>'
-  const editor = editable ? `<div class="widget-edit-panel"><div class="widget-editor-top"><strong>⠿ Widget ${index + 1}</strong><button class="remove-widget" type="button" data-remove-id="${escapeHtml(widget.id)}">Entfernen</button></div><label>Titel<input data-field="title" value="${escapeHtml(widget.title)}" maxlength="30" /></label><label>URL<input data-field="url" type="url" value="${escapeHtml(widget.url)}" placeholder="https://example.com" /></label><label>Größe<select data-field="size"><option value="standard" ${widget.size === 'standard' ? 'selected' : ''}>Standard</option><option value="wide" ${widget.size === 'wide' ? 'selected' : ''}>Breit</option><option value="tall" ${widget.size === 'tall' ? 'selected' : ''}>Hoch</option></select></label></div>` : ''
-  return `<article class="widget iframe-widget${widgetClass(widget.size)}${editable ? ' admin-widget widget-editor' : ' kiosk-widget'}"${editable ? ` draggable="true" data-widget-id="${escapeHtml(widget.id)}"` : ''}><div class="widget-heading"><span>${escapeHtml(widget.title)}</span><span class="live-dot">LIVE</span></div><div class="iframe-placeholder">${content}</div>${editor}</article>`
+  const editor = editable ? `<div class="widget-edit-panel"><div class="widget-editor-top"><strong>⠿ Widget ${index + 1}</strong><span class="dimension-label">${widget.columns} × ${widget.rows}</span><button class="remove-widget" type="button" data-remove-id="${escapeHtml(widget.id)}">Entfernen</button></div><label>Titel<input data-field="title" value="${escapeHtml(widget.title)}" maxlength="30" /></label><label>URL<input data-field="url" type="url" value="${escapeHtml(widget.url)}" placeholder="https://example.com" /></label></div><span class="resize-handle" title="Widget-Größe ziehen" aria-label="Widget-Größe ziehen"></span>` : ''
+  return `<article class="widget iframe-widget${editable ? ' admin-widget widget-editor' : ' kiosk-widget'}" style="grid-column: span ${widget.columns}; grid-row: span ${widget.rows};"${editable ? ` draggable="true" data-widget-id="${escapeHtml(widget.id)}" data-columns="${widget.columns}" data-rows="${widget.rows}"` : ''}><div class="widget-heading"><span>${escapeHtml(widget.title)}</span><span class="live-dot">LIVE</span></div><div class="iframe-placeholder">${content}</div>${editor}</article>`
 }
 
 function renderDisplayPage() {
@@ -106,7 +102,7 @@ function renderAdminPage() {
   const message = document.querySelector<HTMLElement>('#save-message')!
   const weatherCityInput = document.querySelector<HTMLInputElement>('#admin-weather-city')!
   document.querySelector<HTMLButtonElement>('#add-widget')!.addEventListener('click', () => {
-    const nextWidget: WebWidget = { id: `widget-${Date.now()}`, title: `Web-Widget ${editorList.children.length + 1}`, url: '', size: 'standard' }
+    const nextWidget: WebWidget = { id: `widget-${Date.now()}`, title: `Web-Widget ${editorList.children.length + 1}`, url: '', columns: 6, rows: 1 }
     editorList.insertAdjacentHTML('beforeend', renderWidgetEditor(nextWidget, editorList.children.length))
     bindEditorInteractions()
   })
@@ -133,6 +129,33 @@ function renderAdminPage() {
         const source = sourceId ? editorList.querySelector<HTMLElement>(`[data-widget-id="${CSS.escape(sourceId)}"]`) : null
         if (source && source !== editor) editorList.insertBefore(source, editor)
       })
+      editor.querySelector<HTMLElement>('.resize-handle')?.addEventListener('pointerdown', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        const startX = event.clientX
+        const startY = event.clientY
+        const startColumns = Number(editor.dataset.columns) || 6
+        const startRows = Number(editor.dataset.rows) || 1
+        const gridStyle = getComputedStyle(editorList)
+        const gap = Number.parseFloat(gridStyle.columnGap) || 16
+        const columnWidth = (editorList.clientWidth - gap * 11) / 12
+        const rowHeight = 316
+        const move = (moveEvent: PointerEvent) => {
+          const columns = Math.max(1, Math.min(12, startColumns + Math.round((moveEvent.clientX - startX) / (columnWidth + gap))))
+          const rows = Math.max(1, Math.min(4, startRows + Math.round((moveEvent.clientY - startY) / rowHeight)))
+          editor.dataset.columns = String(columns)
+          editor.dataset.rows = String(rows)
+          editor.style.gridColumn = `span ${columns}`
+          editor.style.gridRow = `span ${rows}`
+          editor.querySelector<HTMLElement>('.dimension-label')!.textContent = `${columns} × ${rows}`
+        }
+        const stop = () => {
+          window.removeEventListener('pointermove', move)
+          window.removeEventListener('pointerup', stop)
+        }
+        window.addEventListener('pointermove', move)
+        window.addEventListener('pointerup', stop, { once: true })
+      })
     })
   }
   bindEditorInteractions()
@@ -143,7 +166,8 @@ function renderAdminPage() {
       id: editor.dataset.widgetId!,
       title: editor.querySelector<HTMLInputElement>('[data-field="title"]')!.value.trim() || 'Web-Widget',
       url: editor.querySelector<HTMLInputElement>('[data-field="url"]')!.value.trim(),
-      size: editor.querySelector<HTMLSelectElement>('[data-field="size"]')!.value as WidgetSize,
+      columns: Number(editor.dataset.columns) || 6,
+      rows: Number(editor.dataset.rows) || 1,
     }))
     saveSettings({ location: document.querySelector<HTMLInputElement>('#admin-location')!.value.trim() || defaultSettings.location, weatherCity: weatherCityInput.value.trim(), widgets })
     message.textContent = 'Gespeichert. Die Anzeige übernimmt die Widgets beim nächsten Öffnen.'

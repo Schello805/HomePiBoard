@@ -11,6 +11,7 @@
 - [x] Einstellungen lokal im Browser speichern
 - [x] Separate Admin-Seite unter `/admin` ergänzen
 - [x] Mehrere Web-Widgets mit eigenen Titeln, URLs und Größen verwalten
+- [x] Widget-Breite und -Höhe frei über den Resize-Griff verändern
 - [x] Optionales Wetter-/Temperaturmodul für den kleinen Header ergänzen
 - [x] Mobile Darstellung und Raspberry-taugliche CSS-Struktur ergänzen
 
