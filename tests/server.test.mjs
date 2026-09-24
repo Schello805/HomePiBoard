@@ -167,7 +167,7 @@ test('admin PIN can be changed and remains active after a server restart', async
   const changed = await fetch(`${running.url}/api/admin-pin`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json', 'x-admin-pin': '2468' },
-    body: JSON.stringify({ pin: '135790' }),
+    body: JSON.stringify({ pin: '1357' }),
   })
   assert.equal(changed.status, 204)
 
@@ -179,13 +179,13 @@ test('admin PIN can be changed and remains active after a server restart', async
   const newPin = await fetch(`${running.url}/api/auth`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ pin: '135790' }),
+    body: JSON.stringify({ pin: '1357' }),
   })
   assert.equal(oldPin.status, 401)
   assert.equal(newPin.status, 204)
 
   const authFile = await readFile(path.join(running.dataDirectory, 'auth.json'), 'utf8')
-  assert.doesNotMatch(authFile, /135790|2468/)
+  assert.doesNotMatch(authFile, /1357|2468/)
   const storedAuth = JSON.parse(authFile)
   assert.equal(storedAuth.algorithm, 'scrypt')
   assert.ok(storedAuth.salt)
@@ -198,7 +198,7 @@ test('admin PIN can be changed and remains active after a server restart', async
   const persistedPin = await fetch(`${restarted.url}/api/auth`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ pin: '135790' }),
+    body: JSON.stringify({ pin: '1357' }),
   })
   assert.equal(persistedPin.status, 204)
 })

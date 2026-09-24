@@ -6,7 +6,7 @@ import { bindWidgetFrames, renderWidget, renderWidgetContent, widgetTypeLabel } 
 const pinKey = 'homepiboard-admin-pin'
 
 export function validatePinChange(newPin: string, confirmation: string) {
-  if (!/^\d{6,64}$/.test(newPin)) return 'Die neue PIN muss aus 6 bis 64 Ziffern bestehen.'
+  if (!/^\d{4,64}$/.test(newPin)) return 'Die neue PIN muss aus 4 bis 64 Ziffern bestehen.'
   if (newPin !== confirmation) return 'Die neuen PINs stimmen nicht überein.'
   return ''
 }
@@ -51,7 +51,7 @@ export async function renderAdminPage(app: HTMLElement) {
     </section>
   </main>
   <dialog class="pin-dialog" id="pin-dialog"><form method="dialog" id="pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Admin-Bereich</span><h2>PIN eingeben</h2></div><button class="close-button" id="pin-close" type="button" aria-label="Schließen">×</button></div><label for="admin-pin">Admin-PIN<input id="admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><p class="pin-error" id="pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="pin-cancel" type="button">Abbrechen</button><button class="save-button" id="pin-submit" value="default">Entsperren</button></div></form></dialog>
-  <dialog class="pin-dialog" id="change-pin-dialog"><form id="change-pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Sicherheit</span><h2>Admin-PIN ändern</h2></div><button class="close-button" id="change-pin-close" type="button" aria-label="Schließen">×</button></div><label for="current-admin-pin">Aktuelle PIN<input id="current-admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><label for="new-admin-pin">Neue PIN<span>6 bis 64 Ziffern</span><input id="new-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{6,64}" minlength="6" maxlength="64" required /></label><label for="confirm-admin-pin">Neue PIN wiederholen<input id="confirm-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{6,64}" minlength="6" maxlength="64" required /></label><p class="pin-error" id="change-pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="change-pin-cancel" type="button">Abbrechen</button><button class="save-button" id="change-pin-submit" type="submit">PIN speichern</button></div></form></dialog>`
+  <dialog class="pin-dialog" id="change-pin-dialog"><form id="change-pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Sicherheit</span><h2>Admin-PIN ändern</h2></div><button class="close-button" id="change-pin-close" type="button" aria-label="Schließen">×</button></div><label for="current-admin-pin">Aktuelle PIN<input id="current-admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><label for="new-admin-pin">Neue PIN<span>4 bis 64 Ziffern</span><input id="new-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required /></label><label for="confirm-admin-pin">Neue PIN wiederholen<input id="confirm-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required /></label><p class="pin-error" id="change-pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="change-pin-cancel" type="button">Abbrechen</button><button class="save-button" id="change-pin-submit" type="submit">PIN speichern</button></div></form></dialog>`
 
   const editorList = app.querySelector<HTMLElement>('#widget-editors')!
   const message = app.querySelector<HTMLElement>('#save-message')!
@@ -377,7 +377,7 @@ export async function renderAdminPage(app: HTMLElement) {
         changePinError.textContent = 'Die aktuelle PIN ist nicht korrekt.'
         currentPinInput.select()
       } else if (error instanceof SettingsServerError && error.status === 422) {
-        changePinError.textContent = 'Die neue PIN muss aus 6 bis 64 Ziffern bestehen.'
+        changePinError.textContent = 'Die neue PIN muss aus 4 bis 64 Ziffern bestehen.'
       } else {
         changePinError.textContent = adminErrorMessage(error, 'Die PIN konnte nicht geändert werden. Prüfe die Serververbindung.')
       }

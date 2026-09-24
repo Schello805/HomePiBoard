@@ -230,8 +230,8 @@ export function createHomePiBoardServer({
   }
 
   async function replacePin(newPin) {
-    if (typeof newPin !== 'string' || !/^\d{6,64}$/.test(newPin)) {
-      return 'Die neue PIN muss aus 6 bis 64 Ziffern bestehen.'
+    if (typeof newPin !== 'string' || !/^\d{4,64}$/.test(newPin)) {
+      return 'Die neue PIN muss aus 4 bis 64 Ziffern bestehen.'
     }
     const credential = await createPinCredential(newPin, scryptFunction)
     await durableAtomicWrite(authFile, `${JSON.stringify(credential, null, 2)}\n`)

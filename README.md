@@ -38,7 +38,7 @@ Der Befehl führt alle Tests und anschließend den Produktionsbuild aus.
 
 ```bash
 npm run build
-HOMEPIBOARD_PIN=246802 npm start
+HOMEPIBOARD_PIN=2468 npm start
 ```
 
 Danach sind erreichbar:
@@ -46,7 +46,7 @@ Danach sind erreichbar:
 - Anzeige: `http://localhost:4173/`
 - Konfiguration: `http://localhost:4173/admin`
 
-`HOMEPIBOARD_PIN` muss gesetzt sein; ohne explizite PIN startet der Server nicht. Verwende für einen dauerhaft erreichbaren Raspberry Pi eine eigene, ausreichend lange PIN. Neu vergebene PINs müssen aus 6 bis 64 Ziffern bestehen.
+`HOMEPIBOARD_PIN` muss gesetzt sein; ohne explizite PIN startet der Server nicht. Neu vergebene PINs müssen aus 4 bis 64 Ziffern bestehen. Eine längere PIN bietet zusätzlichen Schutz.
 
 Nach dem ersten Start kann die PIN im Adminbereich unter **Sicherheit → Admin-PIN → PIN ändern** geändert werden. Die neue PIN wird ausschließlich als gesalzener Scrypt-Hash in `data/auth.json` gespeichert und bleibt nach Neustarts aktiv. Falls die PIN vergessen wurde, stoppe den Server, lösche `data/auth.json` und starte ihn mit einer neuen `HOMEPIBOARD_PIN` erneut.
 
@@ -79,7 +79,7 @@ User=pi
 WorkingDirectory=/home/pi/HomePiBoard
 Environment=NODE_ENV=production
 Environment=PORT=4173
-Environment=HOMEPIBOARD_PIN=EINE_EIGENE_PIN_MIT_MINDESTENS_6_ZIFFERN
+Environment=HOMEPIBOARD_PIN=EINE_EIGENE_PIN_MIT_MINDESTENS_4_ZIFFERN
 ExecStart=/usr/bin/node /home/pi/HomePiBoard/server.mjs
 Restart=always
 RestartSec=3
