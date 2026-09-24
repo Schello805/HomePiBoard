@@ -13,6 +13,16 @@ export class UnauthorizedError extends Error {
   }
 }
 
+export class RateLimitError extends Error {
+  retryAfterSeconds: number
+
+  constructor(retryAfterSeconds: number) {
+    super(`Zu viele Fehlversuche. Erneut versuchen in ${retryAfterSeconds} Sekunden.`)
+    this.name = 'RateLimitError'
+    this.retryAfterSeconds = retryAfterSeconds
+  }
+}
+
 export class SettingsServerError extends Error {
   status: number
 
@@ -21,6 +31,11 @@ export class SettingsServerError extends Error {
     this.name = 'SettingsServerError'
     this.status = status
   }
+}
+
+function rateLimitError(response: Response) {
+  const retryAfter = Number(response.headers.get('retry-after'))
+  return new RateLimitError(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : 60)
 }
 
 function loadCachedSettings(storage: StorageAdapter) {
@@ -51,10 +66,28 @@ export function createSettingsStore({
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ pin }),
         })
-        return response.ok
-      } catch {
+        if (response.status === 429) throw rateLimitError(response)
+        if (response.status === 401) return false
+        if (!response.ok) throw new SettingsServerError(response.status)
+        return true
+      } catch (error) {
+        if (error instanceof RateLimitError || error instanceof SettingsServerError) throw error
         return false
       }
+    },
+
+    async changePin(currentPin: string, newPin: string) {
+      const response = await fetcher('/api/admin-pin', {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          'x-admin-pin': currentPin,
+        },
+        body: JSON.stringify({ pin: newPin }),
+      })
+      if (response.status === 401) throw new UnauthorizedError()
+      if (response.status === 429) throw rateLimitError(response)
+      if (!response.ok) throw new SettingsServerError(response.status)
     },
 
     async load(): Promise<{ settings: DisplaySettings; source: 'server' | 'local' }> {
@@ -92,6 +125,7 @@ export function createSettingsStore({
       }
 
       if (response.status === 401) throw new UnauthorizedError()
+      if (response.status === 429) throw rateLimitError(response)
       if (!response.ok) throw new SettingsServerError(response.status)
 
       const savedSettings = normalizeSettings(await response.json())

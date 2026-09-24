@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { createSettingsStore, SettingsServerError, UnauthorizedError } from '../src/settings-store.ts'
+import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from '../src/settings-store.ts'
 
 function memoryStorage(initial: Record<string, string> = {}) {
   const values = new Map<string, string>(Object.entries(initial))
@@ -64,6 +64,18 @@ test('verifyPin accepts only a successful authentication response', async () => 
   assert.equal(await rejected.verifyPin('0000'), false)
 })
 
+test('verifyPin exposes unexpected server responses instead of calling them an invalid PIN', async () => {
+  const store = createSettingsStore({
+    storage: memoryStorage(),
+    fetcher: async () => new Response(JSON.stringify({ error: 'Interner Serverfehler.' }), { status: 500 }),
+  })
+
+  await assert.rejects(
+    () => store.verifyPin('2468'),
+    (error: unknown) => error instanceof SettingsServerError && error.status === 500,
+  )
+})
+
 test('save does not disguise an HTTP server error as an offline save', async () => {
   const storage = memoryStorage()
   const store = createSettingsStore({
@@ -92,4 +104,49 @@ test('offline edits remain authoritative until they are synchronized', async () 
   assert.equal(loaded.source, 'local')
   assert.equal(loaded.settings.location, 'Offline geändert')
   assert.equal(storage.getItem('homeboard-settings-dirty'), 'true')
+})
+
+test('changePin sends the current PIN separately from the new PIN', async () => {
+  let captured: { input: RequestInfo | URL; init?: RequestInit } | undefined
+  const store = createSettingsStore({
+    storage: memoryStorage(),
+    fetcher: async (input, init) => {
+      captured = { input, init }
+      return new Response(null, { status: 204 })
+    },
+  })
+
+  await store.changePin('2468', '135790')
+
+  assert.equal(captured?.input, '/api/admin-pin')
+  assert.equal(captured?.init?.method, 'PUT')
+  assert.equal((captured?.init?.headers as Record<string, string>)['x-admin-pin'], '2468')
+  assert.deepEqual(JSON.parse(String(captured?.init?.body)), { pin: '135790' })
+})
+
+test('changePin reports invalid current PINs and rejected replacements', async () => {
+  const unauthorized = createSettingsStore({
+    storage: memoryStorage(),
+    fetcher: async () => new Response(null, { status: 401 }),
+  })
+  const invalid = createSettingsStore({
+    storage: memoryStorage(),
+    fetcher: async () => new Response(JSON.stringify({ error: 'Ungültige neue PIN.' }), { status: 422 }),
+  })
+
+  await assert.rejects(() => unauthorized.changePin('0000', '135790'), UnauthorizedError)
+  await assert.rejects(() => invalid.changePin('2468', '12ab'), (error: unknown) => error instanceof SettingsServerError && error.status === 422)
+})
+
+test('authentication and PIN changes expose rate-limit duration', async () => {
+  const rateLimited = createSettingsStore({
+    storage: memoryStorage(),
+    fetcher: async () => new Response(JSON.stringify({ error: 'Zu viele Fehlversuche.' }), {
+      status: 429,
+      headers: { 'retry-after': '60' },
+    }),
+  })
+
+  await assert.rejects(() => rateLimited.verifyPin('0000'), (error: unknown) => error instanceof RateLimitError && error.retryAfterSeconds === 60)
+  await assert.rejects(() => rateLimited.changePin('0000', '135790'), RateLimitError)
 })

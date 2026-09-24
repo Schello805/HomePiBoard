@@ -188,6 +188,10 @@ button:disabled { cursor: not-allowed; opacity: 0.42; }
 .widget-count { color: var(--muted); font-size: 0.8rem; }
 .admin-global-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .admin-form label span { color: var(--muted); font-size: 0.72rem; }
+.security-setting { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.security-setting strong { display: block; color: var(--ink); font-size: 0.9rem; font-weight: 500; }
+.security-setting p { max-width: 62ch; margin: 5px 0 0; color: var(--muted); font-size: 0.8rem; line-height: 1.45; }
+.security-setting .secondary-button { flex: 0 0 auto; }
 
 .widget-editors { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 580px), 1fr)); align-items: start; gap: 16px; }
 .widget-editor { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); transition: border-color 160ms ease, opacity 160ms ease; }
@@ -247,6 +251,8 @@ button:disabled { cursor: not-allowed; opacity: 0.42; }
   .admin-header-actions { max-width: 78%; }
   .admin-intro h1 { font-size: clamp(2rem, 10vw, 3rem); }
   .admin-global-fields, .widget-edit-panel { grid-template-columns: 1fr; }
+  .security-setting { align-items: stretch; flex-direction: column; }
+  .security-setting .secondary-button { width: 100%; }
   .content-field, .size-fields { grid-column: auto; }
   .widget-card-header { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; }
   .drag-handle { grid-column: 1; grid-row: 1; }

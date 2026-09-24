@@ -38,7 +38,7 @@ Der Befehl führt alle Tests und anschließend den Produktionsbuild aus.
 
 ```bash
 npm run build
-HOMEPIBOARD_PIN=2468 npm start
+HOMEPIBOARD_PIN=246802 npm start
 ```
 
 Danach sind erreichbar:
@@ -46,7 +46,9 @@ Danach sind erreichbar:
 - Anzeige: `http://localhost:4173/`
 - Konfiguration: `http://localhost:4173/admin`
 
-`HOMEPIBOARD_PIN` muss gesetzt sein; ohne explizite PIN startet der Server nicht. Verwende für einen dauerhaft erreichbaren Raspberry Pi eine eigene, ausreichend lange PIN.
+`HOMEPIBOARD_PIN` muss gesetzt sein; ohne explizite PIN startet der Server nicht. Verwende für einen dauerhaft erreichbaren Raspberry Pi eine eigene, ausreichend lange PIN. Neu vergebene PINs müssen aus 6 bis 64 Ziffern bestehen.
+
+Nach dem ersten Start kann die PIN im Adminbereich unter **Sicherheit → Admin-PIN → PIN ändern** geändert werden. Die neue PIN wird ausschließlich als gesalzener Scrypt-Hash in `data/auth.json` gespeichert und bleibt nach Neustarts aktiv. Falls die PIN vergessen wurde, stoppe den Server, lösche `data/auth.json` und starte ihn mit einer neuen `HOMEPIBOARD_PIN` erneut.
 
 Die zentrale Konfiguration wird beim ersten Speichern in `data/settings.json` angelegt. Wenn der Server vorübergehend nicht erreichbar ist, verwendet die Anzeige die zuletzt im Browser gespeicherte Konfiguration.
 
@@ -77,7 +79,7 @@ User=pi
 WorkingDirectory=/home/pi/HomePiBoard
 Environment=NODE_ENV=production
 Environment=PORT=4173
-Environment=HOMEPIBOARD_PIN=EINE_EIGENE_PIN
+Environment=HOMEPIBOARD_PIN=EINE_EIGENE_PIN_MIT_MINDESTENS_6_ZIFFERN
 ExecStart=/usr/bin/node /home/pi/HomePiBoard/server.mjs
 Restart=always
 RestartSec=3
@@ -111,6 +113,7 @@ Je nach Raspberry-Pi-OS-Version kann der Programmname auch `chromium-browser` la
 - `GET /api/settings` – aktuelle Konfiguration lesen
 - `POST /api/auth` – Admin-PIN prüfen
 - `PUT /api/settings` – Konfiguration mit Header `x-admin-pin` speichern
+- `PUT /api/admin-pin` – Admin-PIN mit aktueller PIN im Header `x-admin-pin` ändern
 
 Die PIN schützt Änderungen im lokalen Netzwerk, ersetzt aber keine HTTPS- oder Benutzerverwaltung für eine öffentliche Installation. HomePiBoard sollte nicht direkt aus dem Internet erreichbar sein.
 

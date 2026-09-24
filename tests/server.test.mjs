@@ -1,14 +1,22 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { scrypt as scryptCallback } from 'node:crypto'
+import { mkdtemp, readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import { promisify } from 'node:util'
 
-import { createHomePiBoardServer } from '../server.mjs'
+import { createHomePiBoardServer, parentDirectoriesToSync } from '../server.mjs'
 
-async function startServer() {
-  const dataDirectory = await mkdtemp(path.join(tmpdir(), 'homepiboard-'))
-  const server = createHomePiBoardServer({ dataDirectory, adminPin: '2468' })
+const scrypt = promisify(scryptCallback)
+
+async function startServer({
+  dataDirectory,
+  adminPin = '2468',
+  scryptFunction,
+} = {}) {
+  dataDirectory ||= await mkdtemp(path.join(tmpdir(), 'homepiboard-'))
+  const server = createHomePiBoardServer({ dataDirectory, adminPin, scryptFunction })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('Server did not start')
@@ -92,6 +100,35 @@ test('authentication failures are rate limited', async (context) => {
   assert.deepEqual(statuses, [401, 401, 401, 401, 401, 429])
 })
 
+test('staged authentication requests cannot exceed the expensive verification limit', async (context) => {
+  let derivations = 0
+  const running = await startServer({
+    scryptFunction: (...arguments_) => {
+      derivations += 1
+      return scrypt(...arguments_)
+    },
+  })
+  context.after(() => running.server.close())
+  const bootstrapDerivations = derivations
+
+  const responses = await Promise.all(Array.from({ length: 40 }, () => fetch(`${running.url}/api/auth`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin: 'wrong' }),
+  })))
+
+  assert.equal(responses.filter((response) => response.status === 401).length, 5)
+  assert.equal(responses.filter((response) => response.status === 429).length, 35)
+  assert.equal(derivations - bootstrapDerivations, 5)
+})
+
+test('new persistence directories sync each parent that received a directory entry', () => {
+  assert.deepEqual(
+    parentDirectoriesToSync('/srv/homepiboard', '/srv/homepiboard/data/auth'),
+    ['/srv/homepiboard', '/srv/homepiboard/data'],
+  )
+})
+
 test('settings API rejects layouts that do not fit the kiosk grid', async (context) => {
   const running = await startServer()
   context.after(() => running.server.close())
@@ -121,4 +158,140 @@ test('concurrent settings writes all complete without temporary-file collisions'
   assert.deepEqual(responses.map((response) => response.status), Array(30).fill(200))
   const stored = JSON.parse(await readFile(path.join(running.dataDirectory, 'settings.json'), 'utf8'))
   assert.match(stored.location, /^Ort \d+$/)
+})
+
+test('admin PIN can be changed and remains active after a server restart', async (context) => {
+  const running = await startServer()
+  context.after(() => running.server.close())
+
+  const changed = await fetch(`${running.url}/api/admin-pin`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', 'x-admin-pin': '2468' },
+    body: JSON.stringify({ pin: '135790' }),
+  })
+  assert.equal(changed.status, 204)
+
+  const oldPin = await fetch(`${running.url}/api/auth`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin: '2468' }),
+  })
+  const newPin = await fetch(`${running.url}/api/auth`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin: '135790' }),
+  })
+  assert.equal(oldPin.status, 401)
+  assert.equal(newPin.status, 204)
+
+  const authFile = await readFile(path.join(running.dataDirectory, 'auth.json'), 'utf8')
+  assert.doesNotMatch(authFile, /135790|2468/)
+  const storedAuth = JSON.parse(authFile)
+  assert.equal(storedAuth.algorithm, 'scrypt')
+  assert.ok(storedAuth.salt)
+  assert.ok(storedAuth.hash)
+  assert.equal((await stat(path.join(running.dataDirectory, 'auth.json'))).mode & 0o777, 0o600)
+
+  await new Promise((resolve) => running.server.close(resolve))
+  const restarted = await startServer({ dataDirectory: running.dataDirectory, adminPin: '2468' })
+  context.after(() => restarted.server.close())
+  const persistedPin = await fetch(`${restarted.url}/api/auth`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin: '135790' }),
+  })
+  assert.equal(persistedPin.status, 204)
+})
+
+test('admin PIN change validates the current and replacement PINs', async (context) => {
+  const running = await startServer()
+  context.after(() => running.server.close())
+
+  const wrongCurrent = await fetch(`${running.url}/api/admin-pin`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', 'x-admin-pin': '0000' },
+    body: JSON.stringify({ pin: '135790' }),
+  })
+  const invalidReplacement = await fetch(`${running.url}/api/admin-pin`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', 'x-admin-pin': '2468' },
+    body: JSON.stringify({ pin: '12ab' }),
+  })
+
+  assert.equal(wrongCurrent.status, 401)
+  assert.equal(invalidReplacement.status, 422)
+})
+
+test('concurrent PIN changes allow only one replacement to succeed', async (context) => {
+  const running = await startServer()
+  context.after(() => running.server.close())
+
+  const responses = await Promise.all(['135790', '246802'].map((pin) => fetch(`${running.url}/api/admin-pin`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', 'x-admin-pin': '2468' },
+    body: JSON.stringify({ pin }),
+  })))
+  assert.deepEqual(responses.map((response) => response.status).sort(), [204, 401])
+
+  const checks = await Promise.all(['135790', '246802'].map((pin) => fetch(`${running.url}/api/auth`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin }),
+  })))
+  assert.deepEqual(checks.map((response) => response.status).sort(), [204, 401])
+})
+
+test('malformed persisted credentials fail closed until the documented recovery is used', async (context) => {
+  const dataDirectory = await mkdtemp(path.join(tmpdir(), 'homepiboard-'))
+  await writeFile(path.join(dataDirectory, 'auth.json'), JSON.stringify({ version: 1, algorithm: 'scrypt', salt: 'bad', hash: 'bad' }))
+  const running = await startServer({ dataDirectory })
+  context.after(() => running.server.close())
+
+  const originalConsoleError = console.error
+  console.error = () => {}
+  let response
+  try {
+    response = await fetch(`${running.url}/api/auth`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pin: '2468' }),
+    })
+  } finally {
+    console.error = originalConsoleError
+  }
+
+  assert.equal(response.status, 500)
+
+  await new Promise((resolve) => running.server.close(resolve))
+  await unlink(path.join(dataDirectory, 'auth.json'))
+  const recovered = await startServer({ dataDirectory, adminPin: '975310' })
+  context.after(() => recovered.server.close())
+  const recoveredResponse = await fetch(`${recovered.url}/api/auth`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin: '975310' }),
+  })
+  assert.equal(recoveredResponse.status, 204)
+})
+
+test('invalid JSON syntax in persisted credentials is a server error', async (context) => {
+  const dataDirectory = await mkdtemp(path.join(tmpdir(), 'homepiboard-'))
+  await writeFile(path.join(dataDirectory, 'auth.json'), '{bad')
+  const running = await startServer({ dataDirectory })
+  context.after(() => running.server.close())
+
+  const originalConsoleError = console.error
+  console.error = () => {}
+  let response
+  try {
+    response = await fetch(`${running.url}/api/auth`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pin: '2468' }),
+    })
+  } finally {
+    console.error = originalConsoleError
+  }
+
+  assert.equal(response.status, 500)
 })

@@ -1,9 +1,29 @@
 import { escapeHtml } from './dashboard-utils.ts'
 import { createWidget, defaultSettings, layoutFits, normalizeSettings, widgetConstraints, type DashboardWidget, type WidgetType } from './settings.ts'
-import { createSettingsStore, UnauthorizedError } from './settings-store.ts'
+import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
 import { bindWidgetFrames, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
 
 const pinKey = 'homepiboard-admin-pin'
+
+export function validatePinChange(newPin: string, confirmation: string) {
+  if (!/^\d{6,64}$/.test(newPin)) return 'Die neue PIN muss aus 6 bis 64 Ziffern bestehen.'
+  if (newPin !== confirmation) return 'Die neuen PINs stimmen nicht überein.'
+  return ''
+}
+
+export function adminErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof RateLimitError) {
+    return `Zu viele Fehlversuche. Versuche es in ${error.retryAfterSeconds} Sekunden erneut.`
+  }
+  if (error instanceof SettingsServerError && error.status === 500) {
+    return `${fallback} Prüfe die Serverkonfiguration und gegebenenfalls data/auth.json.`
+  }
+  return fallback
+}
+
+export function clearPinError(errorElement: { textContent: string }) {
+  errorElement.textContent = ''
+}
 
 function renderWidgetEditor(widget: DashboardWidget, index: number) {
   return renderWidget(widget, true, index)
@@ -23,13 +43,15 @@ export async function renderAdminPage(app: HTMLElement) {
       <div class="admin-intro"><span class="widget-kicker">Konfiguration</span><h1 id="admin-title">HomePiBoard <em>EDIT MODE</em></h1><p>Widgets anlegen, bearbeiten, sortieren und sicher im 24 × 8 Raster platzieren.</p></div>
       <form class="admin-form" id="admin-form">
         <section class="settings-section" aria-labelledby="general-title"><div class="section-heading"><div><span class="widget-kicker">Anzeige</span><h2 id="general-title">Allgemeine Einstellungen</h2></div></div><div class="admin-global-fields"><label for="admin-location">Bezeichnung<span>Text im Header</span><input id="admin-location" maxlength="24" value="${escapeHtml(settings.location)}" /></label><label for="admin-weather-city">Wetterort<span>Optional, zum Beispiel Berlin</span><input id="admin-weather-city" maxlength="40" value="${escapeHtml(settings.weatherCity)}" placeholder="Berlin" /></label></div></section>
+        <section class="settings-section" aria-labelledby="security-title"><div class="section-heading"><div><span class="widget-kicker">Sicherheit</span><h2 id="security-title">Admin-PIN</h2></div></div><div class="security-setting"><div><strong>PIN-Schutz</strong><p>Ändere die PIN für Einstellungen und Zurücksetzen direkt auf diesem Gerät.</p></div><button class="secondary-button" id="change-pin-button" type="button">PIN ändern</button></div></section>
         <section class="settings-section" aria-labelledby="widgets-title"><div class="section-heading"><div><span class="widget-kicker">Inhalte</span><h2 id="widgets-title">Widgets</h2></div><span class="widget-count" id="widget-count"></span></div><div class="widget-editors" id="widget-editors">${settings.widgets.map(renderWidgetEditor).join('')}</div><div class="empty-editor-state" id="empty-editor-state"><strong>Noch keine Widgets</strong><span>Wähle unten einen Typ aus, um zu beginnen.</span></div><div class="add-widget-menu" aria-label="Widget hinzufügen"><span>Widget hinzufügen</span><button type="button" data-add-type="web">↗ Webseite</button><button type="button" data-add-type="calendar">▦ Kalender</button><button type="button" data-add-type="text">T Text</button><button type="button" data-add-type="image">▧ Bild</button></div><p class="layout-warning" id="layout-warning" role="alert"></p></section>
         <div class="admin-actions"><button class="secondary-button" id="reset-button" type="button">Alles zurücksetzen</button><button class="save-button" id="save-button" type="submit">Änderungen speichern</button></div>
         <p class="save-message" id="save-message" role="status"></p>
       </form>
     </section>
   </main>
-  <dialog class="pin-dialog" id="pin-dialog"><form method="dialog" id="pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Admin-Bereich</span><h2>PIN eingeben</h2></div><button class="close-button" id="pin-close" type="button" aria-label="Schließen">×</button></div><label for="admin-pin">Admin-PIN<input id="admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><p class="pin-error" id="pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="pin-cancel" type="button">Abbrechen</button><button class="save-button" id="pin-submit" value="default">Entsperren</button></div></form></dialog>`
+  <dialog class="pin-dialog" id="pin-dialog"><form method="dialog" id="pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Admin-Bereich</span><h2>PIN eingeben</h2></div><button class="close-button" id="pin-close" type="button" aria-label="Schließen">×</button></div><label for="admin-pin">Admin-PIN<input id="admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><p class="pin-error" id="pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="pin-cancel" type="button">Abbrechen</button><button class="save-button" id="pin-submit" value="default">Entsperren</button></div></form></dialog>
+  <dialog class="pin-dialog" id="change-pin-dialog"><form id="change-pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Sicherheit</span><h2>Admin-PIN ändern</h2></div><button class="close-button" id="change-pin-close" type="button" aria-label="Schließen">×</button></div><label for="current-admin-pin">Aktuelle PIN<input id="current-admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><label for="new-admin-pin">Neue PIN<span>6 bis 64 Ziffern</span><input id="new-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{6,64}" minlength="6" maxlength="64" required /></label><label for="confirm-admin-pin">Neue PIN wiederholen<input id="confirm-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{6,64}" minlength="6" maxlength="64" required /></label><p class="pin-error" id="change-pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="change-pin-cancel" type="button">Abbrechen</button><button class="save-button" id="change-pin-submit" type="submit">PIN speichern</button></div></form></dialog>`
 
   const editorList = app.querySelector<HTMLElement>('#widget-editors')!
   const message = app.querySelector<HTMLElement>('#save-message')!
@@ -46,6 +68,16 @@ export async function renderAdminPage(app: HTMLElement) {
   const pinSubmit = app.querySelector<HTMLButtonElement>('#pin-submit')!
   const pinInput = app.querySelector<HTMLInputElement>('#admin-pin')!
   const pinError = app.querySelector<HTMLElement>('#pin-error')!
+  const changePinButton = app.querySelector<HTMLButtonElement>('#change-pin-button')!
+  const changePinDialog = app.querySelector<HTMLDialogElement>('#change-pin-dialog')!
+  const changePinForm = app.querySelector<HTMLFormElement>('#change-pin-form')!
+  const changePinClose = app.querySelector<HTMLButtonElement>('#change-pin-close')!
+  const changePinCancel = app.querySelector<HTMLButtonElement>('#change-pin-cancel')!
+  const changePinSubmit = app.querySelector<HTMLButtonElement>('#change-pin-submit')!
+  const currentPinInput = app.querySelector<HTMLInputElement>('#current-admin-pin')!
+  const newPinInput = app.querySelector<HTMLInputElement>('#new-admin-pin')!
+  const confirmPinInput = app.querySelector<HTMLInputElement>('#confirm-admin-pin')!
+  const changePinError = app.querySelector<HTMLElement>('#change-pin-error')!
   let dirty = false
   let pinRequest: Promise<string | null> | null = null
 
@@ -248,14 +280,20 @@ export async function renderAdminPage(app: HTMLElement) {
       const submit = async (event: SubmitEvent) => {
         event.preventDefault()
         const pin = pinInput.value.trim()
+        clearPinError(pinError)
         pinSubmit.disabled = true
         pinSubmit.textContent = 'Prüfe …'
-        const valid = await store.verifyPin(pin)
+        let valid = false
+        try {
+          valid = await store.verifyPin(pin)
+        } catch (error) {
+          pinError.textContent = adminErrorMessage(error, 'Die PIN konnte nicht geprüft werden. Prüfe die Serververbindung.')
+        }
         if (!active) return
         pinSubmit.disabled = false
         pinSubmit.textContent = 'Entsperren'
         if (!valid) {
-          pinError.textContent = 'Die PIN ist nicht korrekt oder der Server ist nicht erreichbar.'
+          if (!pinError.textContent) pinError.textContent = 'Die PIN ist nicht korrekt oder der Server ist nicht erreichbar.'
           pinInput.select()
           return
         }
@@ -302,6 +340,53 @@ export async function renderAdminPage(app: HTMLElement) {
   app.querySelectorAll<HTMLButtonElement>('[data-add-type]').forEach((button) => button.addEventListener('click', () => addWidget(button.dataset.addType as WidgetType)))
   app.querySelectorAll<HTMLInputElement>('.admin-global-fields input').forEach((input) => input.addEventListener('input', markDirty))
 
+  const closeChangePinDialog = () => {
+    if (changePinDialog.open) changePinDialog.close()
+  }
+  changePinButton.addEventListener('click', () => {
+    changePinForm.reset()
+    changePinError.textContent = ''
+    changePinSubmit.disabled = false
+    changePinSubmit.textContent = 'PIN speichern'
+    changePinDialog.showModal()
+    currentPinInput.focus()
+  })
+  changePinClose.addEventListener('click', closeChangePinDialog)
+  changePinCancel.addEventListener('click', closeChangePinDialog)
+  changePinForm.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    const currentPin = currentPinInput.value.trim()
+    const newPin = newPinInput.value.trim()
+    const validationError = validatePinChange(newPin, confirmPinInput.value.trim())
+    if (validationError) {
+      changePinError.textContent = validationError
+      newPinInput.focus()
+      return
+    }
+
+    changePinError.textContent = ''
+    changePinSubmit.disabled = true
+    changePinSubmit.textContent = 'Speichert …'
+    try {
+      await store.changePin(currentPin, newPin)
+      sessionStorage.setItem(pinKey, newPin)
+      closeChangePinDialog()
+      showMessage('Die Admin-PIN wurde geändert.')
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        changePinError.textContent = 'Die aktuelle PIN ist nicht korrekt.'
+        currentPinInput.select()
+      } else if (error instanceof SettingsServerError && error.status === 422) {
+        changePinError.textContent = 'Die neue PIN muss aus 6 bis 64 Ziffern bestehen.'
+      } else {
+        changePinError.textContent = adminErrorMessage(error, 'Die PIN konnte nicht geändert werden. Prüfe die Serververbindung.')
+      }
+    } finally {
+      changePinSubmit.disabled = false
+      changePinSubmit.textContent = 'PIN speichern'
+    }
+  })
+
   app.querySelector<HTMLFormElement>('#admin-form')!.addEventListener('submit', async (event) => {
     event.preventDefault()
     if (!validateLayout()) {
@@ -322,8 +407,8 @@ export async function renderAdminPage(app: HTMLElement) {
       markSaved()
       updateConnectionStatus(saved.source)
       showMessage(saved.source === 'server' ? 'Gespeichert. Alle Anzeigen übernehmen die neue Konfiguration.' : 'Server nicht erreichbar. Änderungen wurden nur in diesem Browser gespeichert.')
-    } catch {
-      showMessage('Die Einstellungen konnten nicht gespeichert werden.', true)
+    } catch (error) {
+      showMessage(adminErrorMessage(error, 'Die Einstellungen konnten nicht gespeichert werden.'), true)
     } finally {
       saveButton.disabled = !layoutFits(readWidgets())
       saveButton.textContent = 'Änderungen speichern'
@@ -337,8 +422,8 @@ export async function renderAdminPage(app: HTMLElement) {
       if (!saved) return
       markSaved()
       window.location.reload()
-    } catch {
-      showMessage('Die Einstellungen konnten nicht zurückgesetzt werden.', true)
+    } catch (error) {
+      showMessage(adminErrorMessage(error, 'Die Einstellungen konnten nicht zurückgesetzt werden.'), true)
     }
   })
 

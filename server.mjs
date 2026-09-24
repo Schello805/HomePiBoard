@@ -1,12 +1,14 @@
 import { createServer } from 'node:http'
-import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, realpath, rename, unlink, writeFile } from 'node:fs/promises'
+import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
+import { mkdir, open, readFile, realpath, rename, unlink } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
 
 import { defaultSettings, layoutFits, normalizeSettings } from './src/settings.ts'
 
 const rootDirectory = path.dirname(fileURLToPath(import.meta.url))
+const scrypt = promisify(scryptCallback)
 const mimeTypes = new Map([
   ['.css', 'text/css; charset=utf-8'],
   ['.html', 'text/html; charset=utf-8'],
@@ -16,6 +18,13 @@ const mimeTypes = new Map([
   ['.svg', 'image/svg+xml'],
   ['.webp', 'image/webp'],
 ])
+
+class RequestBodyError extends Error {
+  constructor() {
+    super('invalid-request-body')
+    this.name = 'RequestBodyError'
+  }
+}
 
 function json(response, status, body) {
   response.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
@@ -30,7 +39,12 @@ async function readJsonBody(request) {
     if (size > 1_000_000) throw new Error('request-too-large')
     chunks.push(chunk)
   }
-  return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new RequestBodyError()
+    throw error
+  }
 }
 
 async function loadSettings(settingsFile) {
@@ -41,6 +55,93 @@ async function loadSettings(settingsFile) {
       return normalizeSettings(defaultSettings)
     }
     return normalizeSettings(defaultSettings)
+  }
+}
+
+async function createPinCredential(pin, scryptFunction = scrypt) {
+  const salt = randomBytes(16)
+  const hash = Buffer.from(await scryptFunction(pin, salt, 64))
+  return {
+    version: 1,
+    algorithm: 'scrypt',
+    salt: salt.toString('base64'),
+    hash: hash.toString('base64'),
+  }
+}
+
+async function verifyPinCredential(pin, credential, scryptFunction = scrypt) {
+  if (!credential || credential.version !== 1 || credential.algorithm !== 'scrypt' || typeof credential.salt !== 'string' || typeof credential.hash !== 'string') {
+    throw new Error('invalid-auth-file')
+  }
+  const salt = Buffer.from(credential.salt, 'base64')
+  const expected = Buffer.from(credential.hash, 'base64')
+  if (salt.length !== 16 || expected.length !== 64 || salt.toString('base64') !== credential.salt || expected.toString('base64') !== credential.hash) {
+    throw new Error('invalid-auth-file')
+  }
+  const actual = Buffer.from(await scryptFunction(pin, salt, expected.length))
+  return expected.length === actual.length && timingSafeEqual(expected, actual)
+}
+
+export function parentDirectoriesToSync(existingAncestor, targetDirectory) {
+  const relative = path.relative(existingAncestor, targetDirectory)
+  if (!relative) return []
+  if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('invalid-directory-ancestor')
+  const directories = []
+  let current = existingAncestor
+  for (const segment of relative.split(path.sep)) {
+    directories.push(current)
+    current = path.join(current, segment)
+  }
+  return directories
+}
+
+async function syncDirectory(directory) {
+  const handle = await open(directory, 'r')
+  try {
+    await handle.sync()
+  } finally {
+    await handle.close()
+  }
+}
+
+async function ensureDirectoryDurable(directory) {
+  let existingAncestor = directory
+  while (true) {
+    try {
+      const handle = await open(existingAncestor, 'r')
+      await handle.close()
+      break
+    } catch (error) {
+      if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') throw error
+      const parent = path.dirname(existingAncestor)
+      if (parent === existingAncestor) throw error
+      existingAncestor = parent
+    }
+  }
+
+  await mkdir(directory, { recursive: true })
+  for (const parentDirectory of parentDirectoriesToSync(existingAncestor, directory)) {
+    await syncDirectory(parentDirectory)
+  }
+}
+
+async function durableAtomicWrite(targetFile, content, mode = 0o600) {
+  await ensureDirectoryDurable(path.dirname(targetFile))
+  const temporaryFile = `${targetFile}.tmp-${process.pid}-${randomUUID()}`
+  let temporaryHandle
+  try {
+    temporaryHandle = await open(temporaryFile, 'wx', mode)
+    await temporaryHandle.writeFile(content, 'utf8')
+    await temporaryHandle.sync()
+    await temporaryHandle.close()
+    temporaryHandle = undefined
+    await rename(temporaryFile, targetFile)
+
+    await syncDirectory(path.dirname(targetFile))
+  } catch (error) {
+    await temporaryHandle?.close().catch(() => {})
+    await unlink(temporaryFile).catch(() => {})
+    throw error
   }
 }
 
@@ -87,43 +188,69 @@ export function createHomePiBoardServer({
   dataDirectory = path.join(rootDirectory, 'data'),
   publicDirectory = path.join(rootDirectory, 'dist'),
   adminPin = process.env.HOMEPIBOARD_PIN,
+  scryptFunction = scrypt,
 } = {}) {
   if (typeof adminPin !== 'string' || adminPin.length === 0) {
     throw new Error('HOMEPIBOARD_PIN muss explizit gesetzt sein.')
   }
 
   const settingsFile = path.join(dataDirectory, 'settings.json')
+  const authFile = path.join(dataDirectory, 'auth.json')
   const authenticationFailures = new Map()
+  const bootstrapCredential = createPinCredential(adminPin, scryptFunction)
   let settingsWriteQueue = Promise.resolve()
+  let authenticationWorkQueue = Promise.resolve()
 
   function persistSettings(settings) {
     const operation = settingsWriteQueue.then(async () => {
-      await mkdir(dataDirectory, { recursive: true })
-      const temporarySettingsFile = `${settingsFile}.tmp-${process.pid}-${randomUUID()}`
-      try {
-        await writeFile(temporarySettingsFile, `${JSON.stringify(settings, null, 2)}\n`, 'utf8')
-        await rename(temporarySettingsFile, settingsFile)
-      } catch (error) {
-        await unlink(temporarySettingsFile).catch(() => {})
-        throw error
-      }
+      await durableAtomicWrite(settingsFile, `${JSON.stringify(settings, null, 2)}\n`)
     })
     settingsWriteQueue = operation.catch(() => {})
     return operation
+  }
+
+  async function loadPinCredential() {
+    try {
+      return JSON.parse(await readFile(authFile, 'utf8'))
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return bootstrapCredential
+      throw error
+    }
+  }
+
+  async function verifyPin(pin) {
+    if (typeof pin !== 'string') return false
+    return verifyPinCredential(pin, await loadPinCredential(), scryptFunction)
+  }
+
+  function queueAuthenticationWork(work) {
+    const operation = authenticationWorkQueue.then(work)
+    authenticationWorkQueue = operation.then(() => undefined, () => undefined)
+    return operation
+  }
+
+  async function replacePin(newPin) {
+    if (typeof newPin !== 'string' || !/^\d{6,64}$/.test(newPin)) {
+      return 'Die neue PIN muss aus 6 bis 64 Ziffern bestehen.'
+    }
+    const credential = await createPinCredential(newPin, scryptFunction)
+    await durableAtomicWrite(authFile, `${JSON.stringify(credential, null, 2)}\n`)
+    return ''
   }
 
   function clientKey(request) {
     return request.socket.remoteAddress || 'unknown'
   }
 
-  function isRateLimited(request) {
+  function rateLimitRetryAfter(request) {
     const entry = authenticationFailures.get(clientKey(request))
-    if (!entry) return false
-    if (Date.now() - entry.since >= 60_000) {
+    if (!entry) return 0
+    const elapsed = Date.now() - entry.since
+    if (elapsed >= 60_000) {
       authenticationFailures.delete(clientKey(request))
-      return false
+      return 0
     }
-    return entry.count >= 5
+    return entry.count >= 5 ? Math.max(1, Math.ceil((60_000 - elapsed) / 1000)) : 0
   }
 
   function recordAuthenticationFailure(request) {
@@ -136,17 +263,30 @@ export function createHomePiBoardServer({
     entry.count += 1
   }
 
-  function rejectAuthentication(request, response) {
-    if (isRateLimited(request)) {
-      response.writeHead(429, {
-        'content-type': 'application/json; charset=utf-8',
-        'retry-after': '60',
-      })
-      response.end(JSON.stringify({ error: 'Zu viele Fehlversuche. Bitte später erneut versuchen.' }))
-      return
-    }
-    recordAuthenticationFailure(request)
-    json(response, 401, { error: 'Ungültige PIN.' })
+  function rejectRateLimited(response, retryAfter) {
+    response.writeHead(429, {
+      'content-type': 'application/json; charset=utf-8',
+      'retry-after': String(retryAfter),
+    })
+    response.end(JSON.stringify({ error: 'Zu viele Fehlversuche. Bitte später erneut versuchen.' }))
+  }
+
+  async function runAuthenticated(request, pin, onAuthenticated) {
+    return queueAuthenticationWork(async () => {
+      const retryAfter = rateLimitRetryAfter(request)
+      if (retryAfter) return { status: 'rate-limited', retryAfter }
+      if (!(await verifyPin(pin))) {
+        recordAuthenticationFailure(request)
+        return { status: 'unauthorized', retryAfter: 0 }
+      }
+      authenticationFailures.delete(clientKey(request))
+      return { status: 'accepted', retryAfter: 0, value: await onAuthenticated() }
+    })
+  }
+
+  function respondToAuthenticationFailure(result, response) {
+    if (result.status === 'rate-limited') rejectRateLimited(response, result.retryAfter)
+    else json(response, 401, { error: 'Ungültige PIN.' })
   }
 
   return createServer(async (request, response) => {
@@ -159,38 +299,51 @@ export function createHomePiBoardServer({
       }
 
       if (url.pathname === '/api/auth' && request.method === 'POST') {
-        if (isRateLimited(request)) {
-          rejectAuthentication(request, response)
-          return
-        }
         const body = await readJsonBody(request)
-        if (body.pin !== adminPin) {
-          rejectAuthentication(request, response)
+        const result = await runAuthenticated(request, body.pin, async () => undefined)
+        if (result.status !== 'accepted') {
+          respondToAuthenticationFailure(result, response)
           return
         }
-        authenticationFailures.delete(clientKey(request))
         response.writeHead(204)
         response.end()
         return
       }
 
       if (url.pathname === '/api/settings' && request.method === 'PUT') {
-        if (isRateLimited(request)) {
-          rejectAuthentication(request, response)
+        const result = await runAuthenticated(request, request.headers['x-admin-pin'], async () => {
+          const settings = normalizeSettings(await readJsonBody(request))
+          if (!layoutFits(settings.widgets)) return { settings, validationError: 'Das Widget-Layout passt nicht in das 24 × 8 Raster.' }
+          await persistSettings(settings)
+          return { settings, validationError: '' }
+        })
+        if (result.status !== 'accepted') {
+          respondToAuthenticationFailure(result, response)
           return
         }
-        if (request.headers['x-admin-pin'] !== adminPin) {
-          rejectAuthentication(request, response)
+        if (result.value.validationError) {
+          json(response, 422, { error: result.value.validationError })
           return
         }
-        authenticationFailures.delete(clientKey(request))
-        const settings = normalizeSettings(await readJsonBody(request))
-        if (!layoutFits(settings.widgets)) {
-          json(response, 422, { error: 'Das Widget-Layout passt nicht in das 24 × 8 Raster.' })
+        json(response, 200, result.value.settings)
+        return
+      }
+
+      if (url.pathname === '/api/admin-pin' && request.method === 'PUT') {
+        const result = await runAuthenticated(request, request.headers['x-admin-pin'], async () => {
+          const body = await readJsonBody(request)
+          return replacePin(body.pin)
+        })
+        if (result.status !== 'accepted') {
+          respondToAuthenticationFailure(result, response)
           return
         }
-        await persistSettings(settings)
-        json(response, 200, settings)
+        if (result.value) {
+          json(response, 422, { error: result.value })
+          return
+        }
+        response.writeHead(204)
+        response.end()
         return
       }
 
@@ -201,7 +354,7 @@ export function createHomePiBoardServer({
 
       await serveStatic(response, url.pathname, publicDirectory)
     } catch (error) {
-      const status = error instanceof SyntaxError ? 400 : error instanceof Error && error.message === 'request-too-large' ? 413 : 500
+      const status = error instanceof RequestBodyError ? 400 : error instanceof Error && error.message === 'request-too-large' ? 413 : 500
       json(response, status, { error: status === 500 ? 'Interner Serverfehler.' : 'Ungültige Anfrage.' })
       if (status === 500) console.error(error)
     }
