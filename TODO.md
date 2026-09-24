@@ -16,15 +16,20 @@
 - [x] Widget-Typen für Webseite, Kalender, Text und Bild ergänzen
 - [x] Optionales Wetter-/Temperaturmodul für den kleinen Header ergänzen
 - [x] Mobile Darstellung und Raspberry-taugliche CSS-Struktur ergänzen
+- [x] Anwendung in Settings-, Anzeige-, Admin- und Widget-Module aufteilen
+- [x] Automatisierte Tests für Migration, Offline-Speicher, Widgets und Server-API ergänzen
+- [x] Kiosk-Raster auf die verfügbare Bildschirmhöhe begrenzen
+- [x] Admin-Ansicht mit PIN-Schutz absichern
+- [x] Konfiguration serverseitig in `data/settings.json` speichern
+- [x] Ladezustand und manuelles Neuladen für iframe-Widgets ergänzen
+- [x] Systemd- und Chromium-Autostart dokumentieren
 
 ## Als Nächstes
 
 - [x] Drag-and-drop zum Sortieren der Widget-Reihenfolge ergänzen
 - [ ] Weitere kleine Header-Module ergänzen: Netzwerkstatus
 - [ ] Diashow-Widget ergänzen
-- [ ] Admin-Ansicht mit PIN-Schutz absichern
-- [ ] Konfiguration serverseitig auf dem Raspberry Pi speichern
-- [ ] Automatische iframe-Aktualisierung und Fehlerzustand ergänzen
-- [ ] Kiosk-Autostart für Chromium auf Raspberry Pi 3B dokumentieren und testen
+- [ ] Automatische iframe-Aktualisierung in konfigurierbaren Intervallen ergänzen
+- [ ] Kiosk-Autostart auf einem echten Raspberry Pi testen
 - [ ] Netzwerk- und Offline-Verhalten prüfen
 - [ ] Produktionsbuild auf dem Raspberry Pi testen

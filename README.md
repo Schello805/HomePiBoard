@@ -1,49 +1,121 @@
 # HomePiBoard
 
-Eine schlanke Digital-Signage-Anzeige für zu Hause. Die Anwendung ist für einen Raspberry Pi 3B mit Chromium im Kiosk-Modus gedacht.
+Eine schlanke Digital-Signage-Anzeige für zu Hause. HomePiBoard ist für einen Raspberry Pi mit Chromium im Kiosk-Modus gedacht und benötigt im Betrieb keine Datenbank.
 
-## Lokal starten
+## Funktionen
+
+- 24×8-Widget-Raster für Webseite, Kalender, Text und Bild
+- Drag-and-drop und Größenänderung im Edit-Modus
+- Wetterdaten über Open-Meteo
+- zentrale Konfiguration in `data/settings.json`
+- lokaler Browser-Cache als Offline-Rückfall
+- PIN-Schutz für Änderungen
+- statischer Client und kleiner Node.js-Server ohne Runtime-Abhängigkeiten
+
+## Voraussetzungen
+
+- Node.js 22.18 oder neuer
+- npm
+
+## Entwicklung
 
 ```bash
 npm install
 npm run dev
 ```
 
-Die Anzeige ist danach unter `http://localhost:5173/` erreichbar.
+Vite startet den Client üblicherweise unter `http://localhost:5173`. Ohne laufenden HomePiBoard-Server arbeitet der Client im lokalen Offline-Modus und speichert nur in diesem Browser.
 
-## Produktionsbuild
+## Tests und Build
+
+```bash
+npm run check
+```
+
+Der Befehl führt alle Tests und anschließend den Produktionsbuild aus.
+
+## Lokal im Produktionsmodus starten
 
 ```bash
 npm run build
-npm run preview
+HOMEPIBOARD_PIN=2468 npm start
 ```
 
-## Installation auf Raspberry Pi 3B
+Danach sind erreichbar:
 
-Für ein einzelnes Gerät ist Raspberry Pi OS mit Desktop (32-bit) am einfachsten. Im Raspberry Pi Imager können WLAN, Benutzername und SSH bereits vorkonfiguriert werden.
+- Anzeige: `http://localhost:4173/`
+- Konfiguration: `http://localhost:4173/admin`
 
-Auf dem Pi:
+`HOMEPIBOARD_PIN` muss gesetzt sein; ohne explizite PIN startet der Server nicht. Verwende für einen dauerhaft erreichbaren Raspberry Pi eine eigene, ausreichend lange PIN.
+
+Die zentrale Konfiguration wird beim ersten Speichern in `data/settings.json` angelegt. Wenn der Server vorübergehend nicht erreichbar ist, verwendet die Anzeige die zuletzt im Browser gespeicherte Konfiguration.
+
+## Installation auf einem Raspberry Pi
+
+Repository klonen und Build erstellen:
 
 ```bash
-sudo apt update
-sudo apt install -y git nodejs npm nginx chromium-browser
 git clone https://github.com/Schello805/HomePiBoard.git
 cd HomePiBoard
 npm install
-npm run build
-sudo rm -rf /var/www/homepiboard
-sudo mkdir -p /var/www/homepiboard
-sudo cp -r dist/* /var/www/homepiboard/
+npm run check
 ```
 
-Danach kann nginx den Build ausliefern. Für die Wandanzeige wird Chromium im Kiosk-Modus auf `http://localhost/` gestartet. Der automatische Chromium-Start und der Neustart bei Stromausfall sind noch gerätespezifisch einzurichten.
+### Systemd-Service
 
-Für den Raspberry Pi kann der erzeugte `dist/`-Ordner mit einem kleinen statischen Webserver ausgeliefert werden. Chromium startet anschließend die Anzeige im Vollbild:
+`/etc/systemd/system/homepiboard.service` anlegen:
+
+```ini
+[Unit]
+Description=HomePiBoard signage server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/HomePiBoard
+Environment=NODE_ENV=production
+Environment=PORT=4173
+Environment=HOMEPIBOARD_PIN=EINE_EIGENE_PIN
+ExecStart=/usr/bin/node /home/pi/HomePiBoard/server.mjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Anschließend aktivieren:
 
 ```bash
-chromium-browser --kiosk http://localhost:4173
+sudo systemctl daemon-reload
+sudo systemctl enable --now homepiboard
+sudo systemctl status homepiboard
 ```
 
-Die Einstellungen werden in der aktuellen Browser-Installation gespeichert. Unter `/admin` können Ort, Wetterort und Widgets angepasst werden. Es gibt die Typen Webseite, Kalender, Text und Bild. Widget-Breite und -Höhe lassen sich direkt an der unteren rechten Ecke jeder Karte im feinen 24×8-Raster ziehen. Bestehende Layouts werden automatisch migriert. Das optionale Wettermodul nutzt Open-Meteo und benötigt Internetzugang.
+Pfade und Benutzername müssen gegebenenfalls an die lokale Installation angepasst werden.
+
+### Chromium im Kiosk-Modus
+
+Chromium kann nach dem Start der grafischen Sitzung mit folgendem Ziel geöffnet werden:
+
+```bash
+chromium --kiosk --noerrdialogs --disable-infobars http://localhost:4173/
+```
+
+Je nach Raspberry-Pi-OS-Version kann der Programmname auch `chromium-browser` lauten. Der Befehl kann über die Autostart-Konfiguration der verwendeten Desktop-Sitzung gestartet werden.
+
+## API
+
+- `GET /api/settings` – aktuelle Konfiguration lesen
+- `POST /api/auth` – Admin-PIN prüfen
+- `PUT /api/settings` – Konfiguration mit Header `x-admin-pin` speichern
+
+Die PIN schützt Änderungen im lokalen Netzwerk, ersetzt aber keine HTTPS- oder Benutzerverwaltung für eine öffentliche Installation. HomePiBoard sollte nicht direkt aus dem Internet erreichbar sein.
+
+## Hinweise zu Web-Widgets
+
+Viele Webseiten verbieten die Einbettung in fremde iframes. HomePiBoard zeigt während des Ladens einen Status und bietet bei langsamen Widgets eine Schaltfläche zum Neuladen. Sicherheitsrichtlinien der eingebetteten Webseite kann HomePiBoard nicht umgehen.
 
 Die offenen Aufgaben stehen in [TODO.md](TODO.md).
