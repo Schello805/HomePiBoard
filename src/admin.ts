@@ -336,12 +336,16 @@ export async function renderAdminPage(app: HTMLElement) {
     dirty = true
     saveState.textContent = 'UNGESPEICHERT'
     saveState.classList.add('is-dirty')
+    saveButton.innerHTML = '<span class="unsaved-badge-dot">●</span> <span>Änderungen speichern</span>'
+    saveButton.classList.add('is-dirty')
   }
 
   function markSaved() {
     dirty = false
     saveState.textContent = 'GESPEICHERT'
     saveState.classList.remove('is-dirty')
+    saveButton.textContent = 'Speichern'
+    saveButton.classList.remove('is-dirty')
   }
 
   function updateConnectionStatus(source: 'server' | 'local') {
@@ -1416,7 +1420,13 @@ export async function renderAdminPage(app: HTMLElement) {
       showMessage(adminErrorMessage(error, 'Die Einstellungen konnten nicht gespeichert werden.'), true)
     } finally {
       saveButton.disabled = !layoutFits(readWidgets())
-      saveButton.textContent = 'Speichern'
+      if (!dirty) {
+        saveButton.textContent = 'Speichern'
+        saveButton.classList.remove('is-dirty')
+      } else {
+        saveButton.innerHTML = '<span class="unsaved-badge-dot">●</span> <span>Änderungen speichern</span>'
+        saveButton.classList.add('is-dirty')
+      }
     }
   })
 

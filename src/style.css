@@ -369,6 +369,28 @@ button:has(.loading-spinner) {
 }
 .admin-topbar .save-button:hover:not(:disabled) { box-shadow: 0 0 12px rgba(201, 242, 105, 0.45); }
 .admin-topbar .save-button:disabled { opacity: 0.45; cursor: default; }
+.save-button.is-dirty {
+  background: var(--acid) !important;
+  color: #121411 !important;
+  box-shadow: 0 0 14px rgba(201, 242, 105, 0.55);
+  animation: pulseSaveBtn 2.2s infinite ease-in-out;
+}
+@keyframes pulseSaveBtn {
+  0%, 100% { box-shadow: 0 0 10px rgba(201, 242, 105, 0.4); }
+  50% { box-shadow: 0 0 22px rgba(201, 242, 105, 0.85), 0 0 6px #fff; }
+}
+.unsaved-badge-dot {
+  display: inline-block;
+  font-size: 0.85em;
+  color: #b71c1c;
+  margin-right: 5px;
+  line-height: 1;
+  animation: pulseBadgeDot 1.4s infinite ease-in-out;
+}
+@keyframes pulseBadgeDot {
+  0%, 100% { opacity: 1; transform: scale(1.1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
 .admin-topbar .back-link {
   height: 32px;
   padding: 0 10px;

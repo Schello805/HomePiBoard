@@ -599,6 +599,18 @@ export async function renderSettingsPage(app: HTMLElement) {
     }
   }
 
+  let isSettingsDirty = false
+  const markDirty = () => {
+    isSettingsDirty = true
+    saveBtn.innerHTML = '<span class="unsaved-badge-dot">●</span> <span>Änderungen speichern</span>'
+    saveBtn.classList.add('is-dirty')
+  }
+  const markClean = () => {
+    isSettingsDirty = false
+    saveBtn.textContent = '💾 Einstellungen speichern'
+    saveBtn.classList.remove('is-dirty')
+  }
+
   async function saveSettings() {
     let pin = sessionStorage.getItem(pinKey)
     if (!pin) {
@@ -633,15 +645,27 @@ export async function renderSettingsPage(app: HTMLElement) {
       if (saved.source === 'local') {
         showFeedback('Änderungen nur lokal gespeichert (Server offline).', true)
       } else {
+        markClean()
         showFeedback('✓ Einstellungen erfolgreich gespeichert! Alle Anzeigen übernehmen die Änderung.')
       }
     } catch (error) {
       showFeedback(adminErrorMessage(error, 'Fehler beim Speichern der Einstellungen.'), true)
     } finally {
       saveBtn.disabled = false
-      saveBtn.textContent = '💾 Einstellungen speichern'
+      if (!isSettingsDirty) {
+        markClean()
+      } else {
+        markDirty()
+      }
     }
   }
+
+  // Dirty tracking for settings form inputs
+  app.querySelectorAll<HTMLInputElement | HTMLSelectElement>('.settings-main-content input, .settings-main-content select').forEach((ctrl) => {
+    if (ctrl.closest('#settings-pin-change-form')) return
+    ctrl.addEventListener('input', markDirty)
+    ctrl.addEventListener('change', markDirty)
+  })
 
   // Event Listeners
   saveBtn.addEventListener('click', saveSettings)
