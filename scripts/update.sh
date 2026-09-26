@@ -22,6 +22,10 @@ if [ -f "./scripts/disable-sleep.sh" ]; then
   chmod +x ./scripts/disable-sleep.sh
   ./scripts/disable-sleep.sh || true
 fi
+if [ -f "./scripts/set-audio-output.sh" ]; then
+  chmod +x ./scripts/set-audio-output.sh
+  ./scripts/set-audio-output.sh hdmi || true
+fi
 if [ -f "./scripts/setup-hdmi-audio.sh" ]; then
   chmod +x ./scripts/setup-hdmi-audio.sh
   ./scripts/setup-hdmi-audio.sh || true
