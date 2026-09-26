@@ -1,4 +1,6 @@
+import { formatUptime } from './admin.ts'
 import { escapeHtml, weatherSymbol } from './dashboard-utils.ts'
+import { DEFAULT_HEADER_ITEMS, type DisplaySettings, type HeaderItemType } from './settings.ts'
 import { createSettingsStore } from './settings-store.ts'
 import { bindWidgetFrames, renderWidget } from './widgets.ts'
 
@@ -211,6 +213,33 @@ export function initNetworkStatus(target: HTMLElement, initialSource: 'server' |
   }, 30000)
 }
 
+export function renderHeaderItemHtml(item: HeaderItemType, settings: DisplaySettings, isOnline: boolean, source: 'server' | 'local'): string {
+  switch (item) {
+    case 'network':
+      return `<span class="connection-status ${isOnline ? 'is-online' : 'is-offline'}" id="network-status" title="Netzwerkstatus">${isOnline ? 'ONLINE' : (source === 'local' ? 'LOKAL' : 'OFFLINE')}</span>`
+    case 'location': {
+      const loc = settings.location || settings.weatherCity
+      return loc ? `<span class="weather-location" id="header-location">${escapeHtml(loc)}</span>` : ''
+    }
+    case 'weather':
+      return '<span class="weather-status" id="weather"></span>'
+    case 'date':
+      return '<time id="date">--.--.----</time>'
+    case 'clock':
+      return '<strong id="clock">--:--</strong>'
+    case 'cpu':
+      return '<span class="header-chip header-chip-cpu" id="header-cpu" title="Raspberry Pi CPU Temperatur"><span class="chip-icon">🔥</span> <span class="chip-val" id="header-cpu-val">-- °C</span></span>'
+    case 'ram':
+      return '<span class="header-chip header-chip-ram" id="header-ram" title="Raspberry Pi RAM Nutzung"><span class="chip-icon">💾</span> <span class="chip-val" id="header-ram-val">--%</span></span>'
+    case 'uptime':
+      return '<span class="header-chip header-chip-uptime" id="header-uptime" title="System-Betriebszeit"><span class="chip-icon">⏱️</span> <span class="chip-val" id="header-uptime-val">--</span></span>'
+    case 'ip':
+      return '<span class="header-chip header-chip-ip" id="header-ip" title="Lokale IP-Adresse"><span class="chip-icon">🌐</span> <span class="chip-val" id="header-ip-val">--</span></span>'
+    default:
+      return ''
+  }
+}
+
 export async function renderDisplayPage(app: HTMLElement) {
   const store = createSettingsStore()
   const { settings, source } = await store.load()
@@ -219,18 +248,16 @@ export async function renderDisplayPage(app: HTMLElement) {
     ? settings.widgets.map((widget) => renderWidget(widget)).join('')
     : '<div class="empty-display"><span class="widget-kicker">Noch keine Widgets</span><a href="/admin">Admin öffnen <span>↗</span></a></div>'
 
+  const headerItems = settings.headerItems && settings.headerItems.length ? settings.headerItems : DEFAULT_HEADER_ITEMS
+  const headerHtml = headerItems.map((item) => renderHeaderItemHtml(item, settings, isOnline, source)).join('')
+
   app.innerHTML = `
     <main class="signage-shell">
       <header class="header-bar">
         <div class="brand-mark"><img class="brand-logo" src="/homepiboard-logo.svg" alt="HomePiBoard" /></div>
         <div class="header-status">
-          <span class="connection-status ${isOnline ? 'is-online' : 'is-offline'}" id="network-status" title="Netzwerkstatus">${isOnline ? 'ONLINE' : (source === 'local' ? 'LOKAL' : 'OFFLINE')}</span>
-          <span class="weather-location">${escapeHtml(settings.weatherCity || settings.location)}</span>
-          <span class="status-divider"></span>
-          <span class="weather-status" id="weather"></span>
-          <time id="date">--.--.----</time>
-          <strong id="clock">--:--</strong>
-          <a class="settings-button" href="/admin" aria-label="Anzeige konfigurieren">⚙</a>
+          ${headerHtml}
+          <a class="settings-button" href="/settings" aria-label="Einstellungen" title="Einstellungen">⚙</a>
         </div>
       </header>
       <section class="widget-grid" aria-label="Anzeigen-Widgets">${widgets}</section>
@@ -242,13 +269,50 @@ export async function renderDisplayPage(app: HTMLElement) {
     </main>`
 
   const shell = app.querySelector<HTMLElement>('.signage-shell')!
-  const clock = app.querySelector<HTMLElement>('#clock')!
-  const date = app.querySelector<HTMLElement>('#date')!
-  const weather = app.querySelector<HTMLElement>('#weather')!
-  const networkStatus = app.querySelector<HTMLElement>('#network-status')!
+  const clock = app.querySelector<HTMLElement>('#clock')
+  const date = app.querySelector<HTMLElement>('#date')
+  const weather = app.querySelector<HTMLElement>('#weather')
+  const networkStatus = app.querySelector<HTMLElement>('#network-status')
   const nightClockOverlay = app.querySelector<HTMLElement>('#night-clock-overlay')!
   const nightClockTime = app.querySelector<HTMLElement>('#night-clock-time')!
   const nightClockDate = app.querySelector<HTMLElement>('#night-clock-date')!
+
+  const cpuVal = app.querySelector<HTMLElement>('#header-cpu-val')
+  const ramVal = app.querySelector<HTMLElement>('#header-ram-val')
+  const uptimeVal = app.querySelector<HTMLElement>('#header-uptime-val')
+  const ipVal = app.querySelector<HTMLElement>('#header-ip-val')
+
+  if (cpuVal || ramVal || uptimeVal || ipVal) {
+    const updateHeaderTelemetry = async () => {
+      try {
+        const res = await fetch('/api/system', { cache: 'no-store' })
+        if (!res.ok) return
+        const data = await res.json() as {
+          cpuTemp?: number | null
+          loadAvg?: number[]
+          memory?: { percent?: number; usedMb?: number; totalMb?: number }
+          uptimeSeconds?: number
+          network?: { primaryIp?: string }
+        }
+        if (cpuVal && data.cpuTemp !== undefined) {
+          cpuVal.textContent = data.cpuTemp !== null ? `${data.cpuTemp.toFixed(1)} °C` : (data.loadAvg ? `${data.loadAvg[0]} load` : '--')
+        }
+        if (ramVal && data.memory && data.memory.percent !== undefined) {
+          ramVal.textContent = `${Math.round(data.memory.percent)}%`
+        }
+        if (uptimeVal && data.uptimeSeconds !== undefined) {
+          uptimeVal.textContent = formatUptime(data.uptimeSeconds)
+        }
+        if (ipVal && data.network && data.network.primaryIp) {
+          ipVal.textContent = data.network.primaryIp
+        }
+      } catch {
+        // ignore offline
+      }
+    }
+    void updateHeaderTelemetry()
+    window.setInterval(updateHeaderTelemetry, 10000)
+  }
 
   if (settings.displayScale && settings.displayScale !== 100) {
     shell.style.setProperty('--kiosk-scale', String(settings.displayScale / 100))
@@ -297,26 +361,28 @@ export async function renderDisplayPage(app: HTMLElement) {
     try {
       const formattedTime = now.toLocaleTimeString(locale, timeOptions)
       const formattedDate = now.toLocaleDateString(locale, dateOptions)
-      clock.textContent = formattedTime
-      if (showWeekday) {
-        const parts = formattedDate.split(/(^[^\d]+)/).filter(Boolean)
-        if (parts.length >= 2) {
-          const weekdayStr = parts[0]!.trim()
-          const dateStr = parts.slice(1).join('').trim().replace(/^,?\s*/, '')
-          date.innerHTML = `<span class="header-weekday">${escapeHtml(weekdayStr)}</span> ${escapeHtml(dateStr)}`
+      if (clock) clock.textContent = formattedTime
+      if (date) {
+        if (showWeekday) {
+          const parts = formattedDate.split(/(^[^\d]+)/).filter(Boolean)
+          if (parts.length >= 2) {
+            const weekdayStr = parts[0]!.trim()
+            const dateStr = parts.slice(1).join('').trim().replace(/^,?\s*/, '')
+            date.innerHTML = `<span class="header-weekday">${escapeHtml(weekdayStr)}</span> ${escapeHtml(dateStr)}`
+          } else {
+            date.textContent = formattedDate
+          }
         } else {
           date.textContent = formattedDate
         }
-      } else {
-        date.textContent = formattedDate
       }
       if (nightClockTime) nightClockTime.textContent = formattedTime
       if (nightClockDate) nightClockDate.textContent = formattedDate
     } catch {
       const fbTime = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
       const fbDate = now.toLocaleDateString('de-DE', { weekday: showWeekday ? 'short' : undefined, day: '2-digit', month: '2-digit', year: 'numeric' })
-      clock.textContent = fbTime
-      date.textContent = fbDate
+      if (clock) clock.textContent = fbTime
+      if (date) date.textContent = fbDate
       if (nightClockTime) nightClockTime.textContent = fbTime
       if (nightClockDate) nightClockDate.textContent = fbDate
     }
@@ -443,10 +509,10 @@ export async function renderDisplayPage(app: HTMLElement) {
   window.setInterval(updateLiveWidgets, 10000)
 
   initScreenWakeLock()
-  initNetworkStatus(networkStatus, source)
+  if (networkStatus) initNetworkStatus(networkStatus, source)
   bindWidgetFrames(app)
   bindRadioWidgets(app)
-  if (settings.weatherCity) await loadWeather(settings.weatherCity, weather)
+  if (weather && settings.weatherCity) await loadWeather(settings.weatherCity, weather)
 }
 
 export function initScreenWakeLock() {

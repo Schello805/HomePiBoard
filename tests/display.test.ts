@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { bindRadioWidgets, calculatePixelShift, initScreenWakeLock, isNightTime } from '../src/display.ts'
+import { bindRadioWidgets, calculatePixelShift, initScreenWakeLock, isNightTime, renderHeaderItemHtml } from '../src/display.ts'
 
 test('isNightTime detects nighttime within standard window', () => {
   const at1am = new Date(2026, 8, 26, 1, 30)
@@ -228,6 +228,52 @@ test('initScreenWakeLock safely handles environments without navigator or wakeLo
   assert.doesNotThrow(() => {
     initScreenWakeLock()
   })
+})
+
+test('renderHeaderItemHtml correctly outputs markup for all supported header item types', () => {
+  const settings = {
+    version: 3,
+    location: 'Wohnzimmer',
+    weatherCity: 'Berlin',
+    widgets: [],
+  }
+
+  const clock = renderHeaderItemHtml('clock', settings, true, 'server')
+  assert.match(clock, /id="clock"/)
+
+  const date = renderHeaderItemHtml('date', settings, true, 'server')
+  assert.match(date, /id="date"/)
+
+  const weather = renderHeaderItemHtml('weather', settings, true, 'server')
+  assert.match(weather, /id="weather"/)
+
+  const location = renderHeaderItemHtml('location', settings, true, 'server')
+  assert.match(location, /id="header-location"/)
+  assert.match(location, /Wohnzimmer/)
+
+  const cpu = renderHeaderItemHtml('cpu', settings, true, 'server')
+  assert.match(cpu, /header-chip-cpu/)
+  assert.match(cpu, /id="header-cpu-val"/)
+
+  const ram = renderHeaderItemHtml('ram', settings, true, 'server')
+  assert.match(ram, /header-chip-ram/)
+  assert.match(ram, /id="header-ram-val"/)
+
+  const uptime = renderHeaderItemHtml('uptime', settings, true, 'server')
+  assert.match(uptime, /header-chip-uptime/)
+  assert.match(uptime, /id="header-uptime-val"/)
+
+  const ip = renderHeaderItemHtml('ip', settings, true, 'server')
+  assert.match(ip, /header-chip-ip/)
+  assert.match(ip, /id="header-ip-val"/)
+
+  const networkOnline = renderHeaderItemHtml('network', settings, true, 'server')
+  assert.match(networkOnline, /is-online/)
+  assert.match(networkOnline, /ONLINE/)
+
+  const networkOffline = renderHeaderItemHtml('network', settings, false, 'local')
+  assert.match(networkOffline, /is-offline/)
+  assert.match(networkOffline, /LOKAL/)
 })
 
 

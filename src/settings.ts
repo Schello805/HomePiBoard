@@ -1,5 +1,49 @@
 export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow' | 'waste' | 'media'
 
+export type HeaderItemType =
+  | 'clock'
+  | 'date'
+  | 'weather'
+  | 'location'
+  | 'cpu'
+  | 'ram'
+  | 'uptime'
+  | 'network'
+  | 'ip'
+
+export const VALID_HEADER_ITEMS = new Set<HeaderItemType>([
+  'clock',
+  'date',
+  'weather',
+  'location',
+  'cpu',
+  'ram',
+  'uptime',
+  'network',
+  'ip',
+])
+
+export const DEFAULT_HEADER_ITEMS: HeaderItemType[] = ['network', 'location', 'weather', 'date', 'clock']
+
+export interface HeaderItemMeta {
+  id: HeaderItemType
+  label: string
+  icon: string
+  desc: string
+}
+
+export const ALL_HEADER_ITEMS_META: HeaderItemMeta[] = [
+  { id: 'clock', label: 'Uhrzeit', icon: '⏰', desc: 'Digitale Uhrzeit (z. B. 14:35)' },
+  { id: 'date', label: 'Datum', icon: '📅', desc: 'Wochentag & formatiertes Datum' },
+  { id: 'weather', label: 'Wetter', icon: '🌤️', desc: 'Lokale Temperatur & Wetterzustand' },
+  { id: 'location', label: 'Standort', icon: '📍', desc: 'Display-Name / Ort' },
+  { id: 'cpu', label: 'CPU-Temperatur', icon: '🔥', desc: 'Raspberry Pi SoC Temperatur' },
+  { id: 'ram', label: 'RAM-Auslastung', icon: '💾', desc: 'Speichernutzung in %' },
+  { id: 'uptime', label: 'Laufzeit (Uptime)', icon: '⏱️', desc: 'System-Betriebszeit' },
+  { id: 'network', label: 'Netzwerk-Status', icon: '🟢', desc: 'ONLINE / LOKAL Pille' },
+  { id: 'ip', label: 'IP-Adresse', icon: '🌐', desc: 'Lokale IPv4-Netzwerkadresse' },
+]
+
 export type DashboardWidget = {
   id: string
   type: WidgetType
@@ -37,6 +81,7 @@ export type DisplaySettings = {
   notificationSoundEnabled?: boolean
   notificationSoundVolume?: number
   audioOutput?: 'hdmi' | 'jack'
+  headerItems?: HeaderItemType[]
   widgets: DashboardWidget[]
 }
 
@@ -76,6 +121,7 @@ export const defaultSettings: DisplaySettings = {
   notificationSoundEnabled: true,
   notificationSoundVolume: 80,
   audioOutput: 'hdmi',
+  headerItems: [...DEFAULT_HEADER_ITEMS],
   widgets: [],
 }
 
@@ -291,6 +337,10 @@ export function normalizeSettings(value: unknown): DisplaySettings {
   const rawVolume = Number(parsed.notificationSoundVolume)
   const notificationSoundVolume = Number.isFinite(rawVolume) ? Math.max(0, Math.min(100, Math.round(rawVolume))) : defaultSettings.notificationSoundVolume
   const audioOutput = parsed.audioOutput === 'jack' ? 'jack' : 'hdmi'
+  const rawHeaderItems = Array.isArray(parsed.headerItems) ? parsed.headerItems : null
+  const headerItems: HeaderItemType[] = rawHeaderItems !== null
+    ? rawHeaderItems.filter((item): item is HeaderItemType => typeof item === 'string' && VALID_HEADER_ITEMS.has(item as HeaderItemType))
+    : [...DEFAULT_HEADER_ITEMS]
 
   return {
     version: SETTINGS_VERSION,
@@ -310,6 +360,7 @@ export function normalizeSettings(value: unknown): DisplaySettings {
     notificationSoundEnabled,
     notificationSoundVolume,
     audioOutput,
+    headerItems,
     widgets,
   }
 }

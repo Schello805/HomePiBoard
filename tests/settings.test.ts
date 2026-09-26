@@ -307,4 +307,26 @@ test('createWidget and normalizeSettings support waste and media widgets', () =>
   assert.equal(normalized.widgets[1]?.mediaPlaying, true)
 })
 
+test('normalizeSettings preserves, filters and defaults headerItems', () => {
+  const custom = normalizeSettings({
+    version: 3,
+    headerItems: ['cpu', 'ram', 'weather', 'clock', 'invalid-item', 123],
+    widgets: [],
+  })
+  assert.deepEqual(custom.headerItems, ['cpu', 'ram', 'weather', 'clock'])
+
+  const fallback = normalizeSettings({
+    version: 3,
+    widgets: [],
+  })
+  assert.deepEqual(fallback.headerItems, ['network', 'location', 'weather', 'date', 'clock'])
+
+  const empty = normalizeSettings({
+    version: 3,
+    headerItems: [],
+    widgets: [],
+  })
+  assert.deepEqual(empty.headerItems, [])
+})
+
 

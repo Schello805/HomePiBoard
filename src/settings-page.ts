@@ -1,7 +1,7 @@
 import { adminErrorMessage, clearPinError, formatCpuTemp, formatUptime, validatePinChange } from './admin.ts'
 import { escapeHtml } from './dashboard-utils.ts'
 import { playNotificationSound } from './display.ts'
-import { normalizeSettings, SETTINGS_VERSION } from './settings.ts'
+import { ALL_HEADER_ITEMS_META, DEFAULT_HEADER_ITEMS, type HeaderItemType, normalizeSettings, SETTINGS_VERSION } from './settings.ts'
 import { createSettingsStore } from './settings-store.ts'
 
 export async function renderSettingsPage(app: HTMLElement) {
@@ -103,7 +103,39 @@ export async function renderSettingsPage(app: HTMLElement) {
             </div>
           </section>
 
-          <!-- CARD 2: Uhrzeit, Datum & Sprache -->
+          <!-- CARD: Header-Elemente & Info-Leiste (Drag & Drop) -->
+          <section class="settings-card card-header-builder span-full">
+            <div class="settings-card-header">
+              <div class="settings-icon-badge icon-builder">📊</div>
+              <div>
+                <h2 class="settings-card-title">Kiosk-Header &amp; Info-Leiste</h2>
+                <p class="settings-card-desc">Status-Infos frei anordnen (per Drag &amp; Drop oder Pfeiltasten), hinzufügen oder entfernen</p>
+              </div>
+            </div>
+            <div class="settings-card-body">
+              <div class="header-builder-preview-box">
+                <div class="header-builder-preview-title">Live-Vorschau des Kiosk-Headers:</div>
+                <div class="header-builder-preview-bar" id="settings-header-preview"></div>
+              </div>
+
+              <div class="header-builder-section">
+                <div class="header-builder-heading-row">
+                  <span class="builder-section-title">Aktive Elemente im Header (von links nach rechts):</span>
+                  <button class="settings-action-btn secondary small" id="settings-header-reset-btn" type="button" title="Standard-Header wiederherstellen">
+                    <span>↺</span> <span>Standard wiederherstellen</span>
+                  </button>
+                </div>
+                <div class="header-chips-list" id="active-header-chips" role="list"></div>
+              </div>
+
+              <div class="header-builder-section">
+                <div class="builder-section-title">Verfügbare Elemente zum Hinzufügen:</div>
+                <div class="available-chips-row" id="available-header-chips"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- CARD 3: Uhrzeit, Datum & Sprache -->
           <section class="settings-card card-time">
             <div class="settings-card-header">
               <div class="settings-icon-badge icon-time">🕒</div>
@@ -437,6 +469,167 @@ export async function renderSettingsPage(app: HTMLElement) {
   const confirmPinInput = app.querySelector<HTMLInputElement>('#settings-confirm-pin')!
   const pinChangeError = app.querySelector<HTMLElement>('#settings-pin-error')!
 
+  const activeChipsContainer = app.querySelector<HTMLElement>('#active-header-chips')!
+  const availableChipsContainer = app.querySelector<HTMLElement>('#available-header-chips')!
+  const headerPreviewBar = app.querySelector<HTMLElement>('#settings-header-preview')!
+  const headerResetBtn = app.querySelector<HTMLButtonElement>('#settings-header-reset-btn')!
+
+  let currentHeaderItems: HeaderItemType[] = [...(settings.headerItems && settings.headerItems.length ? settings.headerItems : DEFAULT_HEADER_ITEMS)]
+
+  function renderHeaderBuilderUI() {
+    if (!headerPreviewBar || !activeChipsContainer || !availableChipsContainer) return
+
+    // 1. Live Preview Bar
+    headerPreviewBar.innerHTML = currentHeaderItems.map((id) => {
+      const loc = locationInput ? locationInput.value.trim() || 'Zuhause' : (settings.location || 'Zuhause')
+      switch (id) {
+        case 'network': return '<span class="preview-chip is-online">ONLINE</span>'
+        case 'location': return `<span class="preview-chip">📍 ${escapeHtml(loc)}</span>`
+        case 'weather': return '<span class="preview-chip">🌤️ 21°C</span>'
+        case 'date': return '<span class="preview-chip">📅 Sa, 26.09.</span>'
+        case 'clock': return '<span class="preview-chip is-bold">⏰ 14:35</span>'
+        case 'cpu': return '<span class="preview-chip">🔥 48.2 °C</span>'
+        case 'ram': return '<span class="preview-chip">💾 42%</span>'
+        case 'uptime': return '<span class="preview-chip">⏱️ 3d 4h</span>'
+        case 'ip': return '<span class="preview-chip">🌐 192.168.1.50</span>'
+        default: return `<span class="preview-chip">${escapeHtml(id)}</span>`
+      }
+    }).join('')
+
+    // 2. Active Chips List
+    if (currentHeaderItems.length === 0) {
+      activeChipsContainer.innerHTML = '<div class="empty-header-chips-hint">Keine Elemente im Header aktiv. Klicke unten auf ein Element, um es hinzuzufügen.</div>'
+    } else {
+      activeChipsContainer.innerHTML = currentHeaderItems.map((id, index) => {
+        const meta = ALL_HEADER_ITEMS_META.find((m) => m.id === id) || { id, label: id, icon: '📌', desc: '' }
+        return `
+          <div class="header-chip-item" draggable="true" data-item-id="${id}" data-item-index="${index}" role="listitem">
+            <span class="chip-drag-handle" title="Ziehen zum Neuanordnen">⋮⋮</span>
+            <span class="chip-icon">${meta.icon}</span>
+            <span class="chip-label">${escapeHtml(meta.label)}</span>
+            <div class="chip-actions">
+              <button class="chip-btn chip-btn-left" data-action="move-left" data-item-id="${id}" type="button" title="Nach links verschieben" ${index === 0 ? 'disabled' : ''}>◀</button>
+              <button class="chip-btn chip-btn-right" data-action="move-right" data-item-id="${id}" type="button" title="Nach rechts verschieben" ${index === currentHeaderItems.length - 1 ? 'disabled' : ''}>▶</button>
+              <button class="chip-btn chip-btn-remove" data-action="remove" data-item-id="${id}" type="button" title="Entfernen">✕</button>
+            </div>
+          </div>
+        `
+      }).join('')
+    }
+
+    // 3. Available Chips
+    const available = ALL_HEADER_ITEMS_META.filter((m) => !currentHeaderItems.includes(m.id))
+    if (available.length === 0) {
+      availableChipsContainer.innerHTML = '<span class="all-chips-active-hint">✓ Alle verfügbaren Elemente sind bereits im Header aktiv.</span>'
+    } else {
+      availableChipsContainer.innerHTML = available.map((m) => `
+        <button class="add-header-chip-btn" data-add-header-item="${m.id}" type="button" title="${escapeHtml(m.desc)}">
+          <span class="add-plus">+</span>
+          <span class="chip-icon">${m.icon}</span>
+          <span>${escapeHtml(m.label)}</span>
+        </button>
+      `).join('')
+    }
+
+    // Bind event handlers
+    bindHeaderBuilderEvents()
+  }
+
+  function bindHeaderBuilderEvents() {
+    // Add buttons
+    availableChipsContainer.querySelectorAll<HTMLButtonElement>('[data-add-header-item]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault()
+        const id = btn.dataset.addHeaderItem as HeaderItemType
+        if (id && !currentHeaderItems.includes(id)) {
+          currentHeaderItems.push(id)
+          renderHeaderBuilderUI()
+          markDirty()
+        }
+      })
+    })
+
+    // Action buttons (move left, right, remove)
+    activeChipsContainer.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const action = btn.dataset.action
+        const id = btn.dataset.itemId as HeaderItemType
+        const index = currentHeaderItems.indexOf(id)
+        if (index === -1) return
+
+        if (action === 'move-left' && index > 0) {
+          const temp = currentHeaderItems[index - 1]!
+          currentHeaderItems[index - 1] = id
+          currentHeaderItems[index] = temp
+          renderHeaderBuilderUI()
+          markDirty()
+        } else if (action === 'move-right' && index < currentHeaderItems.length - 1) {
+          const temp = currentHeaderItems[index + 1]!
+          currentHeaderItems[index + 1] = id
+          currentHeaderItems[index] = temp
+          renderHeaderBuilderUI()
+          markDirty()
+        } else if (action === 'remove') {
+          currentHeaderItems.splice(index, 1)
+          renderHeaderBuilderUI()
+          markDirty()
+        }
+      })
+    })
+
+    // Drag and Drop
+    let draggedIndex: number | null = null
+    const chipItems = activeChipsContainer.querySelectorAll<HTMLElement>('.header-chip-item')
+    chipItems.forEach((chip) => {
+      chip.addEventListener('dragstart', (e) => {
+        draggedIndex = Number(chip.dataset.itemIndex)
+        chip.classList.add('is-dragging')
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move'
+          e.dataTransfer.setData('text/plain', String(draggedIndex))
+        }
+      })
+
+      chip.addEventListener('dragend', () => {
+        chip.classList.remove('is-dragging')
+        chipItems.forEach((c) => c.classList.remove('is-drop-target'))
+      })
+
+      chip.addEventListener('dragover', (e) => {
+        e.preventDefault()
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+        chip.classList.add('is-drop-target')
+      })
+
+      chip.addEventListener('dragleave', () => {
+        chip.classList.remove('is-drop-target')
+      })
+
+      chip.addEventListener('drop', (e) => {
+        e.preventDefault()
+        chip.classList.remove('is-drop-target')
+        const targetIndex = Number(chip.dataset.itemIndex)
+        if (draggedIndex !== null && !isNaN(draggedIndex) && draggedIndex !== targetIndex) {
+          const [movedItem] = currentHeaderItems.splice(draggedIndex, 1)
+          if (movedItem) {
+            currentHeaderItems.splice(targetIndex, 0, movedItem)
+            renderHeaderBuilderUI()
+            markDirty()
+          }
+        }
+      })
+    })
+  }
+
+  headerResetBtn?.addEventListener('click', (e) => {
+    e.preventDefault()
+    currentHeaderItems = [...DEFAULT_HEADER_ITEMS]
+    renderHeaderBuilderUI()
+    markDirty()
+  })
+
   let saveTimer: number | undefined
   function showFeedback(text: string, isError = false) {
     if (saveTimer) window.clearTimeout(saveTimer)
@@ -754,6 +947,7 @@ export async function renderSettingsPage(app: HTMLElement) {
       notificationSoundEnabled: notificationSoundEnabledCheckbox.checked,
       notificationSoundVolume: Number(notificationSoundVolumeInput.value) || 0.8,
       audioOutput: (audioOutputSelect?.value as 'hdmi' | 'jack') || 'hdmi',
+      headerItems: currentHeaderItems,
     })
 
     saveBtn.disabled = true
@@ -787,6 +981,13 @@ export async function renderSettingsPage(app: HTMLElement) {
   })
 
   // Event Listeners
+  locationInput?.addEventListener('input', () => {
+    renderHeaderBuilderUI()
+  })
+  weatherCityInput?.addEventListener('input', () => {
+    renderHeaderBuilderUI()
+  })
+
   const soundVolumeValEl = app.querySelector<HTMLElement>('#settings-notification-sound-volume-val')
   notificationSoundVolumeInput?.addEventListener('input', () => {
     if (soundVolumeValEl) {
@@ -838,6 +1039,7 @@ export async function renderSettingsPage(app: HTMLElement) {
   })
 
   // Init
+  renderHeaderBuilderUI()
   updateResolutionDisplay()
   refreshTelemetry()
   checkUpdateStatus(false)
