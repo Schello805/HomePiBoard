@@ -1,3 +1,4 @@
+import { execFile as execFileCallback } from 'node:child_process'
 import { createServer } from 'node:http'
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import { lookup as dnsLookup } from 'node:dns/promises'
@@ -13,6 +14,7 @@ import { parseCalendarFeed } from './src/calendar-feed.ts'
 
 const rootDirectory = path.dirname(fileURLToPath(import.meta.url))
 const scrypt = promisify(scryptCallback)
+const execFile = promisify(execFileCallback)
 const mimeTypes = new Map([
   ['.css', 'text/css; charset=utf-8'],
   ['.html', 'text/html; charset=utf-8'],
@@ -215,6 +217,115 @@ export async function getSystemInfo({ thermalPath = '/sys/class/thermal/thermal_
   }
 }
 
+export async function getSystemUpdateStatus({ cwd = rootDirectory, fetchRemote = false, exec = execFile } = {}) {
+  try {
+    const { stdout: currentCommit } = await exec('git', ['rev-parse', '--short', 'HEAD'], { cwd })
+    const { stdout: currentCommitMsg } = await exec('git', ['log', '-1', '--pretty=format:%s'], { cwd })
+    const { stdout: branch } = await exec('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd })
+
+    let remoteCommit = ''
+    let updateAvailable = false
+    let pendingCommits = []
+
+    if (fetchRemote) {
+      try {
+        await exec('git', ['fetch', 'origin', branch.trim()], { cwd, timeout: 10000 })
+      } catch {
+        // remote unreachable / offline
+      }
+    }
+
+    try {
+      const { stdout: remoteShort } = await exec('git', ['rev-parse', '--short', `origin/${branch.trim()}`], { cwd })
+      remoteCommit = remoteShort.trim()
+      const { stdout: diff } = await exec('git', ['log', `HEAD..origin/${branch.trim()}`, '--pretty=format:%h %s'], { cwd })
+      pendingCommits = diff.trim() ? diff.trim().split('\n').filter(Boolean) : []
+      updateAvailable = pendingCommits.length > 0
+    } catch {
+      // no upstream tracked or git fetch failed
+    }
+
+    return {
+      success: true,
+      branch: branch.trim(),
+      currentCommit: currentCommit.trim(),
+      currentCommitMsg: currentCommitMsg.trim(),
+      remoteCommit: remoteCommit || currentCommit.trim(),
+      updateAvailable,
+      pendingCommits,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      branch: 'main',
+      currentCommit: 'unbekannt',
+      currentCommitMsg: '',
+      remoteCommit: '',
+      updateAvailable: false,
+      pendingCommits: [],
+    }
+  }
+}
+
+export async function performSystemUpdate({ cwd = rootDirectory, restartProcess = true, exec = execFile } = {}) {
+  const log = []
+
+  log.push('1/4: Hole neuesten Code von GitHub (git pull)...')
+  try {
+    const { stdout: gitOut, stderr: gitErr } = await exec('git', ['pull'], { cwd, timeout: 30000 })
+    if (gitOut.trim()) log.push(gitOut.trim())
+    else if (gitErr.trim()) log.push(gitErr.trim())
+  } catch (err) {
+    log.push(`git pull: ${err.message}`)
+  }
+
+  log.push('2/4: Prüfe npm Abhängigkeiten...')
+  try {
+    const { stdout: npmOut } = await exec('npm', ['install', '--no-audit', '--no-fund'], { cwd, timeout: 90000 })
+    if (npmOut.trim()) log.push(npmOut.trim().split('\n').slice(-3).join('\n'))
+  } catch (err) {
+    log.push(`npm install: ${err.message}`)
+  }
+
+  log.push('3/4: Kompiliere Frontend (Vite & TypeScript)...')
+  try {
+    await exec('npm', ['run', 'build'], { cwd, timeout: 60000 })
+    log.push('✓ Frontend erfolgreich gebaut!')
+  } catch (err) {
+    log.push(`Build-Warnung: ${err.message}`)
+  }
+
+  log.push('4/4: Aktualisiere HDMI Monitor Anzeige...')
+  try {
+    await exec('pkill', ['-f', 'chromium|chrome'], { timeout: 3000 })
+    log.push('✓ Kiosk-Browser auf HDMI neu geladen.')
+  } catch {
+    log.push('ℹ Kiosk-Browser nicht aktiv oder bereits aktuell.')
+  }
+
+  let newCommit = 'aktuell'
+  try {
+    const { stdout: commitOut } = await exec('git', ['rev-parse', '--short', 'HEAD'], { cwd })
+    newCommit = commitOut.trim()
+  } catch {
+    // ignore
+  }
+
+  if (restartProcess) {
+    setTimeout(() => {
+      process.exit(0)
+    }, 1500)
+  }
+
+  return {
+    success: true,
+    newCommit,
+    log: log.join('\n'),
+    restarting: restartProcess,
+  }
+}
+
 export function parentDirectoriesToSync(existingAncestor, targetDirectory) {
   const relative = path.relative(existingAncestor, targetDirectory)
   if (!relative) return []
@@ -329,6 +440,8 @@ export function createHomePiBoardServer({
   calendarFetch = fetch,
   lookupFunction = dnsLookup,
   thermalPath = '/sys/class/thermal/thermal_zone0/temp',
+  updateStatusHandler,
+  updateExecuteHandler,
 } = {}) {
   if (typeof adminPin !== 'string' || adminPin.length === 0) {
     throw new Error('HOMEPIBOARD_PIN muss explizit gesetzt sein.')
@@ -463,6 +576,29 @@ export function createHomePiBoardServer({
       if (url.pathname === '/api/system' && request.method === 'GET') {
         const info = await getSystemInfo({ thermalPath })
         json(response, 200, info)
+        return
+      }
+
+      if (url.pathname === '/api/system/update-status' && request.method === 'GET') {
+        const fetchRemote = url.searchParams.get('check') === '1'
+        const status = updateStatusHandler
+          ? await updateStatusHandler(fetchRemote)
+          : await getSystemUpdateStatus({ cwd: rootDirectory, fetchRemote })
+        json(response, 200, status)
+        return
+      }
+
+      if (url.pathname === '/api/system/update' && request.method === 'POST') {
+        const result = await runAuthenticated(request, request.headers['x-admin-pin'], async () => {
+          return updateExecuteHandler
+            ? await updateExecuteHandler(process.env.NODE_ENV !== 'test')
+            : await performSystemUpdate({ cwd: rootDirectory, restartProcess: process.env.NODE_ENV !== 'test' })
+        })
+        if (result.status !== 'accepted') {
+          respondToAuthenticationFailure(result, response)
+          return
+        }
+        json(response, 200, result.value)
         return
       }
 

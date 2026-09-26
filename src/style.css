@@ -831,6 +831,17 @@ button:has(.loading-spinner) {
 .system-status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; background: rgba(201, 242, 105, 0.06); border: 1px solid rgba(201, 242, 105, 0.2); border-radius: 12px; font-size: 0.7rem; color: var(--acid); font-family: monospace; cursor: pointer; text-decoration: none; }
 .system-status-pill:hover { background: rgba(201, 242, 105, 0.14); border-color: var(--acid); }
 
+.system-update-container { display: flex; flex-direction: column; gap: 8px; background: #121412; border: 1px solid var(--line); border-radius: 5px; padding: 10px 12px; }
+.update-status-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.8rem; }
+.update-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 4px; font-size: 0.74rem; font-weight: 600; }
+.update-badge.is-uptodate { background: rgba(201, 242, 105, 0.1); color: var(--acid); border: 1px solid rgba(201, 242, 105, 0.3); }
+.update-badge.is-available { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+.update-badge.is-updating { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
+.update-badge.is-error { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+.update-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.update-log-box { background: #080908; border: 1px solid var(--line); border-radius: 4px; padding: 8px; max-height: 140px; overflow-y: auto; font-family: monospace; font-size: 0.68rem; color: #a3a3a3; white-space: pre-wrap; line-height: 1.4; }
+
+
 @keyframes rise-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (max-width: 720px) {

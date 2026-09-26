@@ -144,7 +144,15 @@ Nach einem Neustart (`sudo reboot`) startet die HDMI-Anzeige automatisch im Voll
 
 Wenn neue Funktionen oder Fehlerbehebungen für HomePiBoard erscheinen, kannst du deine Installation auf dem Raspberry Pi in Sekundenschnelle aktualisieren:
 
-### Option A: Mit dem automatischen Update-Skript (Empfohlen)
+### Option A: 1-Klick-Update direkt im Admin-Panel (Bequemste Methode – kein SSH nötig!)
+
+Öffne einfach das Admin-Panel im Browser (`http://<pi-ip>:4173/admin`):
+1. Klicke oben rechts auf **⚙ System** (oder das Telemetrie-Pill).
+2. Scrolle zum Abschnitt **🚀 Software-Aktualisierung (1-Klick-Update)**.
+3. Klicke auf **„🔍 Nach Updates suchen“** und danach auf **„🚀 Jetzt aktualisieren“**.
+4. HomePiBoard führt `git pull`, `npm install` und `npm run build` vollautomatisch im Hintergrund aus, aktualisiert die HDMI-Anzeige und startet den Server neu.
+
+### Option B: Mit dem automatischen Update-Skript (Terminal / SSH)
 
 Verbinde dich per SSH mit deinem Pi und führe das integrierte Skript aus:
 
@@ -160,7 +168,7 @@ cd ~/HomePiBoard
 - Startet den Hintergrunddienst `homepiboard.service` neu
 - **Aktualisiert die HDMI-Anzeige / den Kiosk-Browser automatisch** (kein Neustart des Pi nötig!)
 
-### Option B: Manuell Schritt für Schritt
+### Option C: Manuell Schritt für Schritt
 
 Falls du das Update manuell ausführen möchtest:
 
@@ -177,7 +185,7 @@ pkill -f chromium
 > **Tipp:** Ein Neustart des Raspberry Pi (`sudo reboot`) ist nach einem Update **nicht** erforderlich. Um nur das Frontend neu zu laden, reicht `pkill -f chromium` (das Kiosk-Skript startet den Browser nach 2 Sekunden automatisch neu) oder das Drücken von `F5` / `Strg + R` auf einer angeschlossenen Tastatur.
 
 
-### Option C: Raspberry Pi OS & Chromium-Updates
+### Option D: Raspberry Pi OS & Chromium-Updates
 Um zusätzlich das Linux-Betriebssystem und den Chromium-Browser aktuell zu halten:
 
 ```bash

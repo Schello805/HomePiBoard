@@ -16,9 +16,19 @@ async function startServer({
   scryptFunction,
   calendarFetch,
   lookupFunction,
+  updateStatusHandler,
+  updateExecuteHandler,
 } = {}) {
   dataDirectory ||= await mkdtemp(path.join(tmpdir(), 'homepiboard-'))
-  const server = createHomePiBoardServer({ dataDirectory, adminPin, scryptFunction, calendarFetch, lookupFunction })
+  const server = createHomePiBoardServer({
+    dataDirectory,
+    adminPin,
+    scryptFunction,
+    calendarFetch,
+    lookupFunction,
+    updateStatusHandler,
+    updateExecuteHandler,
+  })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('Server did not start')
@@ -538,5 +548,65 @@ test('media API stores and returns playback state', async (context) => {
   assert.equal(data.artist, 'Eagles')
   assert.equal(data.playing, true)
 })
+
+test('system update-status returns branch and commit info', async (context) => {
+  const running = await startServer({
+    updateStatusHandler: async (fetchRemote) => ({
+      success: true,
+      branch: 'main',
+      currentCommit: 'abc1234',
+      currentCommitMsg: 'feat: add radio preset',
+      remoteCommit: 'def5678',
+      updateAvailable: fetchRemote,
+      pendingCommits: fetchRemote ? ['def5678 fix: volume slider'] : [],
+    }),
+  })
+  context.after(() => running.server.close())
+
+  const res = await fetch(`${running.url}/api/system/update-status`)
+  assert.equal(res.status, 200)
+  const data = await res.json()
+  assert.equal(data.branch, 'main')
+  assert.equal(data.currentCommit, 'abc1234')
+  assert.equal(data.updateAvailable, false)
+
+  const resCheck = await fetch(`${running.url}/api/system/update-status?check=1`)
+  assert.equal(resCheck.status, 200)
+  const dataCheck = await resCheck.json()
+  assert.equal(dataCheck.updateAvailable, true)
+  assert.equal(dataCheck.pendingCommits.length, 1)
+})
+
+test('system update endpoint requires valid admin PIN and executes handler', async (context) => {
+  let executed = false
+  const running = await startServer({
+    adminPin: '4321',
+    updateExecuteHandler: async () => {
+      executed = true
+      return { success: true, newCommit: 'fedcba9', log: 'all good', restarting: false }
+    },
+  })
+  context.after(() => running.server.close())
+
+  // Missing or wrong PIN
+  const unauthRes = await fetch(`${running.url}/api/system/update`, {
+    method: 'POST',
+    headers: { 'x-admin-pin': '0000' },
+  })
+  assert.equal(unauthRes.status, 401)
+  assert.equal(executed, false)
+
+  // Valid PIN
+  const okRes = await fetch(`${running.url}/api/system/update`, {
+    method: 'POST',
+    headers: { 'x-admin-pin': '4321' },
+  })
+  assert.equal(okRes.status, 200)
+  const okData = await okRes.json()
+  assert.equal(okData.success, true)
+  assert.equal(okData.newCommit, 'fedcba9')
+  assert.equal(executed, true)
+})
+
 
 

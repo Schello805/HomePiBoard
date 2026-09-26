@@ -391,6 +391,29 @@ export async function renderAdminPage(app: HTMLElement) {
         </div>
       </section>
 
+      <section class="system-dialog-section">
+        <div class="system-section-header">
+          <h3 class="system-section-title">🚀 Software-Aktualisierung (1-Klick-Update)</h3>
+          <button class="topbar-btn" id="update-check-btn" type="button" title="Auf GitHub nach neuen Versionen suchen">🔍 Nach Updates suchen</button>
+        </div>
+        <div id="system-update-container" class="system-update-container">
+          <div class="update-status-row">
+            <span class="telemetry-label">Aktuelle Version:</span>
+            <strong id="update-current-version">Lade …</strong>
+          </div>
+          <div class="update-status-row" id="update-status-banner">
+            <span class="update-badge is-uptodate" id="update-badge">Lade Status …</span>
+          </div>
+          <small class="system-field-hint" id="update-hint">Aktualisiert Code, Abhängigkeiten, Frontend und HDMI-Display vollautomatisch ohne SSH oder Pi-Neustart.</small>
+          <div class="update-actions">
+            <button class="save-button" id="trigger-update-btn" type="button">🚀 Jetzt aktualisieren</button>
+          </div>
+          <div class="update-log-box" id="update-log-box" style="display: none;">
+            <pre id="update-log-text"></pre>
+          </div>
+        </div>
+      </section>
+
       <div class="dialog-actions">
         <button class="secondary-button" id="system-settings-cancel" type="button">Abbrechen</button>
         <button class="save-button" id="system-settings-apply" type="button">Übernehmen</button>
@@ -462,6 +485,13 @@ export async function renderAdminPage(app: HTMLElement) {
   const telemetryRefreshBtn = app.querySelector<HTMLButtonElement>('#telemetry-refresh-btn')!
   const systemTelemetryContainer = app.querySelector<HTMLElement>('#system-telemetry-container')!
   const systemStatusPill = app.querySelector<HTMLButtonElement>('#system-status-pill')!
+  const updateCheckBtn = app.querySelector<HTMLButtonElement>('#update-check-btn')
+  const updateCurrentVersion = app.querySelector<HTMLElement>('#update-current-version')
+  const updateBadge = app.querySelector<HTMLElement>('#update-badge')
+  const updateHint = app.querySelector<HTMLElement>('#update-hint')
+  const triggerUpdateBtn = app.querySelector<HTMLButtonElement>('#trigger-update-btn')
+  const updateLogBox = app.querySelector<HTMLElement>('#update-log-box')
+  const updateLogText = app.querySelector<HTMLElement>('#update-log-text')
   let dirty = false
   let pinRequest: Promise<string | null> | null = null
 
@@ -1558,6 +1588,7 @@ export async function renderAdminPage(app: HTMLElement) {
   const openSystemSettings = () => {
     updateResolutionDisplay()
     refreshTelemetry()
+    checkUpdateStatus(false)
     systemSettingsDialog.showModal()
   }
   const closeSystemSettings = () => {
@@ -1584,6 +1615,158 @@ export async function renderAdminPage(app: HTMLElement) {
   })
   refreshTelemetry()
   window.setInterval(refreshTelemetry, 30000)
+
+  async function checkUpdateStatus(fetchRemote = false) {
+    if (!updateCurrentVersion || !updateBadge) return
+    if (fetchRemote && updateCheckBtn) {
+      updateCheckBtn.disabled = true
+      updateCheckBtn.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Prüfe …</span>'
+    }
+    try {
+      const res = await fetch(`/api/system/update-status${fetchRemote ? '?check=1' : ''}`, { method: 'GET', cache: 'no-store' })
+      if (!res.ok) throw new Error('status-failed')
+      const data = await res.json() as {
+        success: boolean
+        branch: string
+        currentCommit: string
+        currentCommitMsg: string
+        remoteCommit: string
+        updateAvailable: boolean
+        pendingCommits: string[]
+      }
+      updateCurrentVersion.textContent = `${data.branch} (${data.currentCommit})`
+      updateCurrentVersion.title = data.currentCommitMsg || ''
+
+      if (data.updateAvailable) {
+        updateBadge.className = 'update-badge is-available'
+        updateBadge.textContent = `⚡ Update verfügbar (${data.remoteCommit})`
+        if (data.pendingCommits && data.pendingCommits.length) {
+          updateHint!.textContent = `Neu: ${data.pendingCommits.join(', ')}`
+        } else {
+          updateHint!.textContent = 'Ein neues Update ist auf GitHub verfügbar. Klicke unten, um es direkt einzuspielen.'
+        }
+        if (triggerUpdateBtn) {
+          triggerUpdateBtn.textContent = `🚀 Jetzt auf ${data.remoteCommit} aktualisieren`
+          triggerUpdateBtn.disabled = false
+        }
+      } else {
+        updateBadge.className = 'update-badge is-uptodate'
+        updateBadge.textContent = '✓ Auf neuestem Stand'
+        updateHint!.textContent = 'Dein HomePiBoard ist auf dem aktuellsten Stand von GitHub.'
+        if (triggerUpdateBtn) {
+          triggerUpdateBtn.textContent = '🔄 Neu kompilieren / erzwingen'
+          triggerUpdateBtn.disabled = false
+        }
+      }
+    } catch {
+      updateCurrentVersion.textContent = 'Unbekannt'
+      updateBadge.className = 'update-badge is-error'
+      updateBadge.textContent = 'Prüfung fehlgeschlagen'
+    } finally {
+      if (updateCheckBtn) {
+        updateCheckBtn.disabled = false
+        updateCheckBtn.textContent = '🔍 Nach Updates suchen'
+      }
+    }
+  }
+
+  async function triggerUpdate() {
+    if (!triggerUpdateBtn) return
+    let pin = sessionStorage.getItem(pinKey)
+    if (!pin) {
+      pin = await requestPin()
+      if (!pin) return
+    }
+
+    triggerUpdateBtn.disabled = true
+    if (updateCheckBtn) updateCheckBtn.disabled = true
+    systemSettingsClose.disabled = true
+    systemSettingsCancel.disabled = true
+    systemSettingsApply.disabled = true
+    triggerUpdateBtn.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Update läuft (git pull, build) …</span>'
+    if (updateBadge) {
+      updateBadge.className = 'update-badge is-updating'
+      updateBadge.textContent = '⏳ Update wird ausgeführt …'
+    }
+    if (updateLogBox) {
+      updateLogBox.style.display = 'block'
+      if (updateLogText) updateLogText.textContent = 'Starte Aktualisierung...\n'
+    }
+
+    try {
+      let res = await fetch('/api/system/update', {
+        method: 'POST',
+        headers: { 'x-admin-pin': pin },
+      })
+
+      if (res.status === 401) {
+        sessionStorage.removeItem(pinKey)
+        const retryPin = await requestPin()
+        if (!retryPin) {
+          throw new Error('PIN erforderlich.')
+        }
+        pin = retryPin
+        res = await fetch('/api/system/update', {
+          method: 'POST',
+          headers: { 'x-admin-pin': pin },
+        })
+      }
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(errData.error || `HTTP ${res.status}`)
+      }
+
+      const result = await res.json() as { success: boolean; newCommit: string; log: string; restarting?: boolean }
+      if (updateLogText) {
+        updateLogText.textContent = result.log || 'Update erfolgreich abgeschlossen!'
+      }
+      if (updateBadge) {
+        updateBadge.className = 'update-badge is-uptodate'
+        updateBadge.textContent = `🎉 Erfolgreich auf ${result.newCommit} aktualisiert!`
+      }
+      if (updateHint) {
+        updateHint.textContent = result.restarting
+          ? 'Der Server und der HDMI-Monitor starten neu. Die Seite lädt in 3 Sekunden automatisch neu …'
+          : 'Update abgeschlossen. Der HDMI-Monitor wurde aktualisiert.'
+      }
+
+      if (result.restarting) {
+        triggerUpdateBtn.textContent = '✓ Aktualisiert (Server startet neu...)'
+        window.setTimeout(() => {
+          window.location.reload()
+        }, 3500)
+      } else {
+        triggerUpdateBtn.textContent = '✓ Erfolgreich'
+        window.setTimeout(() => {
+          triggerUpdateBtn.disabled = false
+          triggerUpdateBtn.textContent = '🚀 Jetzt aktualisieren'
+          if (updateCheckBtn) updateCheckBtn.disabled = false
+          systemSettingsClose.disabled = false
+          systemSettingsCancel.disabled = false
+          systemSettingsApply.disabled = false
+        }, 3000)
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (updateBadge) {
+        updateBadge.className = 'update-badge is-error'
+        updateBadge.textContent = '❌ Update fehlgeschlagen'
+      }
+      if (updateLogText) {
+        updateLogText.textContent += `\nFehler: ${msg}`
+      }
+      triggerUpdateBtn.disabled = false
+      triggerUpdateBtn.textContent = 'Erneut versuchen'
+      if (updateCheckBtn) updateCheckBtn.disabled = false
+      systemSettingsClose.disabled = false
+      systemSettingsCancel.disabled = false
+      systemSettingsApply.disabled = false
+    }
+  }
+
+  updateCheckBtn?.addEventListener('click', () => checkUpdateStatus(true))
+  triggerUpdateBtn?.addEventListener('click', triggerUpdate)
 
   app.querySelector<HTMLFormElement>('#admin-form')!.addEventListener('submit', async (event) => {
     event.preventDefault()
