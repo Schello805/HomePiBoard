@@ -83,12 +83,13 @@ ssh pi@raspberrypi.local
 ```
 *(Gib dein bei der Image-Erstellung vergebenes Passwort ein).*
 
-### Schritt 3: Paketlisten aktualisieren & curl / git installieren
-Führe auf dem Pi folgenden Befehl aus:
+### Schritt 3: System aktualisieren (apt update & upgrade) & curl / git installieren
+Bringe das frische Raspberry Pi OS Lite auf den aktuellen Stand und installiere `curl` sowie `git`:
 
 ```bash
-sudo apt update && sudo apt install -y curl git
+sudo apt update && sudo apt upgrade -y && sudo apt install -y curl git
 ```
+*(Hinweis: Das `upgrade` stellt sicher, dass alle Treiber, Sicherheitsupdates und Systempakete auf dem neuesten Stand sind).*
 
 ### Schritt 4: Vollautomatische 1-Klick-Installation starten
 Kopiere diesen One-Liner und drücke Enter:

@@ -13,6 +13,7 @@ echo "==========================================================="
 # 1. Systempakete aktualisieren und Voraussetzungen installieren
 echo "[1/6] Aktualisiere Paketlisten und installiere Systempakete..."
 sudo apt-get update -y
+sudo apt-get upgrade -y
 sudo apt-get install -y curl git unclutter
 
 # Für OS Lite: Leichtgewichtige X11-Umgebung und Chromium installieren
