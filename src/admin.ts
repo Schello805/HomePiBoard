@@ -1,5 +1,5 @@
 import { escapeHtml } from './dashboard-utils.ts'
-import { playNotificationSound } from './display.ts'
+import { bindRadioWidgets, playNotificationSound } from './display.ts'
 import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type WidgetType } from './settings.ts'
 import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
 import { parseCalendarFeed } from './calendar-feed.ts'
@@ -683,6 +683,7 @@ export async function renderAdminPage(app: HTMLElement) {
       preview.classList.toggle('has-title', Boolean(widget.showTitle))
       previewContent.innerHTML = `${widget.showTitle ? `<header class="kiosk-widget-header preview-header"><h2 class="kiosk-widget-title">${escapeHtml(widget.title)}</h2></header>` : ''}<div class="iframe-placeholder">${renderWidgetContent(widget)}</div>`
       bindWidgetFrames(previewContent)
+      bindRadioWidgets(previewContent, { allowAutoplay: false })
     }
     validateLayout()
   }
@@ -694,6 +695,7 @@ export async function renderAdminPage(app: HTMLElement) {
     const editor = editorList.lastElementChild as HTMLElement
     bindEditor(editor)
     bindWidgetFrames(editor)
+    bindRadioWidgets(editor, { allowAutoplay: false })
     updateEditorIndexes()
     markDirty()
     editor.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -712,6 +714,7 @@ export async function renderAdminPage(app: HTMLElement) {
     const copy = editor.nextElementSibling as HTMLElement
     bindEditor(copy)
     bindWidgetFrames(copy)
+    bindRadioWidgets(copy, { allowAutoplay: false })
     updateEditorIndexes()
     markDirty()
     copy.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -1208,6 +1211,7 @@ export async function renderAdminPage(app: HTMLElement) {
       const newEditor = editorList.children[index] as HTMLElement
       bindEditor(newEditor)
       bindWidgetFrames(newEditor)
+      bindRadioWidgets(newEditor, { allowAutoplay: false })
       markDirty()
       const newDialog = newEditor.querySelector<HTMLDialogElement>('[data-widget-dialog]')
       if (newDialog && typeof newDialog.showModal === 'function') {
@@ -1427,6 +1431,7 @@ export async function renderAdminPage(app: HTMLElement) {
     })
   })
   bindWidgetFrames(editorList)
+  bindRadioWidgets(editorList, { allowAutoplay: false })
   updateEditorIndexes()
 
   app.querySelectorAll<HTMLButtonElement>('[data-add-type]').forEach((button) => button.addEventListener('click', () => addWidget(button.dataset.addType as WidgetType)))

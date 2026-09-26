@@ -444,8 +444,85 @@ export function bindRadioWidgets(root: ParentNode, options: { allowAutoplay?: bo
     const eqBars = widget.querySelector('.media-equalizer-bars')
     const statusText = widget.querySelector<HTMLElement>('[data-media-status]')
     const volumeSlider = widget.querySelector<HTMLInputElement>('[data-action="volume-slider"]')
+    const volumeVal = widget.querySelector<HTMLElement>('[data-media-volume-val]')
+    const volumeIcon = widget.querySelector<HTMLElement>('.media-volume-icon')
+    const durationEl = widget.querySelector<HTMLElement>('[data-media-duration]')
 
     if (!audio || !streamUrl) return
+
+    let playbackSeconds = 0
+    let timerInterval: number | undefined
+
+    const formatTime = (totalSec: number) => {
+      const mins = Math.floor(totalSec / 60)
+      const secs = totalSec % 60
+      if (mins >= 60) {
+        const hrs = Math.floor(mins / 60)
+        const remMins = mins % 60
+        return `${hrs}:${remMins < 10 ? '0' : ''}${remMins}:${secs < 10 ? '0' : ''}${secs}`
+      }
+      return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`
+    }
+
+    const startTimer = () => {
+      if (timerInterval) clearInterval(timerInterval)
+      const timer = setInterval(() => {
+        if (!audio.paused) {
+          if (audio.currentTime && isFinite(audio.currentTime) && audio.currentTime > 0) {
+            playbackSeconds = Math.floor(audio.currentTime)
+          } else {
+            playbackSeconds++
+          }
+          if (durationEl) {
+            durationEl.textContent = formatTime(playbackSeconds)
+          }
+        }
+      }, 1000)
+      if (typeof timer === 'object' && timer && typeof (timer as { unref?: () => void }).unref === 'function') {
+        (timer as { unref: () => void }).unref()
+      }
+      timerInterval = timer as unknown as number
+    }
+
+    const stopTimer = () => {
+      if (timerInterval) {
+        clearInterval(timerInterval)
+        timerInterval = undefined
+      }
+    }
+
+    const applyVolume = (val: number) => {
+      const safeVal = Math.max(0, Math.min(1, isNaN(val) ? 0.8 : val))
+      audio.volume = safeVal
+      if (volumeSlider) {
+        volumeSlider.value = String(safeVal)
+      }
+      if (volumeVal) {
+        volumeVal.textContent = `${Math.round(safeVal * 100)}%`
+      }
+      if (volumeIcon) {
+        volumeIcon.textContent = safeVal === 0 ? '🔇' : (safeVal < 0.4 ? '🔉' : '🔊')
+      }
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('homepiboard-radio-volume', String(safeVal))
+        }
+      } catch {
+        // storage disabled
+      }
+    }
+
+    // Gespeicherte Lautstärke wiederherstellen
+    try {
+      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('homepiboard-radio-volume') : null
+      if (saved !== null) {
+        applyVolume(Number(saved))
+      } else if (volumeSlider) {
+        applyVolume(Number(volumeSlider.value))
+      }
+    } catch {
+      // ignore
+    }
 
     const setPlayingState = (isPlaying: boolean) => {
       widget.classList.toggle('is-playing', isPlaying)
@@ -473,6 +550,12 @@ export function bindRadioWidgets(root: ParentNode, options: { allowAutoplay?: bo
         coverWrapper.setAttribute?.('title', isPlaying ? 'Wiedergabe pausieren' : 'Wiedergabe starten')
       }
       if (statusText) statusText.textContent = isPlaying ? 'Auf Sendung' : 'Bereit'
+
+      if (isPlaying) {
+        startTimer()
+      } else {
+        stopTimer()
+      }
     }
 
     const startAudio = async (isAutoplay = false): Promise<boolean> => {
@@ -558,17 +641,40 @@ export function bindRadioWidgets(root: ParentNode, options: { allowAutoplay?: bo
       })
     })
 
-    volumeSlider?.addEventListener('input', (e) => {
+    if (volumeSlider) {
+      const handleVol = (e: Event) => {
+        e.stopPropagation()
+        applyVolume(Number(volumeSlider.value))
+      }
+      volumeSlider.addEventListener('input', handleVol)
+      volumeSlider.addEventListener('change', handleVol)
+      volumeSlider.addEventListener('pointerdown', (e) => e.stopPropagation())
+      volumeSlider.addEventListener('mousedown', (e) => e.stopPropagation())
+    }
+
+    volumeIcon?.addEventListener('click', (e) => {
       e.stopPropagation()
-      const val = Math.max(0, Math.min(1, Number(volumeSlider.value) || 0.8))
-      audio.volume = val
+      if (audio.volume > 0) {
+        audio.dataset.prevVolume = String(audio.volume)
+        applyVolume(0)
+      } else {
+        const prev = Number(audio.dataset.prevVolume) || 0.8
+        applyVolume(prev)
+      }
     })
 
     audio.addEventListener('play', () => setPlayingState(true))
     audio.addEventListener('pause', () => setPlayingState(false))
+    audio.addEventListener('timeupdate', () => {
+      if (audio.currentTime && isFinite(audio.currentTime)) {
+        playbackSeconds = Math.floor(audio.currentTime)
+        if (durationEl) {
+          durationEl.textContent = formatTime(playbackSeconds)
+        }
+      }
+    })
     audio.addEventListener('error', () => {
-      // Nur einen Fehler anzeigen, wenn Audio aktiv abspielen sollte und eine Quelle hat
-      if (audio.paused || !audio.getAttribute('src')) {
+      if (audio.paused || !audio.getAttribute?.('src')) {
         return
       }
       setPlayingState(false)

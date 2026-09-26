@@ -316,6 +316,7 @@ export function mediaContent(widget: DashboardWidget) {
       <div class="media-header-tag">
         <span class="media-live-badge"><span class="media-live-dot"></span> LIVE RADIO</span>
         <span class="media-status-text" data-media-status>${isPlaying ? 'Auf Sendung' : 'Bereit'}</span>
+        <span class="media-time-badge" data-media-duration title="Sendezeit / Wiedergabedauer">00:00</span>
       </div>
       <strong class="media-title" data-media-field="title">${escapeHtml(title)}</strong>
       <span class="media-artist" data-media-field="artist">${escapeHtml(artist)}</span>
@@ -324,9 +325,10 @@ export function mediaContent(widget: DashboardWidget) {
         <div class="media-equalizer-bars ${isPlaying ? 'is-animated' : ''}" aria-hidden="true">
           <span></span><span></span><span></span><span></span>
         </div>
-        <div class="media-volume-control" title="Lautstärke">
-          <span class="media-volume-icon" aria-hidden="true">🔊</span>
+        <div class="media-volume-control" title="Lautstärke anpassen">
+          <span class="media-volume-icon" role="button" tabindex="0" title="Stummschalten / Ton an" aria-label="Stummschalten">🔊</span>
           <input type="range" class="media-volume-slider" data-action="volume-slider" min="0" max="1" step="0.05" value="0.8" aria-label="Lautstärke" />
+          <span class="media-volume-val" data-media-volume-val>80%</span>
         </div>
       </div>
     </div>
