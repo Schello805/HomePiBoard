@@ -162,7 +162,10 @@ export async function renderSettingsPage(app: HTMLElement) {
               </label>
               <div class="settings-slider-row">
                 <label for="settings-notification-sound-volume">
-                  <span>Lautstärke des Signaltons</span>
+                  <div class="settings-slider-label-header">
+                    <span>Lautstärke des Signaltons</span>
+                    <strong id="settings-notification-sound-volume-val" class="settings-slider-value">${Math.round((settings.notificationSoundVolume ?? 0.8) * 100)}%</strong>
+                  </div>
                   <input type="range" id="settings-notification-sound-volume" min="0.1" max="1.0" step="0.05" value="${settings.notificationSoundVolume ?? 0.8}" />
                 </label>
                 <button class="topbar-btn" id="settings-test-sound-btn" type="button">🔔 Signalton testen</button>
@@ -668,6 +671,12 @@ export async function renderSettingsPage(app: HTMLElement) {
   })
 
   // Event Listeners
+  const soundVolumeValEl = app.querySelector<HTMLElement>('#settings-notification-sound-volume-val')
+  notificationSoundVolumeInput?.addEventListener('input', () => {
+    if (soundVolumeValEl) {
+      soundVolumeValEl.textContent = `${Math.round(Number(notificationSoundVolumeInput.value) * 100)}%`
+    }
+  })
   saveBtn.addEventListener('click', saveSettings)
   testSoundBtn?.addEventListener('click', () => {
     void playNotificationSound('doorbell', Number(notificationSoundVolumeInput?.value) || 0.8)
