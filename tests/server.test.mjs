@@ -619,3 +619,71 @@ test('static routes serve index.html for /, /admin, and /settings', async (conte
     assert.match(contentType, /text\/html/, `Expected text/html for ${path}`)
   }
 })
+
+test('presets API allows listing, creating, activating, updating, and deleting display profiles', async (context) => {
+  const running = await startServer({ adminPin: '2468' })
+  context.after(() => running.server.close())
+
+  // 1. Initially empty
+  const listRes = await fetch(`${running.url}/api/presets`)
+  assert.equal(listRes.status, 200)
+  const initialList = await listRes.json()
+  assert.deepEqual(initialList, [])
+
+  // 2. Create preset (requires PIN)
+  const unauthCreate = await fetch(`${running.url}/api/presets`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-admin-pin': '0000' },
+    body: JSON.stringify({ name: 'Wohnzimmer Party', settings: { version: 3, location: 'Party Raum', widgets: [] } }),
+  })
+  assert.equal(unauthCreate.status, 401)
+
+  const createRes = await fetch(`${running.url}/api/presets`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-admin-pin': '2468' },
+    body: JSON.stringify({ name: 'Wohnzimmer Party', settings: { version: 3, location: 'Party Raum', widgets: [] } }),
+  })
+  assert.equal(createRes.status, 201)
+  const created = await createRes.json()
+  assert.equal(created.name, 'Wohnzimmer Party')
+  assert.equal(created.settings.location, 'Party Raum')
+  assert.ok(created.id)
+
+  // 3. List contains created preset
+  const listAfter = await (await fetch(`${running.url}/api/presets`)).json()
+  assert.equal(listAfter.length, 1)
+  assert.equal(listAfter[0].id, created.id)
+
+  // 4. Update preset name
+  const updateRes = await fetch(`${running.url}/api/presets/${created.id}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', 'x-admin-pin': '2468' },
+    body: JSON.stringify({ name: 'Wohnzimmer Chillout' }),
+  })
+  assert.equal(updateRes.status, 200)
+  const updated = await updateRes.json()
+  assert.equal(updated.name, 'Wohnzimmer Chillout')
+
+  // 5. Activate preset as active settings
+  const activateRes = await fetch(`${running.url}/api/presets/${created.id}/activate`, {
+    method: 'POST',
+    headers: { 'x-admin-pin': '2468' },
+  })
+  assert.equal(activateRes.status, 200)
+  const activeSettings = await activateRes.json()
+  assert.equal(activeSettings.location, 'Party Raum')
+
+  // Verify /api/settings now reflects activated preset
+  const currentSettings = await (await fetch(`${running.url}/api/settings`)).json()
+  assert.equal(currentSettings.location, 'Party Raum')
+
+  // 6. Delete preset
+  const deleteRes = await fetch(`${running.url}/api/presets/${created.id}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-pin': '2468' },
+  })
+  assert.equal(deleteRes.status, 204)
+
+  const listFinal = await (await fetch(`${running.url}/api/presets`)).json()
+  assert.deepEqual(listFinal, [])
+})

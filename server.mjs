@@ -470,6 +470,7 @@ export function createHomePiBoardServer({
   }
 
   const settingsFile = path.join(dataDirectory, 'settings.json')
+  const presetsFile = path.join(dataDirectory, 'presets.json')
   const authFile = path.join(dataDirectory, 'auth.json')
   const authenticationFailures = new Map()
   const bootstrapCredential = createPinCredential(adminPin, scryptFunction)
@@ -504,6 +505,25 @@ export function createHomePiBoardServer({
       if (settings.audioOutput && typeof audioOutputExecuteHandler === 'function') {
         audioOutputExecuteHandler(settings.audioOutput).catch(() => {})
       }
+    })
+    settingsWriteQueue = operation.catch(() => {})
+    return operation
+  }
+
+  async function loadPresets() {
+    try {
+      const content = await readFile(presetsFile, 'utf8')
+      const parsed = JSON.parse(content)
+      return Array.isArray(parsed) ? parsed : []
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return []
+      throw error
+    }
+  }
+
+  function persistPresets(presets) {
+    const operation = settingsWriteQueue.then(async () => {
+      await durableAtomicWrite(presetsFile, `${JSON.stringify(presets, null, 2)}\n`)
     })
     settingsWriteQueue = operation.catch(() => {})
     return operation
@@ -744,6 +764,108 @@ export function createHomePiBoardServer({
           return
         }
         json(response, 200, result.value.settings)
+        return
+      }
+
+      if (url.pathname === '/api/presets' && request.method === 'GET') {
+        const presets = await loadPresets()
+        json(response, 200, presets)
+        return
+      }
+
+      if (url.pathname === '/api/presets' && request.method === 'POST') {
+        const result = await runAuthenticated(request, request.headers['x-admin-pin'], async () => {
+          const body = await readJsonBody(request)
+          const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 80) : 'Neues Display'
+          const settings = normalizeSettings(body.settings || defaultSettings)
+          const preset = {
+            id: randomUUID(),
+            name,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            settings,
+          }
+          const presets = await loadPresets()
+          presets.unshift(preset)
+          await persistPresets(presets)
+          return preset
+        })
+        if (result.status !== 'accepted') {
+          respondToAuthenticationFailure(result, response)
+          return
+        }
+        json(response, 201, result.value)
+        return
+      }
+
+      if (url.pathname.startsWith('/api/presets/') && url.pathname.endsWith('/activate') && request.method === 'POST') {
+        const presetId = url.pathname.slice('/api/presets/'.length, -'/activate'.length)
+        const result = await runAuthenticated(request, request.headers['x-admin-pin'], async () => {
+          const presets = await loadPresets()
+          const preset = presets.find((p) => p.id === presetId)
+          if (!preset) return { notFound: true }
+          const settings = normalizeSettings(preset.settings)
+          await persistSettings(settings)
+          return { settings }
+        })
+        if (result.status !== 'accepted') {
+          respondToAuthenticationFailure(result, response)
+          return
+        }
+        if (result.value.notFound) {
+          json(response, 404, { error: 'Layout nicht gefunden.' })
+          return
+        }
+        json(response, 200, result.value.settings)
+        return
+      }
+
+      if (url.pathname.startsWith('/api/presets/') && request.method === 'PUT') {
+        const presetId = url.pathname.slice('/api/presets/'.length)
+        const result = await runAuthenticated(request, request.headers['x-admin-pin'], async () => {
+          const body = await readJsonBody(request)
+          const presets = await loadPresets()
+          const index = presets.findIndex((p) => p.id === presetId)
+          if (index === -1) return { notFound: true }
+          const existing = presets[index]
+          const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 80) : existing.name
+          const settings = body.settings ? normalizeSettings(body.settings) : existing.settings
+          const updated = {
+            ...existing,
+            name,
+            settings,
+            updatedAt: Date.now(),
+          }
+          presets[index] = updated
+          await persistPresets(presets)
+          return { updated }
+        })
+        if (result.status !== 'accepted') {
+          respondToAuthenticationFailure(result, response)
+          return
+        }
+        if (result.value.notFound) {
+          json(response, 404, { error: 'Layout nicht gefunden.' })
+          return
+        }
+        json(response, 200, result.value.updated)
+        return
+      }
+
+      if (url.pathname.startsWith('/api/presets/') && request.method === 'DELETE') {
+        const presetId = url.pathname.slice('/api/presets/'.length)
+        const result = await runAuthenticated(request, request.headers['x-admin-pin'], async () => {
+          const presets = await loadPresets()
+          const filtered = presets.filter((p) => p.id !== presetId)
+          await persistPresets(filtered)
+          return { ok: true }
+        })
+        if (result.status !== 'accepted') {
+          respondToAuthenticationFailure(result, response)
+          return
+        }
+        response.writeHead(204)
+        response.end()
         return
       }
 

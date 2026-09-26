@@ -1,6 +1,6 @@
 import { escapeHtml } from './dashboard-utils.ts'
 import { bindRadioWidgets } from './display.ts'
-import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type WidgetType } from './settings.ts'
+import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type DisplaySettings, type WidgetType } from './settings.ts'
 import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
 import { parseCalendarFeed } from './calendar-feed.ts'
 import { bindWidgetFrames, isBuiltInCalendar, parseSlideshowUrls, renderSlideshowCrudList, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
@@ -226,6 +226,7 @@ export async function renderAdminPage(app: HTMLElement) {
         <div class="admin-global-fields">
           <label class="topbar-field" for="admin-location"><span>Name</span><input id="admin-location" maxlength="24" value="${escapeHtml(settings.location)}" placeholder="Zuhause" /></label>
           <label class="topbar-field" for="admin-weather-city"><span>Wetter</span><input id="admin-weather-city" maxlength="40" value="${escapeHtml(settings.weatherCity)}" placeholder="Berlin" /></label>
+          <button class="topbar-btn" id="admin-presets-btn" type="button" title="Gespeicherte Display-Layouts & Profile">📋 Displays &amp; Vorlagen</button>
           <a class="topbar-btn" id="display-settings-button" href="/settings" title="Display-, HDMI- & Systemeinstellungen">⚙ Einstellungen</a>
           <button class="topbar-btn" id="change-pin-button" type="button" title="Admin-PIN ändern">🔑 PIN</button>
         </div>
@@ -282,6 +283,43 @@ export async function renderAdminPage(app: HTMLElement) {
         <button class="danger-confirm-button" id="confirm-ok" type="button">Löschen</button>
       </div>
     </form>
+  </dialog>
+  <dialog class="pin-dialog presets-dialog" id="presets-dialog">
+    <div class="dialog-heading">
+      <div>
+        <span class="widget-kicker">Display-Profile &amp; Vorlagen</span>
+        <h2>Gespeicherte Displays</h2>
+      </div>
+      <button class="close-button" id="presets-close" type="button" aria-label="Schließen">×</button>
+    </div>
+    <div class="presets-dialog-body">
+      <div class="preset-create-card">
+        <label for="new-preset-name">
+          <span style="font-weight:600; color:#fff;">Aktuelles Display als Vorlage speichern</span>
+          <div class="preset-input-row">
+            <input id="new-preset-name" maxlength="60" placeholder="z. B. Wohnzimmer Standard, Party, Nacht-Ansicht" />
+            <button class="save-button" id="save-new-preset-btn" type="button">💾 Als Profil speichern</button>
+          </div>
+        </label>
+        <div class="preset-json-tools">
+          <button class="topbar-btn" id="export-json-btn" type="button" title="Aktuelles Layout als JSON-Datei herunterladen">📤 Aktuelles Display als JSON exportieren</button>
+          <label class="topbar-btn file-label-btn" for="import-json-file" title="JSON-Layout von Datei importieren">
+            📥 JSON importieren
+            <input type="file" id="import-json-file" accept=".json" style="display:none" />
+          </label>
+        </div>
+      </div>
+      <div class="presets-list-section">
+        <h3>Gespeicherte Profile</h3>
+        <p class="presets-list-hint">Nur ein Display ist jeweils aktiv. Klicke auf <strong>„Laden &amp; Aktivieren“</strong>, um ein Profil sofort auf dem Bildschirm anzuzeigen.</p>
+        <div class="presets-list" id="presets-list-container">
+          <div class="preset-item-loading">Lade Vorlagen …</div>
+        </div>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="secondary-button" id="presets-cancel" type="button">Schließen</button>
+    </div>
   </dialog>`
 
   const showConfirm = createConfirmModal(app)
@@ -1394,6 +1432,255 @@ export async function renderAdminPage(app: HTMLElement) {
     window.setTimeout(() => checkUpdateStatus(true), 2500)
     window.setInterval(() => checkUpdateStatus(true), 10 * 60 * 1000)
   }
+
+  // ==========================================
+  // Display Presets & JSON Export/Import Logic
+  // ==========================================
+  function applySettingsToEditor(newSettings: DisplaySettings) {
+    const locInput = app.querySelector<HTMLInputElement>('#admin-location')
+    if (locInput) locInput.value = newSettings.location || ''
+    const weatherInput = app.querySelector<HTMLInputElement>('#admin-weather-city')
+    if (weatherInput) weatherInput.value = newSettings.weatherCity || ''
+    editorList.innerHTML = newSettings.widgets.map(renderWidgetEditor).join('')
+    editorList.querySelectorAll<HTMLElement>('.widget-editor').forEach(bindEditor)
+    bindWidgetFrames(editorList)
+    bindRadioWidgets(editorList, { allowAutoplay: false })
+    updateEditorIndexes()
+    validateLayout()
+  }
+
+  function downloadJson(filename: string, data: unknown) {
+    const jsonStr = JSON.stringify(data, null, 2)
+    const blob = new Blob([jsonStr], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  function getCurrentEditorSettings(): DisplaySettings {
+    const locInput = app.querySelector<HTMLInputElement>('#admin-location')
+    const weatherInput = app.querySelector<HTMLInputElement>('#admin-weather-city')
+    return normalizeSettings({
+      ...settings,
+      version: SETTINGS_VERSION,
+      location: locInput ? locInput.value.trim() : settings.location,
+      weatherCity: weatherInput ? weatherInput.value.trim() : settings.weatherCity,
+      widgets: readWidgets(),
+    })
+  }
+
+  const presetsDialog = app.querySelector<HTMLDialogElement>('#presets-dialog')!
+  const presetsClose = app.querySelector<HTMLButtonElement>('#presets-close')!
+  const presetsCancel = app.querySelector<HTMLButtonElement>('#presets-cancel')!
+  const adminPresetsBtn = app.querySelector<HTMLButtonElement>('#admin-presets-btn')!
+  const saveNewPresetBtn = app.querySelector<HTMLButtonElement>('#save-new-preset-btn')!
+  const newPresetNameInput = app.querySelector<HTMLInputElement>('#new-preset-name')!
+  const exportJsonBtn = app.querySelector<HTMLButtonElement>('#export-json-btn')!
+  const importJsonFile = app.querySelector<HTMLInputElement>('#import-json-file')!
+  const presetsListContainer = app.querySelector<HTMLElement>('#presets-list-container')!
+
+  const closePresetsDialog = () => {
+    if (presetsDialog.open) presetsDialog.close()
+  }
+
+  presetsClose?.addEventListener('click', closePresetsDialog)
+  presetsCancel?.addEventListener('click', closePresetsDialog)
+
+  async function loadAndRenderPresets() {
+    if (!presetsListContainer) return
+    presetsListContainer.innerHTML = '<div class="preset-item-loading">Lade Vorlagen …</div>'
+    try {
+      const list = await store.listPresets()
+      if (!list.length) {
+        presetsListContainer.innerHTML = '<div class="preset-empty-state">Noch keine Vorlagen gespeichert. Speichere das aktuelle Display oben als Profil!</div>'
+        return
+      }
+      presetsListContainer.innerHTML = list.map((preset) => {
+        const count = preset.settings?.widgets?.length || 0
+        const widgetSummary = preset.settings?.widgets?.map((w) => widgetTypeLabel(w.type)).slice(0, 4).join(', ') || 'Keine Widgets'
+        const dateStr = new Date(preset.updatedAt || preset.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        return `
+          <div class="preset-item-card" data-id="${escapeHtml(preset.id)}">
+            <div class="preset-item-info">
+              <div class="preset-item-title-row">
+                <span class="preset-item-title">${escapeHtml(preset.name)}</span>
+              </div>
+              <div class="preset-item-meta">
+                <span>📊 ${count} ${count === 1 ? 'Widget' : 'Widgets'} (${escapeHtml(widgetSummary)})</span>
+                <span>🕒 ${escapeHtml(dateStr)}</span>
+              </div>
+            </div>
+            <div class="preset-item-actions">
+              <button class="save-button" data-preset-action="activate" data-id="${escapeHtml(preset.id)}" type="button" title="Dieses Display sofort auf der Anzeige aktivieren">▶ Laden &amp; Aktivieren</button>
+              <button class="topbar-btn" data-preset-action="override" data-id="${escapeHtml(preset.id)}" type="button" title="Vorlage mit dem aktuellen Layout aus dem Editor überschreiben">💾 Überschreiben</button>
+              <button class="topbar-btn" data-preset-action="export" data-id="${escapeHtml(preset.id)}" type="button" title="Als JSON-Datei herunterladen">⬇ JSON</button>
+              <button class="topbar-btn" data-preset-action="rename" data-id="${escapeHtml(preset.id)}" type="button" title="Profil umbenennen">✏</button>
+              <button class="topbar-btn secondary" data-preset-action="delete" data-id="${escapeHtml(preset.id)}" type="button" title="Profil löschen">🗑</button>
+            </div>
+          </div>
+        `
+      }).join('')
+    } catch {
+      presetsListContainer.innerHTML = '<div class="preset-empty-state">Fehler beim Laden der Vorlagen.</div>'
+    }
+  }
+
+  adminPresetsBtn?.addEventListener('click', () => {
+    presetsDialog.showModal()
+    void loadAndRenderPresets()
+    newPresetNameInput.focus()
+  })
+
+  saveNewPresetBtn?.addEventListener('click', async () => {
+    let pin = sessionStorage.getItem(pinKey)
+    if (!pin) {
+      pin = await requestPin()
+      if (!pin) return
+    }
+    const name = newPresetNameInput.value.trim() || `Display ${new Date().toLocaleDateString('de-DE')}`
+    saveNewPresetBtn.disabled = true
+    saveNewPresetBtn.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Speichert …</span>'
+    try {
+      await store.savePreset(name, getCurrentEditorSettings(), pin)
+      newPresetNameInput.value = ''
+      showMessage(`✓ Profil "${name}" erfolgreich gespeichert!`)
+      await loadAndRenderPresets()
+    } catch (error) {
+      showMessage(adminErrorMessage(error, 'Fehler beim Speichern der Vorlage.'), true)
+    } finally {
+      saveNewPresetBtn.disabled = false
+      saveNewPresetBtn.textContent = '💾 Als Profil speichern'
+    }
+  })
+
+  exportJsonBtn?.addEventListener('click', () => {
+    const cur = getCurrentEditorSettings()
+    const loc = (cur.location || 'display').toLowerCase().replace(/\s+/g, '-')
+    const date = new Date().toISOString().slice(0, 10)
+    downloadJson(`homepiboard-${loc}-${date}.json`, cur)
+    showMessage('✓ Display als JSON-Datei exportiert.')
+  })
+
+  importJsonFile?.addEventListener('change', async () => {
+    const file = importJsonFile.files?.[0]
+    if (!file) return
+    try {
+      const text = await file.text()
+      const raw = JSON.parse(text)
+      const imported = normalizeSettings(raw)
+      applySettingsToEditor(imported)
+      markDirty()
+      closePresetsDialog()
+      showMessage(`✓ Layout "${imported.location}" aus JSON importiert. Klicke auf „Änderungen speichern“, um es aktiv zu schalten!`)
+    } catch {
+      showMessage('Die ausgewählte Datei enthält kein gültiges HomePiBoard JSON-Layout.', true)
+    } finally {
+      importJsonFile.value = ''
+    }
+  })
+
+  presetsListContainer?.addEventListener('click', async (event) => {
+    const target = event.target as HTMLElement
+    const actionBtn = target.closest<HTMLButtonElement>('[data-preset-action]')
+    if (!actionBtn) return
+    const action = actionBtn.dataset.presetAction
+    const presetId = actionBtn.dataset.id
+    if (!presetId) return
+
+    const list = await store.listPresets()
+    const preset = list.find((p) => p.id === presetId)
+    if (!preset) return
+
+    if (action === 'export') {
+      const safeName = (preset.name || 'preset').toLowerCase().replace(/[^a-z0-9äöüß_-]/gi, '-')
+      downloadJson(`homepiboard-${safeName}.json`, preset.settings)
+      showMessage(`✓ Profil "${preset.name}" als JSON heruntergeladen.`)
+      return
+    }
+
+    let pin = sessionStorage.getItem(pinKey)
+    if (!pin) {
+      pin = await requestPin()
+      if (!pin) return
+    }
+
+    if (action === 'activate') {
+      actionBtn.disabled = true
+      actionBtn.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span>'
+      try {
+        const activated = await store.activatePreset(presetId, pin)
+        applySettingsToEditor(activated)
+        markSaved()
+        closePresetsDialog()
+        showMessage(`✓ Display "${preset.name}" wurde als aktives Board geladen!`)
+      } catch (error) {
+        showMessage(adminErrorMessage(error, 'Fehler beim Aktivieren der Vorlage.'), true)
+      } finally {
+        actionBtn.disabled = false
+        actionBtn.textContent = '▶ Laden & Aktivieren'
+      }
+      return
+    }
+
+    if (action === 'override') {
+      const confirmed = await showConfirm({
+        kicker: 'Profil überschreiben',
+        title: `"${preset.name}" aktualisieren?`,
+        message: `Möchtest du das Profil "${preset.name}" mit dem aktuellen Stand aus dem Editor überschreiben?`,
+        confirmText: 'Überschreiben',
+        isDanger: false,
+      })
+      if (!confirmed) return
+      actionBtn.disabled = true
+      try {
+        await store.updatePreset(presetId, { settings: getCurrentEditorSettings() }, pin)
+        showMessage(`✓ Profil "${preset.name}" erfolgreich mit aktuellem Stand aktualisiert.`)
+        await loadAndRenderPresets()
+      } catch (error) {
+        showMessage(adminErrorMessage(error, 'Fehler beim Aktualisieren.'), true)
+      } finally {
+        actionBtn.disabled = false
+      }
+      return
+    }
+
+    if (action === 'rename') {
+      const newName = window.prompt('Neuer Name für dieses Display-Profil:', preset.name)
+      if (!newName || !newName.trim() || newName.trim() === preset.name) return
+      try {
+        await store.updatePreset(presetId, { name: newName.trim() }, pin)
+        showMessage(`✓ Profil in "${newName.trim()}" umbenannt.`)
+        await loadAndRenderPresets()
+      } catch (error) {
+        showMessage(adminErrorMessage(error, 'Fehler beim Umbenennen.'), true)
+      }
+      return
+    }
+
+    if (action === 'delete') {
+      const confirmed = await showConfirm({
+        kicker: 'Profil löschen',
+        title: `"${preset.name}" löschen?`,
+        message: `Möchtest du das gespeicherte Profil "${preset.name}" wirklich unwiderruflich löschen?`,
+        confirmText: 'Löschen',
+        isDanger: true,
+      })
+      if (!confirmed) return
+      try {
+        await store.deletePreset(presetId, pin)
+        showMessage(`✓ Profil "${preset.name}" gelöscht.`)
+        await loadAndRenderPresets()
+      } catch (error) {
+        showMessage(adminErrorMessage(error, 'Fehler beim Löschen.'), true)
+      }
+      return
+    }
+  })
 
   app.querySelector<HTMLFormElement>('#admin-form')!.addEventListener('submit', async (event) => {
     event.preventDefault()

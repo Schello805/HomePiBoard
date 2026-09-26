@@ -40,6 +40,14 @@ export type DisplaySettings = {
   widgets: DashboardWidget[]
 }
 
+export type DisplayPreset = {
+  id: string
+  name: string
+  createdAt: number
+  updatedAt: number
+  settings: DisplaySettings
+}
+
 export const GRID_COLUMNS = 24
 export const GRID_ROWS = 14
 export const MAX_WIDGET_COLUMNS = GRID_COLUMNS * 100

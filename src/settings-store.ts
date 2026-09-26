@@ -1,7 +1,8 @@
-import { defaultSettings, normalizeSettings, type DisplaySettings } from './settings.ts'
+import { defaultSettings, normalizeSettings, type DisplayPreset, type DisplaySettings } from './settings.ts'
 
 const settingsKey = 'homeboard-settings'
 const dirtyKey = 'homeboard-settings-dirty'
+const presetsKey = 'homeboard-presets'
 
 type StorageAdapter = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
@@ -48,6 +49,17 @@ function loadCachedSettings(storage: StorageAdapter) {
     storage.removeItem(settingsKey)
     storage.removeItem(dirtyKey)
     return normalizeSettings(defaultSettings)
+  }
+}
+
+function loadCachedPresets(storage: StorageAdapter): DisplayPreset[] {
+  const stored = storage.getItem(presetsKey)
+  if (!stored) return []
+  try {
+    const parsed = JSON.parse(stored)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
   }
 }
 
@@ -132,6 +144,90 @@ export function createSettingsStore({
       storage.setItem(settingsKey, JSON.stringify(savedSettings))
       storage.removeItem(dirtyKey)
       return { settings: savedSettings, source: 'server' }
+    },
+
+    async listPresets(): Promise<DisplayPreset[]> {
+      try {
+        const response = await fetcher('/api/presets', { headers: { accept: 'application/json' } })
+        if (response.ok) {
+          const list = await response.json()
+          if (Array.isArray(list)) {
+            storage.setItem(presetsKey, JSON.stringify(list))
+            return list
+          }
+        }
+      } catch {
+        // fallback
+      }
+      return loadCachedPresets(storage)
+    },
+
+    async savePreset(name: string, settingsValue: DisplaySettings, pin: string): Promise<DisplayPreset> {
+      const settings = normalizeSettings(settingsValue)
+      const response = await fetcher('/api/presets', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-admin-pin': pin,
+        },
+        body: JSON.stringify({ name, settings }),
+      })
+      if (response.status === 401) throw new UnauthorizedError()
+      if (response.status === 429) throw rateLimitError(response)
+      if (!response.ok) throw new SettingsServerError(response.status)
+      const created = await response.json()
+      const cached = loadCachedPresets(storage).filter((p) => p.id !== created.id)
+      cached.unshift(created)
+      storage.setItem(presetsKey, JSON.stringify(cached))
+      return created
+    },
+
+    async updatePreset(id: string, updates: { name?: string; settings?: DisplaySettings }, pin: string): Promise<DisplayPreset> {
+      const payload: Record<string, unknown> = {}
+      if (updates.name !== undefined) payload.name = updates.name
+      if (updates.settings !== undefined) payload.settings = normalizeSettings(updates.settings)
+
+      const response = await fetcher(`/api/presets/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          'x-admin-pin': pin,
+        },
+        body: JSON.stringify(payload),
+      })
+      if (response.status === 401) throw new UnauthorizedError()
+      if (response.status === 429) throw rateLimitError(response)
+      if (!response.ok) throw new SettingsServerError(response.status)
+      const updated = await response.json()
+      const cached = loadCachedPresets(storage).map((p) => (p.id === id ? updated : p))
+      storage.setItem(presetsKey, JSON.stringify(cached))
+      return updated
+    },
+
+    async deletePreset(id: string, pin: string): Promise<void> {
+      const response = await fetcher(`/api/presets/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-pin': pin },
+      })
+      if (response.status === 401) throw new UnauthorizedError()
+      if (response.status === 429) throw rateLimitError(response)
+      if (!response.ok && response.status !== 204 && response.status !== 404) throw new SettingsServerError(response.status)
+      const cached = loadCachedPresets(storage).filter((p) => p.id !== id)
+      storage.setItem(presetsKey, JSON.stringify(cached))
+    },
+
+    async activatePreset(id: string, pin: string): Promise<DisplaySettings> {
+      const response = await fetcher(`/api/presets/${encodeURIComponent(id)}/activate`, {
+        method: 'POST',
+        headers: { 'x-admin-pin': pin },
+      })
+      if (response.status === 401) throw new UnauthorizedError()
+      if (response.status === 429) throw rateLimitError(response)
+      if (!response.ok) throw new SettingsServerError(response.status)
+      const activatedSettings = normalizeSettings(await response.json())
+      storage.setItem(settingsKey, JSON.stringify(activatedSettings))
+      storage.removeItem(dirtyKey)
+      return activatedSettings
     },
   }
 }

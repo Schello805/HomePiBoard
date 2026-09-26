@@ -1775,6 +1775,179 @@ button:has(.loading-spinner) {
   gap: 14px;
 }
 
+/* ==========================================================================
+   Presets & Display Profiles Dialog
+   ========================================================================== */
+.presets-dialog {
+  width: min(720px, calc(100vw - 24px));
+  max-height: calc(90vh);
+  border-radius: 12px;
+  background: #111311;
+  border: 1px solid var(--line);
+  padding: 0;
+  color: var(--ink);
+}
+
+.presets-dialog .dialog-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.presets-dialog-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-height: calc(80vh - 120px);
+  overflow-y: auto;
+}
+
+.preset-create-card {
+  background: #161a16;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.preset-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+}
+
+.preset-input-row input {
+  flex: 1;
+}
+
+.preset-json-tools {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.preset-json-tools .file-label-btn {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.presets-list-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.presets-list-section h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #fff;
+}
+
+.presets-list-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.presets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.preset-item-card {
+  background: #181c18;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.preset-item-card:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.preset-item-card.is-active-preset {
+  border-color: var(--acid);
+  background: rgba(201, 242, 105, 0.05);
+}
+
+.preset-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.preset-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preset-item-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.preset-badge-active {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  background: var(--acid);
+  color: #121411;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.preset-item-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.preset-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preset-item-actions button {
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  height: 32px;
+}
+
+.preset-empty-state, .preset-item-loading {
+  font-size: 0.85rem;
+  color: var(--muted);
+  padding: 16px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+  border: 1px dashed var(--line);
+}
+
 @media (max-width: 600px) {
   .settings-page-shell {
     padding: 16px;
@@ -1783,6 +1956,10 @@ button:has(.loading-spinner) {
     grid-template-columns: 1fr;
   }
   .settings-slider-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .preset-input-row {
     flex-direction: column;
     align-items: stretch;
   }
