@@ -233,6 +233,36 @@ button:disabled { cursor: not-allowed; opacity: 0.42; }
 .save-button:hover:not(:disabled) { filter: brightness(1.05); }
 .secondary-button { border: 1px solid var(--line); color: var(--ink); background: transparent; }
 .secondary-button:hover:not(:disabled) { border-color: var(--muted); background: rgba(242, 238, 230, 0.05); }
+
+/* Loading Spinner */
+.loading-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spinnerRotate 0.65s linear infinite;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.save-button .loading-spinner,
+.danger-confirm-button .loading-spinner {
+  border: 2px solid rgba(0, 0, 0, 0.22);
+  border-top-color: currentColor;
+}
+.loading-spinner-acid {
+  border-top-color: var(--acid) !important;
+}
+button:has(.loading-spinner) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+@keyframes spinnerRotate {
+  to { transform: rotate(360deg); }
+}
 .danger-confirm-button {
   min-height: 44px;
   border-radius: 5px;
@@ -567,7 +597,16 @@ button:disabled { cursor: not-allowed; opacity: 0.42; }
 .upload-status {
   font-size: 0.74rem;
   color: var(--muted);
-  min-height: 1.2em;
+  min-height: 1.4em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.upload-status .loading-spinner {
+  width: 12px;
+  height: 12px;
+  border-width: 1.5px;
+  border-top-color: var(--acid);
 }
 
 .slideshow-crud-section {

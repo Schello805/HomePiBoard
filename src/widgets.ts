@@ -282,7 +282,7 @@ export function renderWasteEvents(events: CalendarFeedEvent[], now = new Date())
 export function wasteContent(widget: DashboardWidget) {
   if (isWasteCalendarFeed(widget)) {
     const cachedItems = widget.wasteItems ? renderWasteItemsHtml(parseWasteItems(widget.wasteItems)) : ''
-    return `<div class="waste-widget-container" data-waste-feed data-waste-widget-id="${escapeHtml(widget.id)}">${cachedItems || '<div class="waste-loading-status" role="status">Müllkalender-Abo wird geladen …</div>'}</div>`
+    return `<div class="waste-widget-container" data-waste-feed data-waste-widget-id="${escapeHtml(widget.id)}">${cachedItems || '<div class="waste-loading-status" role="status"><span class="loading-spinner" aria-hidden="true"></span> <span>Müllkalender-Abo wird geladen …</span></div>'}</div>`
   }
   const items = parseWasteItems(widget.wasteItems)
   return `<div class="waste-widget-container" data-waste-widget>${renderWasteItemsHtml(items)}</div>`
@@ -364,7 +364,7 @@ function frameContent(widget: DashboardWidget) {
     ? ` data-refresh-interval="${widget.refreshIntervalMinutes}"`
     : ''
 
-  return `<div class="frame-container"${refreshAttr}><iframe data-widget-frame src="${escapeHtml(url)}" title="${escapeHtml(widget.title)}" loading="lazy" scrolling="no" referrerpolicy="no-referrer" sandbox="allow-forms allow-popups allow-same-origin allow-scripts"></iframe><div class="frame-status" role="status"><span>Widget wird geladen …</span><button type="button" data-reload-frame>Neu laden</button></div></div>`
+  return `<div class="frame-container"${refreshAttr}><iframe data-widget-frame src="${escapeHtml(url)}" title="${escapeHtml(widget.title)}" loading="lazy" scrolling="no" referrerpolicy="no-referrer" sandbox="allow-forms allow-popups allow-same-origin allow-scripts"></iframe><div class="frame-status" role="status"><span class="loading-spinner" aria-hidden="true"></span> <span>Widget wird geladen …</span><button type="button" data-reload-frame>Neu laden</button></div></div>`
 }
 
 function slideshowContent(widget: DashboardWidget) {

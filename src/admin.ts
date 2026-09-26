@@ -128,6 +128,10 @@ export type ConfirmModalOptions = {
   isDanger?: boolean
 }
 
+export function loadingSpinnerHtml(): string {
+  return '<span class="loading-spinner" aria-hidden="true"></span>'
+}
+
 export function createConfirmModal(root: ParentNode) {
   const dialog = root.querySelector<HTMLDialogElement>('#confirm-dialog')
   const kickerEl = root.querySelector<HTMLElement>('#confirm-kicker')
@@ -956,7 +960,9 @@ export async function renderAdminPage(app: HTMLElement) {
           if (uploadStatus) uploadStatus.textContent = `„${file.name}“ ist größer als 5 MB.`
           continue
         }
-        if (uploadStatus) uploadStatus.textContent = `Lade „${file.name}“ hoch …`
+        if (uploadStatus) {
+          uploadStatus.innerHTML = `<span class="loading-spinner" aria-hidden="true"></span> <span>Lade „${escapeHtml(file.name)}“ hoch …</span>`
+        }
 
         const formData = new FormData()
         formData.append('file', file)
@@ -997,9 +1003,9 @@ export async function renderAdminPage(app: HTMLElement) {
           refreshEditor(editor)
           markDirty()
           if (uploadStatus) {
-            uploadStatus.textContent = currentType === 'slideshow'
-              ? `„${file.name}“ hinzugefügt (${existingUrls.length}/10)`
-              : `„${file.name}“ hochgeladen!`
+            uploadStatus.innerHTML = `<span>✓</span> <span>${currentType === 'slideshow'
+              ? `„${escapeHtml(file.name)}“ hinzugefügt (${existingUrls.length}/10)`
+              : `„${escapeHtml(file.name)}“ hochgeladen!`}</span>`
           }
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Fehler beim Upload.'
@@ -1015,6 +1021,10 @@ export async function renderAdminPage(app: HTMLElement) {
     icsFileInput?.addEventListener('change', () => {
       const file = icsFileInput.files?.[0]
       if (!file) return
+
+      if (icsUploadStatus) {
+        icsUploadStatus.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Lese Kalenderdatei …</span>'
+      }
 
       const reader = new FileReader()
       reader.onload = () => {
@@ -1040,7 +1050,7 @@ export async function renderAdminPage(app: HTMLElement) {
             wasteTextarea.value = upcoming.map((e) => `${e.summary.replace(/[:|]/g, ' - ')}: ${e.start.slice(0, 10)}`).join('\n')
           }
           if (icsUploadStatus) {
-            icsUploadStatus.textContent = `✓ ${upcoming.length} Termine importiert (${file.name})`
+            icsUploadStatus.innerHTML = `<span>✓</span> <span>${upcoming.length} Termine importiert (${escapeHtml(file.name)})</span>`
           }
           refreshEditor(editor)
           markDirty()
@@ -1102,7 +1112,7 @@ export async function renderAdminPage(app: HTMLElement) {
       if (testAudio && !testAudio.paused) {
         cleanupTestAudio()
       } else {
-        if (testRadioStatus) testRadioStatus.textContent = 'Verbinde mit Stream …'
+        if (testRadioStatus) testRadioStatus.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Verbinde mit Stream …</span>'
         if (testRadioBtn) testRadioBtn.innerHTML = '<span class="preview-play-icon">⏸</span> <span>Stoppen</span>'
         testAudio = new Audio(streamUrl)
         testAudio.volume = 0.8
@@ -1357,7 +1367,7 @@ export async function renderAdminPage(app: HTMLElement) {
         const pin = pinInput.value.trim()
         clearPinError(pinError)
         pinSubmit.disabled = true
-        pinSubmit.textContent = 'Prüfe …'
+        pinSubmit.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Prüfe …</span>'
         let valid = false
         try {
           valid = await store.verifyPin(pin)
@@ -1449,7 +1459,7 @@ export async function renderAdminPage(app: HTMLElement) {
 
     changePinError.textContent = ''
     changePinSubmit.disabled = true
-    changePinSubmit.textContent = 'Speichert …'
+    changePinSubmit.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Speichert …</span>'
     try {
       await store.changePin(currentPin, newPin)
       sessionStorage.setItem(pinKey, newPin)
@@ -1557,7 +1567,16 @@ export async function renderAdminPage(app: HTMLElement) {
     closeSystemSettings()
     showMessage('Display-Einstellungen übernommen. Klicke auf "Speichern", um sie dauerhaft zu sichern.')
   })
-  telemetryRefreshBtn.addEventListener('click', () => refreshTelemetry())
+  telemetryRefreshBtn.addEventListener('click', async () => {
+    telemetryRefreshBtn.disabled = true
+    telemetryRefreshBtn.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Lade …</span>'
+    try {
+      await refreshTelemetry()
+    } finally {
+      telemetryRefreshBtn.disabled = false
+      telemetryRefreshBtn.textContent = 'Aktualisieren'
+    }
+  })
   refreshTelemetry()
   window.setInterval(refreshTelemetry, 30000)
 
@@ -1586,7 +1605,7 @@ export async function renderAdminPage(app: HTMLElement) {
       widgets: readWidgets(),
     })
     saveButton.disabled = true
-    saveButton.textContent = 'Speichert …'
+    saveButton.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Speichert …</span>'
     try {
       const saved = await saveWithPin(nextSettings)
       if (!saved) return

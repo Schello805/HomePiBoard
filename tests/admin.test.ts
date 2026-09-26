@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { adminErrorMessage, clearPinError, compactFieldCharacters, createConfirmModal, formatCpuTemp, formatUptime, lostPointerCaptureAction, resizeChangedFromStart, resizeKeyboardDelta, resizePointerDelta, resizeWidgetDimensions, syncCompactField, validatePinChange, widgetPreviewAspectRatio } from '../src/admin.ts'
+import { adminErrorMessage, clearPinError, compactFieldCharacters, createConfirmModal, formatCpuTemp, formatUptime, loadingSpinnerHtml, lostPointerCaptureAction, resizeChangedFromStart, resizeKeyboardDelta, resizePointerDelta, resizeWidgetDimensions, syncCompactField, validatePinChange, widgetPreviewAspectRatio } from '../src/admin.ts'
 import { MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS } from '../src/settings.ts'
 import { RateLimitError } from '../src/settings-store.ts'
 
@@ -203,5 +203,11 @@ test('createConfirmModal sets content and resolves true on confirm and false on 
   const cancelResult = await cancelPromise
   assert.equal(cancelResult, false)
   assert.equal(dialogClosed, true)
+})
+
+test('loadingSpinnerHtml produces accessible loading spinner markup', () => {
+  const spinner = loadingSpinnerHtml()
+  assert.match(spinner, /class="loading-spinner"/)
+  assert.match(spinner, /aria-hidden="true"/)
 })
 
