@@ -17,14 +17,26 @@ sudo apt-get upgrade -y
 sudo apt-get install -y curl git unclutter
 
 # Für OS Lite: Leichtgewichtige X11-Umgebung und Chromium installieren
-if ! command -v startx >/dev/null 2>&1 || ! command -v chromium-browser >/dev/null 2>&1; then
-  echo "  -> Installiere X11, Openbox und Chromium für Kiosk-Ausgabe auf OS Lite..."
-  sudo apt-get install -y --no-install-recommends \
-    xserver-xorg \
-    xinit \
-    openbox \
-    chromium-browser || sudo apt-get install -y chromium
+echo "  -> Installiere X11, Openbox und Chromium für Kiosk-Ausgabe auf OS Lite..."
+sudo apt-get install -y --no-install-recommends \
+  xserver-xorg \
+  xinit \
+  x11-xserver-utils \
+  xserver-xorg-legacy \
+  openbox \
+  libgl1-mesa-dri
+
+# Chromium Browser installieren (auf Debian 12 / arm64 heißt das Paket 'chromium')
+if ! command -v chromium >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1; then
+  echo "  -> Installiere Chromium Browser..."
+  sudo apt-get install -y chromium 2>/dev/null || sudo apt-get install -y chromium-browser 2>/dev/null || true
 fi
+
+# X11 non-root Berechtigung für tty1 / OS Lite sicherstellen
+sudo tee /etc/X11/Xwrapper.config > /dev/null << 'WRAPPER_EOF'
+allowed_users=anybody
+needs_root_rights=yes
+WRAPPER_EOF
 
 # 2. Node.js 22 LTS prüfen / installieren
 echo "[2/6] Prüfe Node.js Installation..."
@@ -110,15 +122,17 @@ XINIT_EOF
 chmod +x "${HOME}/.xinitrc"
 
 # Falls Autologin auf der Konsole aktiv ist, xinit bei Login auf tty1 starten
-if [ ! -f "${HOME}/.bash_profile" ] || ! grep -q "startx" "${HOME}/.bash_profile"; then
-  cat << 'PROFILE_EOF' >> "${HOME}/.bash_profile"
+for PROFILE_FILE in "${HOME}/.bash_profile" "${HOME}/.profile"; do
+  if ! grep -q "startx" "$PROFILE_FILE" 2>/dev/null; then
+    cat << 'PROFILE_EOF' >> "$PROFILE_FILE"
 
 # HomePiBoard: Starte X11 Kiosk automatisch auf tty1 (HDMI)
 if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
   startx -- -nocursor
 fi
 PROFILE_EOF
-fi
+  fi
+done
 
 # Desktop-Autologin bzw. Console-Autologin aktivieren
 if command -v raspi-config >/dev/null 2>&1; then
@@ -146,7 +160,10 @@ echo ""
 echo "  🔑 Standard-PIN:       ${DEFAULT_PIN}"
 echo ""
 echo "==========================================================="
-echo "  Tipp: Öffne http://${IP_ADDR}:4173/admin an deinem Laptop"
-echo "  oder Smartphone, um deine Anzeige zu konfigurieren."
+echo "  ⚠️ WICHTIG – JETZT NEUSTARTEN:"
+echo "  Damit der Kiosk-Modus auf deinem HDMI-Monitor startet,"
+echo "  führe bitte folgenden Befehl aus:"
+echo ""
+echo "    sudo reboot"
 echo "==========================================================="
 echo ""

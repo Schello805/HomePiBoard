@@ -106,6 +106,15 @@ curl -sSL https://raw.githubusercontent.com/Schello805/HomePiBoard/main/scripts/
 - Richtet den randlosen Kiosk-Vollbildmodus auf dem HDMI-Ausgang ein
 - Versteckt den Mauszeiger nach 2 Sekunden Inaktivität
 
+### Schritt 5: Raspberry Pi einmalig neustarten
+Führe abschließend folgenden Befehl aus, um den automatischen HDMI-Kioskmodus zu starten:
+
+```bash
+sudo reboot
+```
+
+Der Pi startet neu, loggt sich automatisch ein und öffnet die HomePiBoard-Anzeige im Vollbildmodus auf deinem HDMI-Monitor!
+
 ---
 
 ### Ausgabe am Ende der Installation
