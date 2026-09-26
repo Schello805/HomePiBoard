@@ -275,50 +275,69 @@ export async function performSystemUpdate({ cwd = rootDirectory, restartProcess 
     PATH: `${process.env.PATH || ''}:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin`,
   }
 
-  log.push('1/4: Hole neuesten Code von GitHub (git pull)...')
+  // 0. Ggf. Dateiberechtigungen korrigieren & Git Safe Directory setzen
   try {
-    const { stdout: gitOut, stderr: gitErr } = await exec('git', ['pull'], { cwd, env, timeout: 45000 })
-    if (gitOut.trim()) log.push(gitOut.trim())
-    else if (gitErr.trim()) log.push(gitErr.trim())
+    const uid = typeof process.getuid === 'function' ? process.getuid() : null
+    const gid = typeof process.getgid === 'function' ? process.getgid() : null
+    if (uid !== null && gid !== null) {
+      await exec('sudo', ['-n', 'chown', '-R', `${uid}:${gid}`, cwd], { env, timeout: 10000 })
+    }
+  } catch {
+    // ignore wenn sudo NOPASSWD nicht konfiguriert
+  }
+
+  try {
+    await exec('git', ['config', '--global', '--add', 'safe.directory', cwd], { env, timeout: 5000 })
+    await exec('git', ['config', '--global', '--add', 'safe.directory', '*'], { env, timeout: 5000 })
+  } catch {
+    // ignore
+  }
+
+  log.push('1/4: Hole neuesten Code von GitHub...')
+  let gitSuccess = false
+  try {
+    await exec('git', ['fetch', 'origin', 'main'], { cwd, env, timeout: 60000 })
+    const { stdout: resetOut } = await exec('git', ['reset', '--hard', 'origin/main'], { cwd, env, timeout: 20000 })
+    if (resetOut.trim()) log.push(resetOut.trim())
+    gitSuccess = true
   } catch (err) {
-    log.push(`git pull: ${err.message}`)
+    try {
+      const { stdout: pullOut, stderr: pullErr } = await exec('git', ['pull'], { cwd, env, timeout: 45000 })
+      if (pullOut.trim()) log.push(pullOut.trim())
+      else if (pullErr.trim()) log.push(pullErr.trim())
+      gitSuccess = true
+    } catch (pullErr) {
+      log.push(`Git-Fehler: ${pullErr.message}`)
+    }
   }
 
   log.push('2/4: Prüfe npm Abhängigkeiten...')
   try {
-    const { stdout: npmOut } = await exec('npm', ['install', '--no-audit', '--no-fund'], { cwd, env, timeout: 120000 })
-    if (npmOut.trim()) log.push(npmOut.trim().split('\n').slice(-3).join('\n'))
+    const { stdout: npmOut } = await exec('npm', ['install', '--no-audit', '--no-fund'], { cwd, env, timeout: 180000 })
+    if (npmOut.trim()) log.push(npmOut.trim().split('\n').slice(-2).join('\n'))
   } catch (err) {
     log.push(`npm install: ${err.message}`)
   }
 
   log.push('3/4: Kompiliere Frontend (Vite & TypeScript)...')
+  let buildSuccess = false
   try {
-    const { stdout: buildOut } = await exec('npm', ['run', 'build'], { cwd, env, timeout: 120000 })
+    const { stdout: buildOut } = await exec('npm', ['run', 'build'], { cwd, env, timeout: 180000 })
     if (buildOut.trim()) log.push(buildOut.trim().split('\n').slice(-3).join('\n'))
     log.push('✓ Frontend erfolgreich gebaut!')
+    buildSuccess = true
   } catch (err) {
-    log.push(`Build-Warnung: ${err.message}`)
+    log.push(`Build-Fehler: ${err.message}`)
   }
 
   log.push('4/4: Aktualisiere HDMI Monitor & Audio...')
-  try {
-    await exec('bash', ['./scripts/disable-sleep.sh'], { cwd, env, timeout: 20000 })
-  } catch {
-    // ignore
-  }
   try {
     await exec('bash', ['./scripts/set-audio-output.sh', 'hdmi'], { cwd, env, timeout: 20000 })
   } catch {
     // ignore
   }
   try {
-    await exec('bash', ['./scripts/setup-hdmi-audio.sh'], { cwd, env, timeout: 20000 })
-  } catch {
-    // ignore
-  }
-  try {
-    await exec('pkill', ['-f', 'chromium|chrome'], { env, timeout: 3000 })
+    await exec('pkill', ['-f', 'chromium|chrome'], { env, timeout: 5000 })
     log.push('✓ Kiosk-Browser auf HDMI neu geladen.')
   } catch {
     log.push('ℹ Kiosk-Browser nicht aktiv oder bereits aktuell.')
@@ -332,14 +351,23 @@ export async function performSystemUpdate({ cwd = rootDirectory, restartProcess 
     // ignore
   }
 
+  const overallSuccess = gitSuccess && buildSuccess
+
   if (restartProcess) {
     setTimeout(() => {
-      process.exit(0)
+      try {
+        exec('sudo', ['-n', 'systemctl', 'restart', 'homepiboard'], { env, timeout: 5000 }).catch(() => {})
+      } catch {
+        // ignore
+      }
+      setTimeout(() => {
+        process.exit(0)
+      }, 500)
     }, 1500)
   }
 
   return {
-    success: true,
+    success: overallSuccess,
     newCommit,
     log: log.join('\n'),
     restarting: restartProcess,

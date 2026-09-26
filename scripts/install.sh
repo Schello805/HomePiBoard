@@ -111,6 +111,12 @@ sudo systemctl daemon-reload
 sudo systemctl enable homepiboard.service
 sudo systemctl restart homepiboard.service
 
+# Sudoers für unterbrechungsfreie Web-Updates einrichten
+if [ -d "/etc/sudoers.d" ]; then
+  echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart homepiboard, /usr/bin/systemctl restart homepiboard.service, /bin/systemctl restart homepiboard, /bin/systemctl restart homepiboard.service, /bin/chown, /usr/bin/chown" | sudo tee /etc/sudoers.d/homepiboard > /dev/null
+  sudo chmod 0440 /etc/sudoers.d/homepiboard 2>/dev/null || true
+fi
+
 # 6. Kiosk-Autostart auf HDMI konfigurieren
 echo "[6/6] Konfiguriere Kiosk-Autostart & Always-On für HDMI..."
 chmod +x "${INSTALL_DIR}/scripts/kiosk.sh"
