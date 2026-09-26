@@ -216,7 +216,7 @@ button:disabled { cursor: not-allowed; opacity: 0.42; }
 .close-button:hover, .icon-button:hover, .drag-handle:hover { border-color: var(--line); color: var(--acid); background: rgba(201, 242, 105, 0.06); }
 .danger-button:hover { color: var(--danger); background: rgba(242, 155, 136, 0.08); }
 .pin-dialog label, .admin-form label { display: flex; align-items: flex-start; flex-direction: column; gap: 6px; color: var(--ink); font-size: 0.78rem; }
-.pin-dialog input, .admin-form input, .admin-form select, .admin-form textarea { width: 100%; border: 1px solid var(--line); border-radius: 5px; padding: 11px 12px; color: var(--ink); background: #151714; outline: none; }
+.pin-dialog input, .admin-form input:not([type="range"]):not([type="checkbox"]), .admin-form select, .admin-form textarea { width: 100%; border: 1px solid var(--line); border-radius: 5px; padding: 11px 12px; color: var(--ink); background: #151714; outline: none; }
 .admin-form textarea { min-height: 86px; resize: vertical; }
 .pin-error, .layout-warning { min-height: 1.3em; margin: 0; color: var(--danger); font-size: 0.82rem; }
 .dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
@@ -1197,10 +1197,19 @@ button:has(.loading-spinner) {
   padding: 3px 8px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+  user-select: none;
 }
 .media-volume-icon {
   font-size: 0.85rem;
   line-height: 1;
+  width: 20px;
+  min-width: 20px;
+  max-width: 20px;
+  flex: 0 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   user-select: none;
   transition: transform 0.15s ease;
@@ -1209,18 +1218,32 @@ button:has(.loading-spinner) {
   transform: scale(1.15);
 }
 .media-volume-slider {
-  width: 76px;
-  height: 6px;
+  width: 76px !important;
+  min-width: 76px !important;
+  max-width: 76px !important;
+  flex: 0 0 76px !important;
+  height: 6px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-radius: 3px !important;
   accent-color: var(--acid);
   cursor: pointer;
+  outline: none !important;
+  box-sizing: border-box !important;
 }
 .media-volume-val {
   font-size: 0.7rem;
   font-weight: 600;
   color: var(--muted);
-  min-width: 30px;
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  flex: 0 0 36px !important;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 @media (max-width: 340px) {
   .media-volume-control { display: none; }
