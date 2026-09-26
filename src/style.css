@@ -1348,6 +1348,232 @@ button:has(.loading-spinner) {
   color: var(--muted);
 }
 
+/* ==========================================================================
+   Dedicated Settings Page (/settings)
+   ========================================================================== */
+.settings-page-shell {
+  min-height: 100vh;
+  padding: 24px 32px;
+  max-width: 1300px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.settings-brand .brand-logo {
+  width: 44px;
+  height: 44px;
+}
+
+.settings-title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.settings-nav-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.settings-main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-feedback-banner {
+  padding: 12px 18px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.settings-feedback-banner.is-success {
+  background: rgba(201, 242, 105, 0.12);
+  border: 1px solid rgba(201, 242, 105, 0.4);
+  color: var(--acid);
+}
+
+.settings-feedback-banner.is-error {
+  background: rgba(255, 92, 119, 0.15);
+  border: 1px solid rgba(255, 92, 119, 0.4);
+  color: #ff8597;
+}
+
+.settings-grid-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.settings-card {
+  background: #111311;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.2s ease;
+}
+
+.settings-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.settings-card.span-full {
+  grid-column: 1 / -1;
+}
+
+.settings-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.settings-card-header > div {
+  flex: 1;
+}
+
+.settings-card-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  box-sizing: border-box;
+}
+
+.settings-card-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.settings-card-desc {
+  margin: 4px 0 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.settings-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.settings-slider-row label {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.settings-slider-row input[type="range"] {
+  width: 100%;
+}
+
+.settings-pin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-pin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.settings-pin-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.settings-pin-grid input {
+  background: #181b18;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.settings-pin-grid input:focus {
+  border-color: var(--acid);
+  outline: none;
+}
+
+.settings-pin-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+@media (max-width: 600px) {
+  .settings-page-shell {
+    padding: 16px;
+  }
+  .settings-grid-layout {
+    grid-template-columns: 1fr;
+  }
+  .settings-slider-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }

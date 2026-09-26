@@ -608,5 +608,14 @@ test('system update endpoint requires valid admin PIN and executes handler', asy
   assert.equal(executed, true)
 })
 
+test('static routes serve index.html for /, /admin, and /settings', async (context) => {
+  const running = await startServer()
+  context.after(() => running.server.close())
 
-
+  for (const path of ['/', '/admin', '/admin/', '/settings', '/settings/']) {
+    const res = await fetch(`${running.url}${path}`)
+    assert.equal(res.status, 200, `Expected 200 for ${path}`)
+    const contentType = res.headers.get('content-type') || ''
+    assert.match(contentType, /text\/html/, `Expected text/html for ${path}`)
+  }
+})

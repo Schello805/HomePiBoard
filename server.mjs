@@ -404,7 +404,7 @@ async function durableAtomicWrite(targetFile, content, mode = 0o600) {
 }
 
 async function serveStatic(response, pathname, publicDirectory) {
-  const requestedPath = pathname === '/' || pathname === '/admin' || pathname === '/admin/'
+  const requestedPath = pathname === '/' || pathname === '/admin' || pathname === '/admin/' || pathname === '/settings' || pathname === '/settings/'
     ? 'index.html'
     : pathname.replace(/^\/+/, '')
   const resolvedPath = path.resolve(publicDirectory, requestedPath)

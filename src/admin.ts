@@ -1,5 +1,5 @@
 import { escapeHtml } from './dashboard-utils.ts'
-import { bindRadioWidgets, playNotificationSound } from './display.ts'
+import { bindRadioWidgets } from './display.ts'
 import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type WidgetType } from './settings.ts'
 import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
 import { parseCalendarFeed } from './calendar-feed.ts'
@@ -226,7 +226,7 @@ export async function renderAdminPage(app: HTMLElement) {
         <div class="admin-global-fields">
           <label class="topbar-field" for="admin-location"><span>Name</span><input id="admin-location" maxlength="24" value="${escapeHtml(settings.location)}" placeholder="Zuhause" /></label>
           <label class="topbar-field" for="admin-weather-city"><span>Wetter</span><input id="admin-weather-city" maxlength="40" value="${escapeHtml(settings.weatherCity)}" placeholder="Berlin" /></label>
-          <button class="topbar-btn" id="display-settings-button" type="button" title="Display-, HDMI- & Systemeinstellungen">⚙ System & HDMI</button>
+          <a class="topbar-btn" id="display-settings-button" href="/settings" title="Display-, HDMI- & Systemeinstellungen">⚙ Einstellungen</a>
           <button class="topbar-btn" id="change-pin-button" type="button" title="Admin-PIN ändern">🔑 PIN</button>
         </div>
         <div class="admin-header-actions">
@@ -241,7 +241,7 @@ export async function renderAdminPage(app: HTMLElement) {
         <div class="admin-subbar-info">
           <span class="widget-count" id="widget-count"></span>
           <span class="grid-hint">${GRID_COLUMNS} × ${GRID_ROWS} Raster • Ecke ↘ ziehen • ⚙ Einstellungen</span>
-          <button class="system-status-pill" id="system-status-pill" type="button" title="Raspberry Pi Telemetrie anzeigen">Pi Telemetrie …</button>
+          <a class="system-status-pill" id="system-status-pill" href="/settings" title="Raspberry Pi Telemetrie anzeigen">Pi Telemetrie …</a>
         </div>
         <div class="add-widget-menu" aria-label="Widget hinzufügen">
           <span class="add-label">+ Widget:</span>
@@ -267,163 +267,6 @@ export async function renderAdminPage(app: HTMLElement) {
   </main>
   <dialog class="pin-dialog" id="pin-dialog"><form method="dialog" id="pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Admin-Bereich</span><h2>PIN eingeben</h2></div><button class="close-button" id="pin-close" type="button" aria-label="Schließen">×</button></div><label for="admin-pin">Admin-PIN<input id="admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><p class="pin-error" id="pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="pin-cancel" type="button">Abbrechen</button><button class="save-button" id="pin-submit" value="default">Entsperren</button></div></form></dialog>
   <dialog class="pin-dialog" id="change-pin-dialog"><form id="change-pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Sicherheit</span><h2>Admin-PIN ändern</h2></div><button class="close-button" id="change-pin-close" type="button" aria-label="Schließen">×</button></div><label for="current-admin-pin">Aktuelle PIN<input id="current-admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><label for="new-admin-pin">Neue PIN<span>4 bis 64 Ziffern</span><input id="new-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required /></label><label for="confirm-admin-pin">Neue PIN wiederholen<input id="confirm-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required /></label><p class="pin-error" id="change-pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="change-pin-cancel" type="button">Abbrechen</button><button class="save-button" id="change-pin-submit" type="submit">PIN speichern</button></div></form></dialog>
-  <dialog class="pin-dialog system-settings-dialog" id="system-settings-dialog">
-    <div class="system-dialog-content">
-      <div class="dialog-heading">
-        <div>
-          <span class="widget-kicker">Raspberry Pi & HDMI</span>
-          <h2>System- & Display-Einstellungen</h2>
-        </div>
-        <button class="close-button" id="system-settings-close" type="button" aria-label="Schließen">×</button>
-      </div>
-
-      <section class="system-dialog-section">
-        <h3 class="system-section-title">📺 HDMI & Bildschirm</h3>
-        <div class="system-field-row">
-          <label for="admin-display-scale">
-            <span>Display-Zoom / Skalierung</span>
-            <select id="admin-display-scale">
-              <option value="80" ${(settings.displayScale || 100) === 80 ? 'selected' : ''}>80% (Sehr kompakt)</option>
-              <option value="90" ${(settings.displayScale || 100) === 90 ? 'selected' : ''}>90% (Kompakt)</option>
-              <option value="100" ${(settings.displayScale || 100) === 100 ? 'selected' : ''}>100% (Standard)</option>
-              <option value="110" ${(settings.displayScale || 100) === 110 ? 'selected' : ''}>110% (Leicht vergrößert)</option>
-              <option value="125" ${(settings.displayScale || 100) === 125 ? 'selected' : ''}>125% (TV-Empfehlung ab 2m)</option>
-              <option value="150" ${(settings.displayScale || 100) === 150 ? 'selected' : ''}>150% (Groß)</option>
-            </select>
-          </label>
-          <div class="system-field-info">
-            <span>Erkannte HDMI-Auflösung:</span>
-            <strong id="admin-detected-resolution">-- × --</strong>
-          </div>
-        </div>
-        <label class="system-checkbox-label" for="admin-hide-cursor">
-          <input type="checkbox" id="admin-hide-cursor" ${settings.hideCursor !== false ? 'checked' : ''} />
-          <span>Mauszeiger auf der HDMI-Anzeige automatisch ausblenden (nach 2 Sek. Inaktivität)</span>
-        </label>
-      </section>
-
-      <section class="system-dialog-section">
-        <h3 class="system-section-title">🕒 Uhrzeit, Sprache & Datum</h3>
-        <div class="system-field-row">
-          <label for="admin-locale">
-            <span>Sprache / Datumsformat</span>
-            <select id="admin-locale">
-              <option value="de-DE" ${(settings.locale || 'de-DE') === 'de-DE' ? 'selected' : ''}>Deutsch (Deutschland)</option>
-              <option value="de-AT" ${(settings.locale || 'de-DE') === 'de-AT' ? 'selected' : ''}>Deutsch (Österreich)</option>
-              <option value="de-CH" ${(settings.locale || 'de-DE') === 'de-CH' ? 'selected' : ''}>Deutsch (Schweiz)</option>
-              <option value="en-US" ${(settings.locale || 'de-DE') === 'en-US' ? 'selected' : ''}>English (US)</option>
-              <option value="en-GB" ${(settings.locale || 'de-DE') === 'en-GB' ? 'selected' : ''}>English (UK)</option>
-              <option value="fr-FR" ${(settings.locale || 'de-DE') === 'fr-FR' ? 'selected' : ''}>Français</option>
-            </select>
-          </label>
-          <label for="admin-timezone">
-            <span>Zeitzone</span>
-            <select id="admin-timezone">
-              <option value="auto" ${(settings.timezone || 'auto') === 'auto' ? 'selected' : ''}>Automatisch (Systemzeit)</option>
-              <option value="Europe/Berlin" ${(settings.timezone || 'auto') === 'Europe/Berlin' ? 'selected' : ''}>Europe/Berlin (Deutschland)</option>
-              <option value="Europe/Vienna" ${(settings.timezone || 'auto') === 'Europe/Vienna' ? 'selected' : ''}>Europe/Vienna (Österreich)</option>
-              <option value="Europe/Zurich" ${(settings.timezone || 'auto') === 'Europe/Zurich' ? 'selected' : ''}>Europe/Zurich (Schweiz)</option>
-              <option value="UTC" ${(settings.timezone || 'auto') === 'UTC' ? 'selected' : ''}>UTC</option>
-            </select>
-          </label>
-        </div>
-        <label class="system-checkbox-label" for="admin-show-weekday">
-          <input type="checkbox" id="admin-show-weekday" ${settings.showWeekday !== false ? 'checked' : ''} />
-          <span>Wochentag im Header anzeigen (z. B. Sa., 26.09.2026)</span>
-        </label>
-        <label class="system-checkbox-label" for="admin-show-seconds">
-          <input type="checkbox" id="admin-show-seconds" ${settings.showSeconds ? 'checked' : ''} />
-          <span>Sekunden in der Digitaluhr anzeigen (z. B. 12:45:30)</span>
-        </label>
-      </section>
-
-      <section class="system-dialog-section">
-        <h3 class="system-section-title">🌙 Nachtmodus &amp; Bildschirmschutz</h3>
-        <label class="system-checkbox-label" for="admin-night-mode-enabled">
-          <input type="checkbox" id="admin-night-mode-enabled" ${settings.nightModeEnabled ? 'checked' : ''} />
-          <span>Automatischer Nachtmodus aktivieren</span>
-        </label>
-        <div class="system-field-row">
-          <label for="admin-night-mode-start">
-            <span>Beginn (Nachtruhe)</span>
-            <input type="time" id="admin-night-mode-start" value="${settings.nightModeStart || '22:00'}" />
-          </label>
-          <label for="admin-night-mode-end">
-            <span>Ende (Aufwachen)</span>
-            <input type="time" id="admin-night-mode-end" value="${settings.nightModeEnd || '06:00'}" />
-          </label>
-          <label for="admin-night-mode-style">
-            <span>Nacht-Darstellung</span>
-            <select id="admin-night-mode-style">
-              <option value="dim" ${(settings.nightModeStyle || 'dim') === 'dim' ? 'selected' : ''}>Gedimmt (15% Helligkeit)</option>
-              <option value="clock" ${(settings.nightModeStyle || 'dim') === 'clock' ? 'selected' : ''}>Minimalistische Nacht-Uhr</option>
-            </select>
-          </label>
-        </div>
-        <label class="system-checkbox-label" for="admin-pixel-shift-enabled">
-          <input type="checkbox" id="admin-pixel-shift-enabled" ${settings.pixelShiftEnabled !== false ? 'checked' : ''} />
-          <span>Pixel-Shift aktivieren (Burn-In-Schutz alle 5 Min. für OLED &amp; LCD)</span>
-        </label>
-        <small class="system-field-hint">💡 Wake-on-Tap: Durch Berührung oder Klick schaltet das Display nachts sofort für 30 Sekunden auf normale Helligkeit zurück.</small>
-      </section>
-
-      <section class="system-dialog-section">
-        <div class="system-section-header">
-          <h3 class="system-section-title">🔔 Webhook-Benachrichtigungen &amp; Klingel-Gong</h3>
-          <button class="topbar-btn" id="test-sound-btn" type="button" title="Gong-Signalton anhören">🔔 Signalton testen</button>
-        </div>
-        <label class="system-checkbox-label" for="admin-notification-sound-enabled">
-          <input type="checkbox" id="admin-notification-sound-enabled" ${settings.notificationSoundEnabled !== false ? 'checked' : ''} />
-          <span>Akustischen Signalton bei Benachrichtigungen abspielen</span>
-        </label>
-        <div class="system-field-row">
-          <label for="admin-notification-sound-volume">
-            <span>Lautstärke des Signaltons</span>
-            <input type="range" id="admin-notification-sound-volume" min="0.1" max="1.0" step="0.05" value="${settings.notificationSoundVolume ?? 0.8}" />
-          </label>
-        </div>
-        <small class="system-field-hint">💡 HTTP-Webhook: Sende <code>POST /api/notify</code> mit JSON: <code>{"title": "Türklingel", "message": "Jemand steht an der Haustür", "sound": "doorbell"}</code></small>
-      </section>
-
-      <section class="system-dialog-section">
-        <div class="system-section-header">
-          <h3 class="system-section-title">📊 Live Raspberry Pi Telemetrie</h3>
-          <button class="topbar-btn" id="telemetry-refresh-btn" type="button" title="Telemetrie aktualisieren">↻ Aktualisieren</button>
-        </div>
-        <div id="system-telemetry-container" class="system-telemetry-container">
-          <span>Lade Telemetrie …</span>
-        </div>
-      </section>
-
-      <section class="system-dialog-section">
-        <div class="system-section-header">
-          <h3 class="system-section-title">🚀 Software-Aktualisierung (1-Klick-Update)</h3>
-          <button class="topbar-btn" id="update-check-btn" type="button" title="Auf GitHub nach neuen Versionen suchen">🔍 Nach Updates suchen</button>
-        </div>
-        <div id="system-update-container" class="system-update-container">
-          <div class="update-status-row">
-            <span class="telemetry-label">Aktuelle Version:</span>
-            <strong id="update-current-version">Lade …</strong>
-          </div>
-          <div class="update-status-row" id="update-status-banner">
-            <span class="update-badge is-uptodate" id="update-badge">Lade Status …</span>
-          </div>
-          <small class="system-field-hint" id="update-hint">Aktualisiert Code, Abhängigkeiten, Frontend und HDMI-Display vollautomatisch ohne SSH oder Pi-Neustart.</small>
-          <div class="update-actions">
-            <button class="save-button" id="trigger-update-btn" type="button">🚀 Jetzt aktualisieren</button>
-          </div>
-          <div class="update-log-box" id="update-log-box" style="display: none;">
-            <pre id="update-log-text"></pre>
-          </div>
-        </div>
-      </section>
-
-      <div class="dialog-actions">
-        <button class="secondary-button" id="system-settings-cancel" type="button">Abbrechen</button>
-        <button class="save-button" id="system-settings-apply" type="button">Übernehmen</button>
-      </div>
-    </div>
-  </dialog>
   <dialog class="pin-dialog confirm-dialog" id="confirm-dialog">
     <form method="dialog" id="confirm-form">
       <div class="dialog-heading">
@@ -467,42 +310,10 @@ export async function renderAdminPage(app: HTMLElement) {
   const newPinInput = app.querySelector<HTMLInputElement>('#new-admin-pin')!
   const confirmPinInput = app.querySelector<HTMLInputElement>('#confirm-admin-pin')!
   const changePinError = app.querySelector<HTMLElement>('#change-pin-error')!
-  const displaySettingsButton = app.querySelector<HTMLButtonElement>('#display-settings-button')!
-  const systemSettingsDialog = app.querySelector<HTMLDialogElement>('#system-settings-dialog')!
-  const systemSettingsClose = app.querySelector<HTMLButtonElement>('#system-settings-close')!
-  const systemSettingsCancel = app.querySelector<HTMLButtonElement>('#system-settings-cancel')!
-  const systemSettingsApply = app.querySelector<HTMLButtonElement>('#system-settings-apply')!
-  const displayScaleSelect = app.querySelector<HTMLSelectElement>('#admin-display-scale')!
-  const detectedResolutionEl = app.querySelector<HTMLElement>('#admin-detected-resolution')!
-  const hideCursorCheckbox = app.querySelector<HTMLInputElement>('#admin-hide-cursor')!
-  const localeSelect = app.querySelector<HTMLSelectElement>('#admin-locale')!
-  const timezoneSelect = app.querySelector<HTMLSelectElement>('#admin-timezone')!
-  const showSecondsCheckbox = app.querySelector<HTMLInputElement>('#admin-show-seconds')!
-  const showWeekdayCheckbox = app.querySelector<HTMLInputElement>('#admin-show-weekday')!
-  const nightModeEnabledCheckbox = app.querySelector<HTMLInputElement>('#admin-night-mode-enabled')!
-  const nightModeStartInput = app.querySelector<HTMLInputElement>('#admin-night-mode-start')!
-  const nightModeEndInput = app.querySelector<HTMLInputElement>('#admin-night-mode-end')!
-  const nightModeStyleSelect = app.querySelector<HTMLSelectElement>('#admin-night-mode-style')!
-  const pixelShiftCheckbox = app.querySelector<HTMLInputElement>('#admin-pixel-shift-enabled')!
-  const notificationSoundEnabledCheckbox = app.querySelector<HTMLInputElement>('#admin-notification-sound-enabled')!
-  const notificationSoundVolumeInput = app.querySelector<HTMLInputElement>('#admin-notification-sound-volume')!
-  const testSoundBtn = app.querySelector<HTMLButtonElement>('#test-sound-btn')!
-  const telemetryRefreshBtn = app.querySelector<HTMLButtonElement>('#telemetry-refresh-btn')!
-  const systemTelemetryContainer = app.querySelector<HTMLElement>('#system-telemetry-container')!
-  const systemStatusPill = app.querySelector<HTMLButtonElement>('#system-status-pill')!
-  const updateCheckBtn = app.querySelector<HTMLButtonElement>('#update-check-btn')
-  const updateCurrentVersion = app.querySelector<HTMLElement>('#update-current-version')
-  const updateBadge = app.querySelector<HTMLElement>('#update-badge')
-  const updateHint = app.querySelector<HTMLElement>('#update-hint')
-  const triggerUpdateBtn = app.querySelector<HTMLButtonElement>('#trigger-update-btn')
-  const updateLogBox = app.querySelector<HTMLElement>('#update-log-box')
-  const updateLogText = app.querySelector<HTMLElement>('#update-log-text')
+  const displaySettingsButton = app.querySelector<HTMLElement>('#display-settings-button')!
+  const systemStatusPill = app.querySelector<HTMLElement>('#system-status-pill')!
   let dirty = false
   let pinRequest: Promise<string | null> | null = null
-
-  testSoundBtn?.addEventListener('click', () => {
-    void playNotificationSound('doorbell', Number(notificationSoundVolumeInput?.value) || 0.8)
-  })
 
   function bindCompactFields(root: ParentNode) {
     root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea').forEach((control) => {
@@ -1520,28 +1331,14 @@ export async function renderAdminPage(app: HTMLElement) {
     }
   })
 
-  const updateResolutionDisplay = () => {
-    const currentRes = typeof window !== 'undefined' && window.screen
-      ? `${window.screen.width} × ${window.screen.height} (${Math.round((window.devicePixelRatio || 1) * 100)}% DPI)`
-      : '1920 × 1080'
-    const storedRes = typeof localStorage !== 'undefined' ? localStorage.getItem('homepiboard-display-resolution') : null
-    detectedResolutionEl.textContent = storedRes ? `${storedRes} (dieses Gerät: ${currentRes})` : currentRes
-  }
-
   async function refreshTelemetry() {
     try {
       const res = await fetch('/api/system', { method: 'GET', cache: 'no-store' })
       if (!res.ok) throw new Error('system-telemetry-failed')
       const data = await res.json() as {
-        hostname: string
-        platform: string
-        arch: string
-        nodeVersion: string
-        uptimeSeconds: number
-        loadAvg: number[]
         cpuTemp: number | null
-        memory: { totalMb: number; freeMb: number; usedMb: number; percent: number }
-        network: { primaryIp: string; addresses: Array<{ name: string; address: string }> }
+        memory: { percent: number; usedMb: number; totalMb: number }
+        network: { primaryIp: string }
       }
 
       const tempStr = data.cpuTemp !== null ? formatCpuTemp(data.cpuTemp) : ''
@@ -1549,235 +1346,36 @@ export async function renderAdminPage(app: HTMLElement) {
       const ipStr = data.network.primaryIp
       systemStatusPill.textContent = [ipStr, tempStr, ramStr].filter(Boolean).join(' • ')
       systemStatusPill.title = `IP: ${ipStr} | CPU: ${tempStr || 'N/A'} | RAM: ${data.memory.usedMb}/${data.memory.totalMb} MB (${ramStr})`
-
-      const uptimeStr = formatUptime(data.uptimeSeconds)
-      const loadStr = data.loadAvg.join(', ')
-
-      systemTelemetryContainer.innerHTML = `
-        <div class="system-telemetry-grid">
-          <div class="telemetry-card">
-            <span class="telemetry-label">🌐 Lokale IP (HDMI / LAN)</span>
-            <div class="telemetry-val-group">
-              <strong class="telemetry-val">${escapeHtml(ipStr)}</strong>
-              <a class="telemetry-link" href="http://${escapeHtml(ipStr)}:4173/admin" target="_blank" rel="noreferrer" title="Im Browser öffnen">Öffnen ↗</a>
-            </div>
-          </div>
-          <div class="telemetry-card">
-            <span class="telemetry-label">🌡️ CPU-Temperatur</span>
-            <strong class="telemetry-val ${data.cpuTemp !== null && data.cpuTemp > 70 ? 'is-warning' : ''}">${escapeHtml(tempStr || 'N/A (nicht Linux)')}</strong>
-          </div>
-          <div class="telemetry-card">
-            <span class="telemetry-label">💾 Arbeitsspeicher (RAM)</span>
-            <strong class="telemetry-val">${data.memory.usedMb} / ${data.memory.totalMb} MB <small>(${data.memory.percent}%)</small></strong>
-          </div>
-          <div class="telemetry-card">
-            <span class="telemetry-label">⚡ CPU-Auslastung (Load)</span>
-            <strong class="telemetry-val">${escapeHtml(loadStr)}</strong>
-          </div>
-          <div class="telemetry-card">
-            <span class="telemetry-label">⏱️ Systemlaufzeit (Uptime)</span>
-            <strong class="telemetry-val">${escapeHtml(uptimeStr)}</strong>
-          </div>
-          <div class="telemetry-card">
-            <span class="telemetry-label">🖥️ Betriebssystem / Host</span>
-            <strong class="telemetry-val"><small>${escapeHtml(data.hostname)} (${escapeHtml(data.platform)} ${escapeHtml(data.arch)})</small></strong>
-          </div>
-        </div>
-      `
     } catch {
-      systemStatusPill.textContent = 'Pi: Offline'
-      systemTelemetryContainer.innerHTML = '<p class="telemetry-offline-hint">Telemetriedaten konnten nicht geladen werden.</p>'
+      systemStatusPill.textContent = 'Pi: Telemetrie'
     }
   }
 
-  const openSystemSettings = () => {
-    updateResolutionDisplay()
-    refreshTelemetry()
-    checkUpdateStatus(false)
-    systemSettingsDialog.showModal()
-  }
-  const closeSystemSettings = () => {
-    if (systemSettingsDialog.open) systemSettingsDialog.close()
-  }
-  displaySettingsButton.addEventListener('click', openSystemSettings)
-  systemStatusPill.addEventListener('click', openSystemSettings)
-  systemSettingsClose.addEventListener('click', closeSystemSettings)
-  systemSettingsCancel.addEventListener('click', closeSystemSettings)
-  systemSettingsApply.addEventListener('click', () => {
-    markDirty()
-    closeSystemSettings()
-    showMessage('Display-Einstellungen übernommen. Klicke auf "Speichern", um sie dauerhaft zu sichern.')
-  })
-  telemetryRefreshBtn.addEventListener('click', async () => {
-    telemetryRefreshBtn.disabled = true
-    telemetryRefreshBtn.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Lade …</span>'
-    try {
-      await refreshTelemetry()
-    } finally {
-      telemetryRefreshBtn.disabled = false
-      telemetryRefreshBtn.textContent = 'Aktualisieren'
-    }
-  })
   refreshTelemetry()
   window.setInterval(refreshTelemetry, 30000)
 
   async function checkUpdateStatus(fetchRemote = false) {
-    if (!updateCurrentVersion || !updateBadge) return
-    if (fetchRemote && updateCheckBtn) {
-      updateCheckBtn.disabled = true
-      updateCheckBtn.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Prüfe …</span>'
-    }
     try {
       const res = await fetch(`/api/system/update-status${fetchRemote ? '?check=1' : ''}`, { method: 'GET', cache: 'no-store' })
       if (!res.ok) throw new Error('status-failed')
       const data = await res.json() as {
-        success: boolean
-        branch: string
-        currentCommit: string
-        currentCommitMsg: string
-        remoteCommit: string
         updateAvailable: boolean
-        pendingCommits: string[]
       }
-      updateCurrentVersion.textContent = `${data.branch} (${data.currentCommit})`
-      updateCurrentVersion.title = data.currentCommitMsg || ''
 
       if (data.updateAvailable) {
         if (displaySettingsButton) {
-          displaySettingsButton.innerHTML = '⚙ System <span class="update-indicator-dot" title="Neues Update verfügbar">●</span>'
-        }
-        updateBadge.className = 'update-badge is-available'
-        updateBadge.textContent = `⚡ Update verfügbar (${data.remoteCommit})`
-        if (data.pendingCommits && data.pendingCommits.length) {
-          updateHint!.textContent = `Neu: ${data.pendingCommits.join(', ')}`
-        } else {
-          updateHint!.textContent = 'Ein neues Update ist auf GitHub verfügbar. Klicke unten, um es direkt einzuspielen.'
-        }
-        if (triggerUpdateBtn) {
-          triggerUpdateBtn.textContent = `🚀 Jetzt auf ${data.remoteCommit} aktualisieren`
-          triggerUpdateBtn.disabled = false
+          displaySettingsButton.innerHTML = '⚙ Einstellungen <span class="update-indicator-dot" title="Neues Update verfügbar">●</span>'
         }
       } else {
         if (displaySettingsButton) {
-          displaySettingsButton.innerHTML = '⚙ System'
-        }
-        updateBadge.className = 'update-badge is-uptodate'
-        updateBadge.textContent = '✓ Auf neuestem Stand'
-        updateHint!.textContent = 'Dein HomePiBoard ist auf dem aktuellsten Stand von GitHub.'
-        if (triggerUpdateBtn) {
-          triggerUpdateBtn.textContent = '🔄 Neu kompilieren / erzwingen'
-          triggerUpdateBtn.disabled = false
+          displaySettingsButton.innerHTML = '⚙ Einstellungen'
         }
       }
     } catch {
-      updateCurrentVersion.textContent = 'Unbekannt'
-      updateBadge.className = 'update-badge is-error'
-      updateBadge.textContent = 'Prüfung fehlgeschlagen'
-    } finally {
-      if (updateCheckBtn) {
-        updateCheckBtn.disabled = false
-        updateCheckBtn.textContent = '🔍 Nach Updates suchen'
-      }
+      // offline or silent
     }
   }
 
-  async function triggerUpdate() {
-    if (!triggerUpdateBtn) return
-    let pin = sessionStorage.getItem(pinKey)
-    if (!pin) {
-      pin = await requestPin()
-      if (!pin) return
-    }
-
-    triggerUpdateBtn.disabled = true
-    if (updateCheckBtn) updateCheckBtn.disabled = true
-    systemSettingsClose.disabled = true
-    systemSettingsCancel.disabled = true
-    systemSettingsApply.disabled = true
-    triggerUpdateBtn.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Update läuft (git pull, build) …</span>'
-    if (updateBadge) {
-      updateBadge.className = 'update-badge is-updating'
-      updateBadge.textContent = '⏳ Update wird ausgeführt …'
-    }
-    if (updateLogBox) {
-      updateLogBox.style.display = 'block'
-      if (updateLogText) updateLogText.textContent = 'Starte Aktualisierung...\n'
-    }
-
-    try {
-      let res = await fetch('/api/system/update', {
-        method: 'POST',
-        headers: { 'x-admin-pin': pin },
-      })
-
-      if (res.status === 401) {
-        sessionStorage.removeItem(pinKey)
-        const retryPin = await requestPin()
-        if (!retryPin) {
-          throw new Error('PIN erforderlich.')
-        }
-        pin = retryPin
-        res = await fetch('/api/system/update', {
-          method: 'POST',
-          headers: { 'x-admin-pin': pin },
-        })
-      }
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({})) as { error?: string }
-        throw new Error(errData.error || `HTTP ${res.status}`)
-      }
-
-      const result = await res.json() as { success: boolean; newCommit: string; log: string; restarting?: boolean }
-      if (updateLogText) {
-        updateLogText.textContent = result.log || 'Update erfolgreich abgeschlossen!'
-      }
-      if (updateBadge) {
-        updateBadge.className = 'update-badge is-uptodate'
-        updateBadge.textContent = `🎉 Erfolgreich auf ${result.newCommit} aktualisiert!`
-      }
-      if (updateHint) {
-        updateHint.textContent = result.restarting
-          ? 'Der Server und der HDMI-Monitor starten neu. Die Seite lädt in 3 Sekunden automatisch neu …'
-          : 'Update abgeschlossen. Der HDMI-Monitor wurde aktualisiert.'
-      }
-
-      if (result.restarting) {
-        triggerUpdateBtn.textContent = '✓ Aktualisiert (Server startet neu...)'
-        window.setTimeout(() => {
-          window.location.reload()
-        }, 3500)
-      } else {
-        triggerUpdateBtn.textContent = '✓ Erfolgreich'
-        window.setTimeout(() => {
-          triggerUpdateBtn.disabled = false
-          triggerUpdateBtn.textContent = '🚀 Jetzt aktualisieren'
-          if (updateCheckBtn) updateCheckBtn.disabled = false
-          systemSettingsClose.disabled = false
-          systemSettingsCancel.disabled = false
-          systemSettingsApply.disabled = false
-        }, 3000)
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      if (updateBadge) {
-        updateBadge.className = 'update-badge is-error'
-        updateBadge.textContent = '❌ Update fehlgeschlagen'
-      }
-      if (updateLogText) {
-        updateLogText.textContent += `\nFehler: ${msg}`
-      }
-      triggerUpdateBtn.disabled = false
-      triggerUpdateBtn.textContent = 'Erneut versuchen'
-      if (updateCheckBtn) updateCheckBtn.disabled = false
-      systemSettingsClose.disabled = false
-      systemSettingsCancel.disabled = false
-      systemSettingsApply.disabled = false
-    }
-  }
-
-  updateCheckBtn?.addEventListener('click', () => checkUpdateStatus(true))
-  triggerUpdateBtn?.addEventListener('click', triggerUpdate)
   if (typeof window !== 'undefined') {
     window.setTimeout(() => checkUpdateStatus(true), 2500)
     window.setInterval(() => checkUpdateStatus(true), 10 * 60 * 1000)
@@ -1790,22 +1388,10 @@ export async function renderAdminPage(app: HTMLElement) {
       return
     }
     const nextSettings = normalizeSettings({
+      ...settings,
       version: SETTINGS_VERSION,
       location: app.querySelector<HTMLInputElement>('#admin-location')!.value.trim() || defaultSettings.location,
       weatherCity: app.querySelector<HTMLInputElement>('#admin-weather-city')!.value.trim(),
-      timezone: timezoneSelect.value,
-      locale: localeSelect.value,
-      showSeconds: showSecondsCheckbox.checked,
-      showWeekday: showWeekdayCheckbox.checked,
-      displayScale: Number(displayScaleSelect.value),
-      hideCursor: hideCursorCheckbox.checked,
-      nightModeEnabled: nightModeEnabledCheckbox.checked,
-      nightModeStart: nightModeStartInput.value,
-      nightModeEnd: nightModeEndInput.value,
-      nightModeStyle: nightModeStyleSelect.value as 'dim' | 'clock',
-      pixelShiftEnabled: pixelShiftCheckbox.checked,
-      notificationSoundEnabled: notificationSoundEnabledCheckbox.checked,
-      notificationSoundVolume: Number(notificationSoundVolumeInput.value) || 0.8,
       widgets: readWidgets(),
     })
     saveButton.disabled = true
@@ -1820,7 +1406,7 @@ export async function renderAdminPage(app: HTMLElement) {
       showMessage(adminErrorMessage(error, 'Die Einstellungen konnten nicht gespeichert werden.'), true)
     } finally {
       saveButton.disabled = !layoutFits(readWidgets())
-      saveButton.textContent = 'Änderungen speichern'
+      saveButton.textContent = 'Speichern'
     }
   })
 
@@ -1836,19 +1422,6 @@ export async function renderAdminPage(app: HTMLElement) {
     try {
       const saved = await saveWithPin(defaultSettings)
       if (!saved) return
-      displayScaleSelect.value = String(defaultSettings.displayScale || 100)
-      hideCursorCheckbox.checked = defaultSettings.hideCursor !== false
-      localeSelect.value = defaultSettings.locale || 'de-DE'
-      timezoneSelect.value = defaultSettings.timezone || 'auto'
-      showSecondsCheckbox.checked = Boolean(defaultSettings.showSeconds)
-      showWeekdayCheckbox.checked = defaultSettings.showWeekday !== false
-      nightModeEnabledCheckbox.checked = Boolean(defaultSettings.nightModeEnabled)
-      nightModeStartInput.value = defaultSettings.nightModeStart || '22:00'
-      nightModeEndInput.value = defaultSettings.nightModeEnd || '06:00'
-      nightModeStyleSelect.value = defaultSettings.nightModeStyle || 'dim'
-      pixelShiftCheckbox.checked = defaultSettings.pixelShiftEnabled !== false
-      notificationSoundEnabledCheckbox.checked = defaultSettings.notificationSoundEnabled !== false
-      notificationSoundVolumeInput.value = String(defaultSettings.notificationSoundVolume ?? 0.8)
       markSaved()
       window.location.reload()
     } catch (error) {
