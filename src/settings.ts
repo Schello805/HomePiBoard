@@ -1,4 +1,4 @@
-export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow'
+export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow' | 'waste' | 'energy' | 'media'
 
 export type DashboardWidget = {
   id: string
@@ -11,6 +11,16 @@ export type DashboardWidget = {
   intervalSeconds?: number
   breakBefore?: boolean
   showTitle?: boolean
+  wasteItems?: string
+  energySolar?: number
+  energyHouse?: number
+  energyGrid?: number
+  energyBatteryPercent?: number
+  mediaTitle?: string
+  mediaArtist?: string
+  mediaAlbum?: string
+  mediaCoverUrl?: string
+  mediaPlaying?: boolean
 }
 
 export type DisplaySettings = {
@@ -22,6 +32,13 @@ export type DisplaySettings = {
   showSeconds?: boolean
   displayScale?: number
   hideCursor?: boolean
+  nightModeEnabled?: boolean
+  nightModeStart?: string
+  nightModeEnd?: string
+  nightModeStyle?: 'dim' | 'clock'
+  pixelShiftEnabled?: boolean
+  notificationSoundEnabled?: boolean
+  notificationSoundVolume?: number
   widgets: DashboardWidget[]
 }
 
@@ -44,10 +61,17 @@ export const defaultSettings: DisplaySettings = {
   showSeconds: false,
   displayScale: 100,
   hideCursor: true,
+  nightModeEnabled: false,
+  nightModeStart: '22:30',
+  nightModeEnd: '06:30',
+  nightModeStyle: 'dim',
+  pixelShiftEnabled: true,
+  notificationSoundEnabled: true,
+  notificationSoundVolume: 80,
   widgets: [],
 }
 
-const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image', 'slideshow'])
+const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image', 'slideshow', 'waste', 'energy', 'media'])
 
 export const widgetConstraints: Record<WidgetType, { minColumns: number; minRows: number; defaultColumns: number; defaultRows: number }> = {
   web: { minColumns: 4, minRows: 2, defaultColumns: 12, defaultRows: 3 },
@@ -55,6 +79,9 @@ export const widgetConstraints: Record<WidgetType, { minColumns: number; minRows
   text: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
   image: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
   slideshow: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
+  waste: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
+  energy: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
+  media: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
 }
 
 const widgetTitles: Record<WidgetType, string> = {
@@ -63,6 +90,9 @@ const widgetTitles: Record<WidgetType, string> = {
   text: 'Notiz',
   image: 'Bild',
   slideshow: 'Diashow',
+  waste: 'Müllkalender',
+  energy: 'Energie & Solar',
+  media: 'Now Playing',
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -89,6 +119,17 @@ export function createWidget(type: WidgetType, index: number, id = `widget-${ind
   }
   if (type === 'slideshow') {
     widget.intervalSeconds = 8
+  } else if (type === 'waste') {
+    widget.wasteItems = 'Morgen: Gelber Sack\nMontag: Restmüll\n15.10.: Papiertonne\n22.10.: Biomüll'
+  } else if (type === 'energy') {
+    widget.energySolar = 650
+    widget.energyHouse = 420
+    widget.energyGrid = -230
+    widget.energyBatteryPercent = 85
+  } else if (type === 'media') {
+    widget.mediaTitle = 'Keine Wiedergabe'
+    widget.mediaArtist = 'Bereit'
+    widget.mediaPlaying = false
   }
   return widget
 }
@@ -209,6 +250,20 @@ export function normalizeSettings(value: unknown): DisplaySettings {
       ...(intervalSeconds !== undefined ? { intervalSeconds } : {}),
       ...(breakBefore ? { breakBefore: true } : {}),
       ...(showTitle ? { showTitle: true } : {}),
+      ...(type === 'waste' && typeof widget.wasteItems === 'string' ? { wasteItems: widget.wasteItems } : {}),
+      ...(type === 'energy' ? {
+        energySolar: typeof widget.energySolar === 'number' ? widget.energySolar : 0,
+        energyHouse: typeof widget.energyHouse === 'number' ? widget.energyHouse : 0,
+        energyGrid: typeof widget.energyGrid === 'number' ? widget.energyGrid : 0,
+        ...(typeof widget.energyBatteryPercent === 'number' ? { energyBatteryPercent: Math.max(0, Math.min(100, Math.round(widget.energyBatteryPercent))) } : {}),
+      } : {}),
+      ...(type === 'media' ? {
+        mediaTitle: text(widget.mediaTitle, 'Keine Wiedergabe'),
+        mediaArtist: text(widget.mediaArtist, 'Bereit'),
+        mediaAlbum: text(widget.mediaAlbum),
+        mediaCoverUrl: text(widget.mediaCoverUrl),
+        mediaPlaying: Boolean(widget.mediaPlaying),
+      } : {}),
     }
   })
 
@@ -229,6 +284,14 @@ export function normalizeSettings(value: unknown): DisplaySettings {
   const rawScale = Number(parsed.displayScale)
   const displayScale = Number.isFinite(rawScale) && rawScale >= 50 && rawScale <= 200 ? Math.round(rawScale) : defaultSettings.displayScale
   const hideCursor = typeof parsed.hideCursor === 'boolean' ? parsed.hideCursor : defaultSettings.hideCursor
+  const nightModeEnabled = typeof parsed.nightModeEnabled === 'boolean' ? parsed.nightModeEnabled : defaultSettings.nightModeEnabled
+  const nightModeStart = typeof parsed.nightModeStart === 'string' && /^\d{1,2}:\d{2}$/.test(parsed.nightModeStart.trim()) ? parsed.nightModeStart.trim() : defaultSettings.nightModeStart
+  const nightModeEnd = typeof parsed.nightModeEnd === 'string' && /^\d{1,2}:\d{2}$/.test(parsed.nightModeEnd.trim()) ? parsed.nightModeEnd.trim() : defaultSettings.nightModeEnd
+  const nightModeStyle = parsed.nightModeStyle === 'clock' ? 'clock' : 'dim'
+  const pixelShiftEnabled = typeof parsed.pixelShiftEnabled === 'boolean' ? parsed.pixelShiftEnabled : defaultSettings.pixelShiftEnabled
+  const notificationSoundEnabled = typeof parsed.notificationSoundEnabled === 'boolean' ? parsed.notificationSoundEnabled : defaultSettings.notificationSoundEnabled
+  const rawVolume = Number(parsed.notificationSoundVolume)
+  const notificationSoundVolume = Number.isFinite(rawVolume) ? Math.max(0, Math.min(100, Math.round(rawVolume))) : defaultSettings.notificationSoundVolume
 
   return {
     version: SETTINGS_VERSION,
@@ -239,6 +302,13 @@ export function normalizeSettings(value: unknown): DisplaySettings {
     showSeconds,
     displayScale,
     hideCursor,
+    nightModeEnabled,
+    nightModeStart,
+    nightModeEnd,
+    nightModeStyle,
+    pixelShiftEnabled,
+    notificationSoundEnabled,
+    notificationSoundVolume,
     widgets,
   }
 }

@@ -340,6 +340,36 @@ export function createHomePiBoardServer({
   let settingsWriteQueue = Promise.resolve()
   let authenticationWorkQueue = Promise.resolve()
 
+  let activeNotification = null
+  const sseClients = new Set()
+  let latestMedia = {
+    title: 'Keine Wiedergabe',
+    artist: 'Bereit',
+    album: '',
+    coverUrl: '',
+    playing: false,
+    updatedAt: Date.now(),
+  }
+  let latestEnergy = {
+    solarWatts: 650,
+    houseWatts: 420,
+    gridWatts: -230,
+    batteryWatts: 0,
+    batteryPercent: 85,
+    updatedAt: Date.now(),
+  }
+
+  function broadcastNotification(notification) {
+    const payload = `data: ${JSON.stringify(notification)}\n\n`
+    for (const client of sseClients) {
+      try {
+        client.write(payload)
+      } catch {
+        sseClients.delete(client)
+      }
+    }
+  }
+
   function persistSettings(settings) {
     const operation = settingsWriteQueue.then(async () => {
       await durableAtomicWrite(settingsFile, `${JSON.stringify(settings, null, 2)}\n`)
@@ -440,6 +470,102 @@ export function createHomePiBoardServer({
       if (url.pathname === '/api/system' && request.method === 'GET') {
         const info = await getSystemInfo({ thermalPath })
         json(response, 200, info)
+        return
+      }
+
+      if (url.pathname === '/api/notify' && request.method === 'POST') {
+        const body = await readJsonBody(request)
+        const durationSeconds = Math.max(3, Math.min(120, Number(body.durationSeconds ?? body.duration) || 15))
+        const imageUrl = String(body.imageUrl || body.image || '').slice(0, 500)
+        const notification = {
+          id: randomUUID(),
+          title: String(body.title || 'Benachrichtigung').slice(0, 100),
+          message: String(body.message || '').slice(0, 500),
+          imageUrl,
+          image: imageUrl,
+          sound: ['chime', 'doorbell', 'alert', 'beep', 'none'].includes(body.sound) ? body.sound : 'doorbell',
+          durationSeconds,
+          duration: durationSeconds,
+          priority: body.priority === 'urgent' ? 'urgent' : 'normal',
+          timestamp: Date.now(),
+        }
+        activeNotification = notification
+        broadcastNotification(notification)
+        json(response, 200, { success: true, notification })
+        return
+      }
+
+      if (url.pathname === '/api/notify/active' && request.method === 'GET') {
+        const isExpired = !activeNotification || (Date.now() - activeNotification.timestamp >= activeNotification.durationSeconds * 1000)
+        json(response, 200, { notification: isExpired ? null : activeNotification })
+        return
+      }
+
+      if (url.pathname === '/api/notify/clear' && request.method === 'POST') {
+        activeNotification = null
+        broadcastNotification({ id: null, cleared: true })
+        json(response, 200, { success: true })
+        return
+      }
+
+      if (url.pathname === '/api/notify/stream' && request.method === 'GET') {
+        response.writeHead(200, {
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-cache, no-transform',
+          'Connection': 'keep-alive',
+        })
+        response.write(': connected\n\n')
+        sseClients.add(response)
+        request.on('close', () => {
+          sseClients.delete(response)
+        })
+        return
+      }
+
+      if (url.pathname === '/api/media' && request.method === 'POST') {
+        const body = await readJsonBody(request)
+        const isPlaying = Boolean(body.playing ?? body.isPlaying)
+        latestMedia = {
+          title: String(body.title || 'Keine Wiedergabe').slice(0, 150),
+          artist: String(body.artist || '').slice(0, 150),
+          album: String(body.album || '').slice(0, 150),
+          coverUrl: body.coverUrl ? String(body.coverUrl).slice(0, 500) : '',
+          playing: isPlaying,
+          isPlaying,
+          updatedAt: Date.now(),
+        }
+        json(response, 200, latestMedia)
+        return
+      }
+
+      if (url.pathname === '/api/media' && request.method === 'GET') {
+        json(response, 200, latestMedia)
+        return
+      }
+
+      if (url.pathname === '/api/energy' && request.method === 'POST') {
+        const body = await readJsonBody(request)
+        const solar = Number(body.solarWatts ?? body.solar) || 0
+        const house = Number(body.houseWatts ?? body.house) || 0
+        const grid = Number(body.gridWatts ?? body.grid) || 0
+        const batteryPct = typeof body.batteryPercent === 'number' ? Math.max(0, Math.min(100, Math.round(body.batteryPercent))) : 0
+        latestEnergy = {
+          solarWatts: solar,
+          solar,
+          houseWatts: house,
+          house,
+          gridWatts: grid,
+          grid,
+          batteryWatts: typeof body.batteryWatts === 'number' ? body.batteryWatts : 0,
+          batteryPercent: batteryPct,
+          updatedAt: Date.now(),
+        }
+        json(response, 200, latestEnergy)
+        return
+      }
+
+      if (url.pathname === '/api/energy' && request.method === 'GET') {
+        json(response, 200, latestEnergy)
         return
       }
 

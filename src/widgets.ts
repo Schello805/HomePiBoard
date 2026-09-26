@@ -8,6 +8,168 @@ const typeLabels: Record<WidgetType, string> = {
   text: 'TEXT',
   image: 'BILD',
   slideshow: 'DIASHOW',
+  waste: 'MÜLL',
+  energy: 'ENERGIE',
+  media: 'MEDIA',
+}
+
+export interface ParsedWasteItem {
+  name: string
+  date: string
+  color: string
+  icon: string
+  badgeText: string
+  isUrgent: boolean
+}
+
+export function parseWasteItems(raw: string | undefined): ParsedWasteItem[] {
+  const content = (raw && raw.trim()) ? raw : 'Restmüll: In 2 Tagen\nBiomüll: Donnerstag\nGelber Sack: Nächste Woche\nPapiermüll: In 10 Tagen'
+  const lines = content.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean)
+
+  return lines.map((line) => {
+    let name = line
+    let date = ''
+    let customColor = ''
+
+    if (line.includes('|')) {
+      const parts = line.split('|')
+      line = parts[0]!.trim()
+      customColor = parts[1]!.trim()
+    }
+
+    const colonIndex = line.indexOf(':')
+    if (colonIndex !== -1) {
+      name = line.slice(0, colonIndex).trim()
+      date = line.slice(colonIndex + 1).trim()
+    }
+
+    const lower = name.toLowerCase()
+    let color = customColor
+    let icon = '🗑️'
+
+    if (lower.includes('bio') || lower.includes('grün') || lower.includes('kompost')) {
+      if (!color) color = '#38a169'
+      icon = '🍏'
+    } else if (lower.includes('gelb') || lower.includes('wertstoff') || lower.includes('plastik') || lower.includes('sack')) {
+      if (!color) color = '#d69e2e'
+      icon = '♻️'
+    } else if (lower.includes('papier') || lower.includes('blau') || lower.includes('pappe') || lower.includes('karton')) {
+      if (!color) color = '#3182ce'
+      icon = '📦'
+    } else if (lower.includes('glas')) {
+      if (!color) color = '#319795'
+      icon = '🍾'
+    } else {
+      if (!color) color = '#718096'
+      icon = '🗑️'
+    }
+
+    let badgeText = date || 'Geplant'
+    let isUrgent = false
+    const lowerDate = date.toLowerCase()
+    if (lowerDate.includes('heute') || lowerDate.includes('morgen') || lowerDate === '1 tag' || lowerDate === 'in 1 tag') {
+      isUrgent = true
+    }
+
+    const isoMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (isoMatch) {
+      const target = new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]))
+      const now = new Date()
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+      const diffDays = Math.round((target.getTime() - startOfToday) / (1000 * 60 * 60 * 24))
+      if (diffDays === 0) {
+        badgeText = 'Heute!'
+        isUrgent = true
+      } else if (diffDays === 1) {
+        badgeText = 'Morgen!'
+        isUrgent = true
+      } else if (diffDays > 1 && diffDays <= 7) {
+        badgeText = `In ${diffDays} Tagen`
+      } else if (diffDays > 7) {
+        badgeText = `${isoMatch[3]}.${isoMatch[2]}.`
+      }
+    }
+
+    return { name, date, color, icon, badgeText, isUrgent }
+  })
+}
+
+export function wasteContent(widget: DashboardWidget) {
+  const items = parseWasteItems(widget.wasteItems)
+  const itemsHtml = items.map((item) => `
+    <div class="waste-item ${item.isUrgent ? 'is-urgent' : ''}" style="--bin-color: ${escapeHtml(item.color)}">
+      <div class="waste-bin-icon" aria-hidden="true">${item.icon}</div>
+      <div class="waste-details">
+        <strong class="waste-label">${escapeHtml(item.name)}</strong>
+        <span class="waste-date-text">${escapeHtml(item.date)}</span>
+      </div>
+      <span class="waste-badge">${escapeHtml(item.badgeText)}</span>
+    </div>
+  `).join('')
+
+  return `<div class="waste-widget-container" data-waste-widget>${itemsHtml}</div>`
+}
+
+export function energyContent(widget: DashboardWidget) {
+  const solar = Number(widget.energySolar ?? 750)
+  const house = Number(widget.energyHouse ?? 450)
+  const grid = Number(widget.energyGrid ?? -300)
+  const battery = Math.min(100, Math.max(0, Number(widget.energyBatteryPercent ?? 85)))
+  const isExport = grid < 0
+
+  return `<div class="energy-widget-container" data-energy-widget>
+    <div class="energy-grid">
+      <div class="energy-card energy-solar">
+        <span class="energy-card-icon" aria-hidden="true">☀️</span>
+        <span class="energy-card-label">Erzeugung</span>
+        <strong class="energy-card-val" data-energy-field="solar">${solar} W</strong>
+        <span class="energy-card-sub">PV / Balkonkraftwerk</span>
+      </div>
+      <div class="energy-card energy-house">
+        <span class="energy-card-icon" aria-hidden="true">🏠</span>
+        <span class="energy-card-label">Hausverbrauch</span>
+        <strong class="energy-card-val" data-energy-field="house">${house} W</strong>
+        <span class="energy-card-sub">Aktueller Bedarf</span>
+      </div>
+      <div class="energy-card energy-grid-flow ${isExport ? 'is-export' : 'is-import'}">
+        <span class="energy-card-icon" aria-hidden="true">${isExport ? '🔄' : '⚡'}</span>
+        <span class="energy-card-label">${isExport ? 'Einspeisung' : 'Netzbezug'}</span>
+        <strong class="energy-card-val" data-energy-field="grid">${Math.abs(grid)} W</strong>
+        <span class="energy-card-sub">${isExport ? 'ins Netz eingespeist' : 'vom Netz bezogen'}</span>
+      </div>
+      <div class="energy-card energy-battery">
+        <span class="energy-card-icon" aria-hidden="true">🔋</span>
+        <span class="energy-card-label">Batteriespeicher</span>
+        <strong class="energy-card-val" data-energy-field="battery">${battery}%</strong>
+        <div class="energy-battery-track" aria-hidden="true">
+          <div class="energy-battery-fill" data-energy-field="battery-fill" style="width: ${battery}%"></div>
+        </div>
+      </div>
+    </div>
+  </div>`
+}
+
+export function mediaContent(widget: DashboardWidget) {
+  const title = (widget.mediaTitle ?? 'Keine Wiedergabe').trim() || 'Keine Wiedergabe'
+  const artist = (widget.mediaArtist ?? '').trim()
+  const album = (widget.mediaAlbum ?? '').trim()
+  const coverUrl = safeResourceUrl(widget.mediaCoverUrl ?? '', 'image')
+  const isPlaying = widget.mediaPlaying !== false && title !== 'Keine Wiedergabe'
+
+  return `<div class="media-widget-container ${isPlaying ? 'is-playing' : 'is-paused'}" data-media-widget>
+    <div class="media-cover-wrapper">
+      ${coverUrl ? `<img class="media-cover" src="${escapeHtml(coverUrl)}" alt="Cover" />` : '<div class="media-cover-placeholder" aria-hidden="true">🎵</div>'}
+      <div class="media-badge-status" aria-hidden="true">${isPlaying ? '▶' : '⏸'}</div>
+    </div>
+    <div class="media-info">
+      <strong class="media-title" data-media-field="title">${escapeHtml(title)}</strong>
+      ${artist ? `<span class="media-artist" data-media-field="artist">${escapeHtml(artist)}</span>` : '<span class="media-artist" data-media-field="artist">Bereit</span>'}
+      ${album ? `<span class="media-album" data-media-field="album">${escapeHtml(album)}</span>` : ''}
+      <div class="media-equalizer-bars ${isPlaying ? 'is-animated' : ''}" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+  </div>`
 }
 
 function safeResourceUrl(value: string, type: WidgetType) {
@@ -100,6 +262,9 @@ export function renderWidgetContent(widget: DashboardWidget) {
       : '<span class="placeholder-icon">▧</span><strong>Bild-URL fehlt</strong>'
   }
   if (widget.type === 'slideshow') return slideshowContent(widget)
+  if (widget.type === 'waste') return wasteContent(widget)
+  if (widget.type === 'energy') return energyContent(widget)
+  if (widget.type === 'media') return mediaContent(widget)
   return frameContent(widget)
 }
 
@@ -181,9 +346,41 @@ function editorMarkup(widget: DashboardWidget, index: number) {
           <button class="close-button" type="button" data-action="close-dialog" aria-label="Schließen">×</button>
         </div>
         <div class="dialog-form-fields">
-          <label for="${controlId}-type">Typ<select id="${controlId}-type" data-field="type"><option value="web" ${widget.type === 'web' ? 'selected' : ''}>Webseite</option><option value="calendar" ${widget.type === 'calendar' ? 'selected' : ''}>Kalender</option><option value="text" ${widget.type === 'text' ? 'selected' : ''}>Text</option><option value="image" ${widget.type === 'image' ? 'selected' : ''}>Bild</option><option value="slideshow" ${widget.type === 'slideshow' ? 'selected' : ''}>Diashow</option></select></label>
+          <label for="${controlId}-type">Typ<select id="${controlId}-type" data-field="type">
+            <option value="web" ${widget.type === 'web' ? 'selected' : ''}>Webseite</option>
+            <option value="calendar" ${widget.type === 'calendar' ? 'selected' : ''}>Kalender</option>
+            <option value="text" ${widget.type === 'text' ? 'selected' : ''}>Text</option>
+            <option value="image" ${widget.type === 'image' ? 'selected' : ''}>Bild</option>
+            <option value="slideshow" ${widget.type === 'slideshow' ? 'selected' : ''}>Diashow</option>
+            <option value="waste" ${widget.type === 'waste' ? 'selected' : ''}>Müllkalender</option>
+            <option value="energy" ${widget.type === 'energy' ? 'selected' : ''}>Energie / PV</option>
+            <option value="media" ${widget.type === 'media' ? 'selected' : ''}>Media-Player</option>
+          </select></label>
           <label for="${controlId}-title">Titel<input id="${controlId}-title" data-field="title" value="${escapeHtml(widget.title)}" maxlength="30" /></label>
           <label class="content-field checkbox-label" for="${controlId}-show-title"><input type="checkbox" id="${controlId}-show-title" data-field="showTitle" ${widget.showTitle ? 'checked' : ''} /><span>Titel in der Anzeige anzeigen</span></label>
+          ${widget.type === 'waste' ? `
+          <label class="content-field" for="${controlId}-waste"><span data-content-label>Abholtermine (Format: Tonne: Datum oder z.B. In 2 Tagen, eine pro Zeile)</span><textarea id="${controlId}-waste" data-field="wasteItems" rows="5" placeholder="Restmüll: In 2 Tagen&#10;Biomüll: Donnerstag&#10;Gelber Sack: 2026-10-02&#10;Papiermüll: In 10 Tagen">${escapeHtml(widget.wasteItems || '')}</textarea></label>
+          <input type="hidden" id="${controlId}-url" data-field="url" value="${escapeHtml(widget.url)}" />
+          ` : widget.type === 'energy' ? `
+          <div class="energy-form-group">
+            <label for="${controlId}-solar">Solarerzeugung (W)<input id="${controlId}-solar" data-field="energySolar" type="number" min="0" value="${widget.energySolar ?? 750}" /></label>
+            <label for="${controlId}-house">Hausverbrauch (W)<input id="${controlId}-house" data-field="energyHouse" type="number" min="0" value="${widget.energyHouse ?? 450}" /></label>
+            <label for="${controlId}-grid">Netz (W, neg. = Einspeisung)<input id="${controlId}-grid" data-field="energyGrid" type="number" value="${widget.energyGrid ?? -300}" /></label>
+            <label for="${controlId}-battery">Akkustand (%)<input id="${controlId}-battery" data-field="energyBatteryPercent" type="number" min="0" max="100" value="${widget.energyBatteryPercent ?? 85}" /></label>
+          </div>
+          <p class="editor-field-hint">💡 Live-Werte können per HTTP <code>POST /api/energy</code> aktualisiert werden.</p>
+          <input type="hidden" id="${controlId}-url" data-field="url" value="${escapeHtml(widget.url)}" />
+          ` : widget.type === 'media' ? `
+          <div class="media-form-group">
+            <label for="${controlId}-media-title">Titel<input id="${controlId}-media-title" data-field="mediaTitle" value="${escapeHtml(widget.mediaTitle || '')}" placeholder="Songtitel" /></label>
+            <label for="${controlId}-media-artist">Künstler<input id="${controlId}-media-artist" data-field="mediaArtist" value="${escapeHtml(widget.mediaArtist || '')}" placeholder="Künstler" /></label>
+            <label for="${controlId}-media-album">Album<input id="${controlId}-media-album" data-field="mediaAlbum" value="${escapeHtml(widget.mediaAlbum || '')}" placeholder="Album" /></label>
+            <label for="${controlId}-media-cover">Cover-Bild URL<input id="${controlId}-media-cover" data-field="mediaCoverUrl" type="url" value="${escapeHtml(widget.mediaCoverUrl || '')}" placeholder="https://..." /></label>
+            <label class="content-field checkbox-label" for="${controlId}-media-playing"><input type="checkbox" id="${controlId}-media-playing" data-field="mediaPlaying" ${widget.mediaPlaying !== false ? 'checked' : ''} /><span>Wiedergabe aktiv (animierter Equalizer)</span></label>
+          </div>
+          <p class="editor-field-hint">💡 Live-Status kann per HTTP <code>POST /api/media</code> aktualisiert werden.</p>
+          <input type="hidden" id="${controlId}-url" data-field="url" value="${escapeHtml(widget.url)}" />
+          ` : `
           ${(widget.type === 'image' || widget.type === 'slideshow') ? `<div class="content-field upload-field"><label class="upload-zone" for="${controlId}-upload"><input type="file" id="${controlId}-upload" data-action="upload" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" ${widget.type === 'slideshow' ? 'multiple' : ''} style="display: none;" /><span class="upload-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>${widget.type === 'slideshow' ? 'Bilder hochladen (max. 10 Bilder, je max. 5 MB)' : 'Bild hochladen (max. 5 MB)'}</span></span><span class="upload-status" data-upload-status aria-live="polite"></span></label></div>` : ''}
           ${widget.type === 'image' && widget.url ? `
           <div class="single-image-item" data-single-image-item>
@@ -213,6 +410,7 @@ function editorMarkup(widget: DashboardWidget, index: number) {
           <label class="content-field" for="${controlId}-url"><span data-content-label>${urlLabel}</span><textarea id="${controlId}-url" data-field="url" rows="3" placeholder="${urlPlaceholder}">${escapeHtml(widget.url)}</textarea></label>
           `}
           ${extraSettingField}
+          `}
           <label class="content-field checkbox-label" for="${controlId}-break"><input type="checkbox" id="${controlId}-break" data-field="breakBefore" ${widget.breakBefore ? 'checked' : ''} /><span>In neuer Zeile beginnen (unterhalb vorheriger Widgets)</span></label>
           <input type="hidden" id="${controlId}-columns" data-field="columns" value="${widget.columns}" />
           <input type="hidden" id="${controlId}-rows" data-field="rows" value="${widget.rows}" />

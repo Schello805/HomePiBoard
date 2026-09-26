@@ -452,3 +452,93 @@ test('system API returns hardware, network and system telemetry', async (context
   assert.ok(data.network && typeof data.network.primaryIp === 'string')
 })
 
+test('notify API creates, reads active and clears notifications', async (context) => {
+  const running = await startServer()
+  context.after(() => running.server.close())
+
+  // Initially active is null
+  const emptyRes = await fetch(`${running.url}/api/notify/active`)
+  assert.equal(emptyRes.status, 200)
+  assert.equal((await emptyRes.json()).notification, null)
+
+  // Send a notification
+  const postRes = await fetch(`${running.url}/api/notify`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      title: 'Türklingel',
+      message: 'Jemand steht an der Haustür',
+      sound: 'doorbell',
+      durationSeconds: 10,
+    }),
+  })
+  assert.equal(postRes.status, 200)
+  const postData = await postRes.json()
+  assert.equal(postData.success, true)
+  assert.equal(postData.notification.title, 'Türklingel')
+  assert.equal(postData.notification.sound, 'doorbell')
+
+  // Check active
+  const activeRes = await fetch(`${running.url}/api/notify/active`)
+  assert.equal(activeRes.status, 200)
+  const activeData = await activeRes.json()
+  assert.equal(activeData.notification.title, 'Türklingel')
+
+  // Clear notification
+  const clearRes = await fetch(`${running.url}/api/notify/clear`, { method: 'POST' })
+  assert.equal(clearRes.status, 200)
+  const afterClear = await (await fetch(`${running.url}/api/notify/active`)).json()
+  assert.equal(afterClear.notification, null)
+})
+
+test('media API stores and returns playback state', async (context) => {
+  const running = await startServer()
+  context.after(() => running.server.close())
+
+  const postRes = await fetch(`${running.url}/api/media`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      title: 'Hotel California',
+      artist: 'Eagles',
+      album: 'Hotel California',
+      playing: true,
+    }),
+  })
+  assert.equal(postRes.status, 200)
+
+  const getRes = await fetch(`${running.url}/api/media`)
+  assert.equal(getRes.status, 200)
+  const data = await getRes.json()
+  assert.equal(data.title, 'Hotel California')
+  assert.equal(data.artist, 'Eagles')
+  assert.equal(data.playing, true)
+})
+
+test('energy API stores and returns power metrics', async (context) => {
+  const running = await startServer()
+  context.after(() => running.server.close())
+
+  const postRes = await fetch(`${running.url}/api/energy`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      solarWatts: 820,
+      houseWatts: 390,
+      gridWatts: -430,
+      batteryWatts: 0,
+      batteryPercent: 92,
+    }),
+  })
+  assert.equal(postRes.status, 200)
+
+  const getRes = await fetch(`${running.url}/api/energy`)
+  assert.equal(getRes.status, 200)
+  const data = await getRes.json()
+  assert.equal(data.solarWatts, 820)
+  assert.equal(data.houseWatts, 390)
+  assert.equal(data.gridWatts, -430)
+  assert.equal(data.batteryPercent, 92)
+})
+
+

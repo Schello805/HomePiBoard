@@ -1,4 +1,5 @@
 import { escapeHtml } from './dashboard-utils.ts'
+import { playNotificationSound } from './display.ts'
 import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type WidgetType } from './settings.ts'
 import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
 import { bindWidgetFrames, isBuiltInCalendar, parseSlideshowUrls, renderSlideshowCrudList, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
@@ -160,6 +161,9 @@ export async function renderAdminPage(app: HTMLElement) {
           <button type="button" data-add-type="text">≡ Text</button>
           <button type="button" data-add-type="image">▧ Bild</button>
           <button type="button" data-add-type="slideshow">▨ Diashow</button>
+          <button type="button" data-add-type="waste">🗑️ Müll</button>
+          <button type="button" data-add-type="energy">☀️ Energie</button>
+          <button type="button" data-add-type="media">🎵 Media</button>
         </div>
       </div>
       <p class="layout-warning" id="layout-warning" role="alert"></p>
@@ -242,6 +246,54 @@ export async function renderAdminPage(app: HTMLElement) {
       </section>
 
       <section class="system-dialog-section">
+        <h3 class="system-section-title">🌙 Nachtmodus &amp; Bildschirmschutz</h3>
+        <label class="system-checkbox-label" for="admin-night-mode-enabled">
+          <input type="checkbox" id="admin-night-mode-enabled" ${settings.nightModeEnabled ? 'checked' : ''} />
+          <span>Automatischer Nachtmodus aktivieren</span>
+        </label>
+        <div class="system-field-row">
+          <label for="admin-night-mode-start">
+            <span>Beginn (Nachtruhe)</span>
+            <input type="time" id="admin-night-mode-start" value="${settings.nightModeStart || '22:00'}" />
+          </label>
+          <label for="admin-night-mode-end">
+            <span>Ende (Aufwachen)</span>
+            <input type="time" id="admin-night-mode-end" value="${settings.nightModeEnd || '06:00'}" />
+          </label>
+          <label for="admin-night-mode-style">
+            <span>Nacht-Darstellung</span>
+            <select id="admin-night-mode-style">
+              <option value="dim" ${(settings.nightModeStyle || 'dim') === 'dim' ? 'selected' : ''}>Gedimmt (15% Helligkeit)</option>
+              <option value="clock" ${(settings.nightModeStyle || 'dim') === 'clock' ? 'selected' : ''}>Minimalistische Nacht-Uhr</option>
+            </select>
+          </label>
+        </div>
+        <label class="system-checkbox-label" for="admin-pixel-shift-enabled">
+          <input type="checkbox" id="admin-pixel-shift-enabled" ${settings.pixelShiftEnabled !== false ? 'checked' : ''} />
+          <span>Pixel-Shift aktivieren (Burn-In-Schutz alle 5 Min. für OLED &amp; LCD)</span>
+        </label>
+        <small class="system-field-hint">💡 Wake-on-Tap: Durch Berührung oder Klick schaltet das Display nachts sofort für 30 Sekunden auf normale Helligkeit zurück.</small>
+      </section>
+
+      <section class="system-dialog-section">
+        <div class="system-section-header">
+          <h3 class="system-section-title">🔔 Webhook-Benachrichtigungen &amp; Klingel-Gong</h3>
+          <button class="topbar-btn" id="test-sound-btn" type="button" title="Gong-Signalton anhören">🔔 Signalton testen</button>
+        </div>
+        <label class="system-checkbox-label" for="admin-notification-sound-enabled">
+          <input type="checkbox" id="admin-notification-sound-enabled" ${settings.notificationSoundEnabled !== false ? 'checked' : ''} />
+          <span>Akustischen Signalton bei Benachrichtigungen abspielen</span>
+        </label>
+        <div class="system-field-row">
+          <label for="admin-notification-sound-volume">
+            <span>Lautstärke des Signaltons</span>
+            <input type="range" id="admin-notification-sound-volume" min="0.1" max="1.0" step="0.05" value="${settings.notificationSoundVolume ?? 0.8}" />
+          </label>
+        </div>
+        <small class="system-field-hint">💡 HTTP-Webhook: Sende <code>POST /api/notify</code> mit JSON: <code>{"title": "Türklingel", "message": "Jemand steht an der Haustür", "sound": "doorbell"}</code></small>
+      </section>
+
+      <section class="system-dialog-section">
         <div class="system-section-header">
           <h3 class="system-section-title">📊 Live Raspberry Pi Telemetrie</h3>
           <button class="topbar-btn" id="telemetry-refresh-btn" type="button" title="Telemetrie aktualisieren">↻ Aktualisieren</button>
@@ -294,11 +346,23 @@ export async function renderAdminPage(app: HTMLElement) {
   const localeSelect = app.querySelector<HTMLSelectElement>('#admin-locale')!
   const timezoneSelect = app.querySelector<HTMLSelectElement>('#admin-timezone')!
   const showSecondsCheckbox = app.querySelector<HTMLInputElement>('#admin-show-seconds')!
+  const nightModeEnabledCheckbox = app.querySelector<HTMLInputElement>('#admin-night-mode-enabled')!
+  const nightModeStartInput = app.querySelector<HTMLInputElement>('#admin-night-mode-start')!
+  const nightModeEndInput = app.querySelector<HTMLInputElement>('#admin-night-mode-end')!
+  const nightModeStyleSelect = app.querySelector<HTMLSelectElement>('#admin-night-mode-style')!
+  const pixelShiftCheckbox = app.querySelector<HTMLInputElement>('#admin-pixel-shift-enabled')!
+  const notificationSoundEnabledCheckbox = app.querySelector<HTMLInputElement>('#admin-notification-sound-enabled')!
+  const notificationSoundVolumeInput = app.querySelector<HTMLInputElement>('#admin-notification-sound-volume')!
+  const testSoundBtn = app.querySelector<HTMLButtonElement>('#test-sound-btn')!
   const telemetryRefreshBtn = app.querySelector<HTMLButtonElement>('#telemetry-refresh-btn')!
   const systemTelemetryContainer = app.querySelector<HTMLElement>('#system-telemetry-container')!
   const systemStatusPill = app.querySelector<HTMLButtonElement>('#system-status-pill')!
   let dirty = false
   let pinRequest: Promise<string | null> | null = null
+
+  testSoundBtn?.addEventListener('click', () => {
+    void playNotificationSound('doorbell', Number(notificationSoundVolumeInput?.value) || 0.8)
+  })
 
   function bindCompactFields(root: ParentNode) {
     root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea').forEach((control) => {
@@ -350,17 +414,53 @@ export async function renderAdminPage(app: HTMLElement) {
     const showTitleInput = editor.querySelector<HTMLInputElement>('[data-field="showTitle"]')
     const showTitle = Boolean(showTitleInput?.checked)
 
+    const urlInput = editor.querySelector<HTMLInputElement | HTMLTextAreaElement>('[data-field="url"]')
+    const url = urlInput ? urlInput.value.trim() : ''
+
+    const wasteInput = editor.querySelector<HTMLTextAreaElement>('[data-field="wasteItems"]')
+    const wasteItems = type === 'waste' && wasteInput ? wasteInput.value.trim() : undefined
+
+    const solarInput = editor.querySelector<HTMLInputElement>('[data-field="energySolar"]')
+    const houseInput = editor.querySelector<HTMLInputElement>('[data-field="energyHouse"]')
+    const gridInput = editor.querySelector<HTMLInputElement>('[data-field="energyGrid"]')
+    const batteryInput = editor.querySelector<HTMLInputElement>('[data-field="energyBatteryPercent"]')
+    const energySolar = type === 'energy' && solarInput ? Number(solarInput.value) || 0 : undefined
+    const energyHouse = type === 'energy' && houseInput ? Number(houseInput.value) || 0 : undefined
+    const energyGrid = type === 'energy' && gridInput ? Number(gridInput.value) || 0 : undefined
+    const energyBatteryPercent = type === 'energy' && batteryInput ? Math.min(100, Math.max(0, Number(batteryInput.value) || 0)) : undefined
+
+    const mediaTitleInput = editor.querySelector<HTMLInputElement>('[data-field="mediaTitle"]')
+    const mediaArtistInput = editor.querySelector<HTMLInputElement>('[data-field="mediaArtist"]')
+    const mediaAlbumInput = editor.querySelector<HTMLInputElement>('[data-field="mediaAlbum"]')
+    const mediaCoverInput = editor.querySelector<HTMLInputElement>('[data-field="mediaCoverUrl"]')
+    const mediaPlayingInput = editor.querySelector<HTMLInputElement>('[data-field="mediaPlaying"]')
+    const mediaTitle = type === 'media' && mediaTitleInput ? mediaTitleInput.value.trim() : undefined
+    const mediaArtist = type === 'media' && mediaArtistInput ? mediaArtistInput.value.trim() : undefined
+    const mediaAlbum = type === 'media' && mediaAlbumInput ? mediaAlbumInput.value.trim() : undefined
+    const mediaCoverUrl = type === 'media' && mediaCoverInput ? mediaCoverInput.value.trim() : undefined
+    const mediaPlaying = type === 'media' && mediaPlayingInput ? Boolean(mediaPlayingInput.checked) : undefined
+
     return {
       id: editor.dataset.widgetId!,
       type,
       title: editor.querySelector<HTMLInputElement>('[data-field="title"]')!.value.trim() || widgetTypeLabel(type),
-      url: editor.querySelector<HTMLTextAreaElement>('[data-field="url"]')!.value.trim(),
+      url,
       columns: Math.max(constraints.minColumns, Math.min(MAX_WIDGET_COLUMNS, Math.round(Number(editor.querySelector<HTMLInputElement>('[data-field="columns"]')!.value) || constraints.defaultColumns))),
       rows: Math.max(constraints.minRows, Math.min(MAX_WIDGET_ROWS, Math.round(Number(editor.querySelector<HTMLInputElement>('[data-field="rows"]')!.value) || constraints.defaultRows))),
       ...(refreshIntervalMinutes !== undefined ? { refreshIntervalMinutes } : {}),
       ...(intervalSeconds !== undefined ? { intervalSeconds } : {}),
       ...(breakBefore ? { breakBefore: true } : {}),
       ...(showTitle ? { showTitle: true } : {}),
+      ...(wasteItems !== undefined ? { wasteItems } : {}),
+      ...(energySolar !== undefined ? { energySolar } : {}),
+      ...(energyHouse !== undefined ? { energyHouse } : {}),
+      ...(energyGrid !== undefined ? { energyGrid } : {}),
+      ...(energyBatteryPercent !== undefined ? { energyBatteryPercent } : {}),
+      ...(mediaTitle !== undefined ? { mediaTitle } : {}),
+      ...(mediaArtist !== undefined ? { mediaArtist } : {}),
+      ...(mediaAlbum !== undefined ? { mediaAlbum } : {}),
+      ...(mediaCoverUrl !== undefined ? { mediaCoverUrl } : {}),
+      ...(mediaPlaying !== undefined ? { mediaPlaying } : {}),
     }
   }
 
@@ -1265,6 +1365,13 @@ export async function renderAdminPage(app: HTMLElement) {
       showSeconds: showSecondsCheckbox.checked,
       displayScale: Number(displayScaleSelect.value),
       hideCursor: hideCursorCheckbox.checked,
+      nightModeEnabled: nightModeEnabledCheckbox.checked,
+      nightModeStart: nightModeStartInput.value,
+      nightModeEnd: nightModeEndInput.value,
+      nightModeStyle: nightModeStyleSelect.value as 'dim' | 'clock',
+      pixelShiftEnabled: pixelShiftCheckbox.checked,
+      notificationSoundEnabled: notificationSoundEnabledCheckbox.checked,
+      notificationSoundVolume: Number(notificationSoundVolumeInput.value) || 0.8,
       widgets: readWidgets(),
     })
     saveButton.disabled = true
@@ -1293,6 +1400,13 @@ export async function renderAdminPage(app: HTMLElement) {
       localeSelect.value = defaultSettings.locale || 'de-DE'
       timezoneSelect.value = defaultSettings.timezone || 'auto'
       showSecondsCheckbox.checked = Boolean(defaultSettings.showSeconds)
+      nightModeEnabledCheckbox.checked = Boolean(defaultSettings.nightModeEnabled)
+      nightModeStartInput.value = defaultSettings.nightModeStart || '22:00'
+      nightModeEndInput.value = defaultSettings.nightModeEnd || '06:00'
+      nightModeStyleSelect.value = defaultSettings.nightModeStyle || 'dim'
+      pixelShiftCheckbox.checked = defaultSettings.pixelShiftEnabled !== false
+      notificationSoundEnabledCheckbox.checked = defaultSettings.notificationSoundEnabled !== false
+      notificationSoundVolumeInput.value = String(defaultSettings.notificationSoundVolume ?? 0.8)
       markSaved()
       window.location.reload()
     } catch (error) {

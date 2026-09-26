@@ -2,6 +2,160 @@ import { escapeHtml, weatherSymbol } from './dashboard-utils.ts'
 import { createSettingsStore } from './settings-store.ts'
 import { bindWidgetFrames, renderWidget } from './widgets.ts'
 
+export function isNightTime(start: string, end: string, now = new Date()): boolean {
+  const parseMinutes = (timeStr: string) => {
+    const parts = (timeStr || '').split(':')
+    const hours = Number(parts[0]) || 0
+    const mins = Number(parts[1]) || 0
+    return hours * 60 + mins
+  }
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const startMinutes = parseMinutes(start)
+  const endMinutes = parseMinutes(end)
+
+  if (startMinutes <= endMinutes) {
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes
+  }
+  return currentMinutes >= startMinutes || currentMinutes < endMinutes
+}
+
+export function calculatePixelShift(step: number): { x: number; y: number } {
+  const shifts = [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 1, y: 1 },
+    { x: 0, y: 1 },
+    { x: -1, y: 1 },
+    { x: -1, y: 0 },
+    { x: -1, y: -1 },
+    { x: 0, y: -1 },
+    { x: 1, y: -1 },
+  ]
+  return shifts[Math.abs(step) % shifts.length]!
+}
+
+export function playNotificationSound(sound: string = 'doorbell', volume: number = 0.8): Promise<void> {
+  try {
+    const AudioContextClass = typeof window !== 'undefined'
+      ? (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)
+      : null
+    if (!AudioContextClass) return Promise.resolve()
+    const ctx = new AudioContextClass()
+    if (ctx.state === 'suspended') {
+      void ctx.resume()
+    }
+    const safeVol = Math.max(0.01, Math.min(1, volume))
+    const now = ctx.currentTime
+
+    if (sound === 'alert') {
+      const osc1 = ctx.createOscillator()
+      const gain1 = ctx.createGain()
+      osc1.type = 'sine'
+      osc1.frequency.setValueAtTime(800, now)
+      gain1.gain.setValueAtTime(safeVol * 0.35, now)
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.15)
+      osc1.connect(gain1)
+      gain1.connect(ctx.destination)
+      osc1.start(now)
+      osc1.stop(now + 0.15)
+
+      const osc2 = ctx.createOscillator()
+      const gain2 = ctx.createGain()
+      osc2.type = 'sine'
+      osc2.frequency.setValueAtTime(950, now + 0.2)
+      gain2.gain.setValueAtTime(safeVol * 0.35, now + 0.2)
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.38)
+      osc2.connect(gain2)
+      gain2.connect(ctx.destination)
+      osc2.start(now + 0.2)
+      osc2.stop(now + 0.38)
+    } else if (sound === 'chime') {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'triangle'
+      osc.frequency.setValueAtTime(880, now)
+      gain.gain.setValueAtTime(safeVol * 0.45, now)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(now)
+      osc.stop(now + 1.2)
+    } else {
+      // Zweiklang-Türgong (D5 587Hz -> A4 440Hz)
+      const osc1 = ctx.createOscillator()
+      const gain1 = ctx.createGain()
+      osc1.type = 'sine'
+      osc1.frequency.setValueAtTime(587.33, now)
+      gain1.gain.setValueAtTime(safeVol * 0.5, now)
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.45)
+      osc1.connect(gain1)
+      gain1.connect(ctx.destination)
+      osc1.start(now)
+      osc1.stop(now + 0.45)
+
+      const osc2 = ctx.createOscillator()
+      const gain2 = ctx.createGain()
+      osc2.type = 'sine'
+      osc2.frequency.setValueAtTime(440, now + 0.35)
+      gain2.gain.setValueAtTime(safeVol * 0.45, now + 0.35)
+      gain2.gain.exponentialRampToValueAtTime(0.0001, now + 1.4)
+      osc2.connect(gain2)
+      gain2.connect(ctx.destination)
+      osc2.start(now + 0.35)
+      osc2.stop(now + 1.4)
+    }
+    return Promise.resolve()
+  } catch {
+    return Promise.resolve()
+  }
+}
+
+export function showNotificationBanner(
+  notification: { id: string; title: string; message: string; image?: string; duration?: number; sound?: string },
+  options: { soundEnabled: boolean; soundVolume: number }
+) {
+  let container = document.getElementById('kiosk-notification-container')
+  if (!container) {
+    container = document.createElement('div')
+    container.id = 'kiosk-notification-container'
+    container.className = 'kiosk-notification-container'
+    document.body.appendChild(container)
+  }
+
+  if (options.soundEnabled) {
+    void playNotificationSound(notification.sound || 'doorbell', options.soundVolume)
+  }
+
+  const durationSec = Math.max(3, Math.min(60, Number(notification.duration) || 10))
+  const banner = document.createElement('div')
+  banner.className = 'notification-banner'
+  banner.setAttribute('role', 'alert')
+  banner.innerHTML = `
+    ${notification.image ? `<img class="notification-banner-img" src="${escapeHtml(notification.image)}" alt="Snapshot" />` : ''}
+    <div class="notification-banner-body">
+      <div class="notification-banner-top">
+        <span class="notification-banner-icon">🔔</span>
+        <strong class="notification-banner-title">${escapeHtml(notification.title)}</strong>
+        <button type="button" class="notification-banner-close" aria-label="Schließen">×</button>
+      </div>
+      <p class="notification-banner-msg">${escapeHtml(notification.message)}</p>
+    </div>
+  `
+
+  const dismiss = () => {
+    banner.classList.add('is-dismissing')
+    window.setTimeout(() => banner.remove(), 400)
+  }
+
+  banner.querySelector('.notification-banner-close')?.addEventListener('click', dismiss)
+  banner.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).tagName !== 'BUTTON') dismiss()
+  })
+
+  container.appendChild(banner)
+  window.setTimeout(dismiss, durationSec * 1000)
+}
+
 async function loadWeather(city: string, target: HTMLElement) {
   try {
     const search = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=de&format=json`)
@@ -80,6 +234,11 @@ export async function renderDisplayPage(app: HTMLElement) {
         </div>
       </header>
       <section class="widget-grid" aria-label="Anzeigen-Widgets">${widgets}</section>
+      <div class="night-clock-overlay" id="night-clock-overlay" aria-hidden="true">
+        <strong class="night-clock-time" id="night-clock-time">--:--</strong>
+        <span class="night-clock-date" id="night-clock-date">--.--.----</span>
+        <span class="night-clock-hint">Tippen zum Aktivieren</span>
+      </div>
     </main>`
 
   const shell = app.querySelector<HTMLElement>('.signage-shell')!
@@ -87,6 +246,9 @@ export async function renderDisplayPage(app: HTMLElement) {
   const date = app.querySelector<HTMLElement>('#date')!
   const weather = app.querySelector<HTMLElement>('#weather')!
   const networkStatus = app.querySelector<HTMLElement>('#network-status')!
+  const nightClockOverlay = app.querySelector<HTMLElement>('#night-clock-overlay')!
+  const nightClockTime = app.querySelector<HTMLElement>('#night-clock-time')!
+  const nightClockDate = app.querySelector<HTMLElement>('#night-clock-date')!
 
   if (settings.displayScale && settings.displayScale !== 100) {
     shell.style.setProperty('--kiosk-scale', String(settings.displayScale / 100))
@@ -131,16 +293,159 @@ export async function renderDisplayPage(app: HTMLElement) {
   const updateTime = () => {
     const now = new Date()
     try {
-      clock.textContent = now.toLocaleTimeString(locale, timeOptions)
-      date.textContent = now.toLocaleDateString(locale, dateOptions)
+      const formattedTime = now.toLocaleTimeString(locale, timeOptions)
+      const formattedDate = now.toLocaleDateString(locale, dateOptions)
+      clock.textContent = formattedTime
+      date.textContent = formattedDate
+      if (nightClockTime) nightClockTime.textContent = formattedTime
+      if (nightClockDate) nightClockDate.textContent = formattedDate
     } catch {
-      clock.textContent = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
-      date.textContent = now.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      const fbTime = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+      const fbDate = now.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      clock.textContent = fbTime
+      date.textContent = fbDate
+      if (nightClockTime) nightClockTime.textContent = fbTime
+      if (nightClockDate) nightClockDate.textContent = fbDate
     }
   }
 
   updateTime()
   window.setInterval(updateTime, 1000)
+
+  // 1. Automatischer Nachtmodus & Display-Dimmen
+  let isTemporarilyAwake = false
+  let wakeTimer: number | undefined
+  const checkNightMode = () => {
+    if (!settings.nightModeEnabled) {
+      shell.classList.remove('is-night-dim', 'is-night-clock')
+      nightClockOverlay.setAttribute('aria-hidden', 'true')
+      return
+    }
+
+    const inNightWindow = isNightTime(settings.nightModeStart || '22:00', settings.nightModeEnd || '06:00')
+    if (inNightWindow && !isTemporarilyAwake) {
+      if (settings.nightModeStyle === 'clock') {
+        shell.classList.add('is-night-clock')
+        shell.classList.remove('is-night-dim')
+        nightClockOverlay.setAttribute('aria-hidden', 'false')
+      } else {
+        shell.classList.add('is-night-dim')
+        shell.classList.remove('is-night-clock')
+        nightClockOverlay.setAttribute('aria-hidden', 'true')
+      }
+    } else {
+      shell.classList.remove('is-night-dim', 'is-night-clock')
+      nightClockOverlay.setAttribute('aria-hidden', 'true')
+    }
+  }
+
+  const wakeDisplay = () => {
+    if (shell.classList.contains('is-night-dim') || shell.classList.contains('is-night-clock')) {
+      isTemporarilyAwake = true
+      shell.classList.remove('is-night-dim', 'is-night-clock')
+      nightClockOverlay.setAttribute('aria-hidden', 'true')
+      if (wakeTimer) window.clearTimeout(wakeTimer)
+      wakeTimer = window.setTimeout(() => {
+        isTemporarilyAwake = false
+        checkNightMode()
+      }, 30000)
+    }
+  }
+
+  window.addEventListener('pointerdown', wakeDisplay, { passive: true })
+  checkNightMode()
+  window.setInterval(checkNightMode, 30000)
+
+  // Pixel-Shift (Burn-in Schutz) alle 5 Minuten
+  if (settings.pixelShiftEnabled !== false) {
+    let shiftStep = 0
+    window.setInterval(() => {
+      shiftStep++
+      const { x, y } = calculatePixelShift(shiftStep)
+      shell.style.setProperty('--pixel-shift-x', `${x}px`)
+      shell.style.setProperty('--pixel-shift-y', `${y}px`)
+    }, 5 * 60 * 1000)
+  }
+
+  // 4. Benachrichtigungs-Zentrale (SSE Stream)
+  const soundOpts = {
+    soundEnabled: settings.notificationSoundEnabled !== false,
+    soundVolume: Number(settings.notificationSoundVolume ?? 0.8),
+  }
+
+  if (typeof EventSource !== 'undefined') {
+    try {
+      const sse = new EventSource('/api/notify/stream')
+      sse.onmessage = (event) => {
+        try {
+          const notif = JSON.parse(event.data) as { id: string; title: string; message: string; image?: string; duration?: number; sound?: string }
+          if (notif && notif.title) {
+            wakeDisplay()
+            showNotificationBanner(notif, soundOpts)
+          }
+        } catch {
+          // ignore malformed
+        }
+      }
+    } catch {
+      // EventSource failed
+    }
+  }
+
+  // Live Updates für Media & Energie-Widgets
+  const updateLiveWidgets = async () => {
+    try {
+      const energyRes = await fetch('/api/energy', { cache: 'no-store' })
+      if (energyRes.ok) {
+        const energyData = await energyRes.json() as { solar: number; house: number; grid: number; batteryPercent: number }
+        app.querySelectorAll('[data-energy-widget]').forEach((widget) => {
+          const solarEl = widget.querySelector('[data-energy-field="solar"]')
+          const houseEl = widget.querySelector('[data-energy-field="house"]')
+          const gridEl = widget.querySelector('[data-energy-field="grid"]')
+          const batteryEl = widget.querySelector('[data-energy-field="battery"]')
+          const batteryFill = widget.querySelector<HTMLElement>('[data-energy-field="battery-fill"]')
+          const gridCard = widget.querySelector('.energy-grid-flow')
+
+          if (solarEl) solarEl.textContent = `${energyData.solar} W`
+          if (houseEl) houseEl.textContent = `${energyData.house} W`
+          if (gridEl) gridEl.textContent = `${Math.abs(energyData.grid)} W`
+          if (batteryEl) batteryEl.textContent = `${energyData.batteryPercent}%`
+          if (batteryFill) batteryFill.style.width = `${Math.min(100, Math.max(0, energyData.batteryPercent))}%`
+          if (gridCard) {
+            gridCard.classList.toggle('is-export', energyData.grid < 0)
+            gridCard.classList.toggle('is-import', energyData.grid >= 0)
+          }
+        })
+      }
+    } catch {
+      // live energy offline
+    }
+
+    try {
+      const mediaRes = await fetch('/api/media', { cache: 'no-store' })
+      if (mediaRes.ok) {
+        const mediaData = await mediaRes.json() as { title: string; artist: string; album: string; coverUrl?: string; isPlaying: boolean }
+        app.querySelectorAll('[data-media-widget]').forEach((widget) => {
+          const titleEl = widget.querySelector('[data-media-field="title"]')
+          const artistEl = widget.querySelector('[data-media-field="artist"]')
+          const albumEl = widget.querySelector('[data-media-field="album"]')
+          const eqBars = widget.querySelector('.media-equalizer-bars')
+          const playBadge = widget.querySelector('.media-badge-status')
+
+          if (titleEl && mediaData.title) titleEl.textContent = mediaData.title
+          if (artistEl && mediaData.artist) artistEl.textContent = mediaData.artist
+          if (albumEl && mediaData.album) albumEl.textContent = mediaData.album
+          if (eqBars) eqBars.classList.toggle('is-animated', Boolean(mediaData.isPlaying))
+          if (playBadge) playBadge.textContent = mediaData.isPlaying ? '▶' : '⏸'
+        })
+      }
+    } catch {
+      // live media offline
+    }
+  }
+
+  window.setInterval(updateLiveWidgets, 10000)
+
   initNetworkStatus(networkStatus, source)
   bindWidgetFrames(app)
   if (settings.weatherCity) await loadWeather(settings.weatherCity, weather)

@@ -4,7 +4,12 @@ Eine schlanke Digital-Signage-Anzeige für zu Hause. HomePiBoard ist für einen 
 
 ## Funktionen
 
-- 24×14-Widget-Raster für Webseite, Kalender, Text, Bild und Diashow
+- 24×14-Widget-Raster für Webseite, Kalender, Text, Bild, Diashow, Müllkalender, Energie & Media
+- 🗑️ **Müllkalender-Widget:** Farbige Abfalltonnen (Restmüll, Bio, Papier, Gelber Sack, Glas) mit Dringlichkeits-Highlight
+- ☀️ **Energie- & PV-Widget:** Solarerzeugung, Hausverbrauch, Netzbezug/-einspeisung und Batteriestand
+- 🎵 **Media-Player ("Now Playing"):** Spotify/Sonos/HomeAssistant Musikstatus mit Cover und animiertem Equalizer
+- 🌙 **Automatischer Nachtmodus & Display-Dimmen:** Zeitgesteuertes Dimmen, Nacht-Uhr, Wake-on-Tap & Pixel-Shift (Burn-In-Schutz für 24/7-Betrieb)
+- 🔔 **Smarte Webhook-Benachrichtigungen:** `POST /api/notify` mit Popup-Banner und integriertem Zweiklang-Türgong (synthetisiert via Web Audio API)
 - Freies Resizing und 4-Wege-Positionierung im Platzspar-Editmodus
 - HDMI-Kiosk-Modus mit automatischer Mauszeiger-Ausblendung
 - Display-Zoom (80%–150%) für Fernseher und Wand-Displays
@@ -135,6 +140,11 @@ Nach einem Neustrat (`sudo reboot`) startet die HDMI-Anzeige automatisch im Voll
 - `PUT /api/admin-pin` – Admin-PIN mit aktueller PIN im Header `x-admin-pin` ändern
 - `POST /api/upload` – Bilddatei hochladen (PNG, JPG, WebP, GIF, SVG bis 5 MB, erfordert `x-admin-pin`)
 - `GET /uploads/:file` – hochgeladene Mediendateien abrufen
+- `POST /api/notify` – Live-Push-Benachrichtigung mit akustischem Gong senden (`{"title": "...", "message": "...", "sound": "doorbell"|"chime"|"alert", "duration": 10, "image": "..."}`)
+- `GET /api/notify/stream` – Server-Sent Events (SSE) Stream für Push-Benachrichtigungen
+- `POST /api/notify/clear` – Aktive Benachrichtigung sofort schließen
+- `POST /api/energy` & `GET /api/energy` – PV-, Hausverbrauch-, Netz- und Akkumesswerte live einspeisen (`{"solar": 850, "house": 420, "grid": -430, "batteryPercent": 90}`)
+- `POST /api/media` & `GET /api/media` – Aktuelle Musikwiedergabe übertragen (`{"title": "...", "artist": "...", "album": "...", "isPlaying": true}`)
 
 Die PIN schützt Änderungen im lokalen Netzwerk, ersetzt aber keine HTTPS- oder Benutzerverwaltung für eine öffentliche Installation. HomePiBoard sollte nicht direkt aus dem Internet erreichbar sein.
 
