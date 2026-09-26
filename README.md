@@ -138,9 +138,46 @@ Sobald die Installation durchgelaufen ist, zeigt dir das Terminal direkt alle wi
 ===========================================================
 ```
 
-Nach einem Neustrat (`sudo reboot`) startet die HDMI-Anzeige automatisch im Vollbild. Ausführliche Tipps zu HDMI-Auflösungen und nächtlicher CEC-Abschaltung findest du in [docs/raspberry-pi-hdmi.md](docs/raspberry-pi-hdmi.md).
+Nach einem Neustart (`sudo reboot`) startet die HDMI-Anzeige automatisch im Vollbild. Ausführliche Tipps zu HDMI-Auflösungen und nächtlicher CEC-Abschaltung findest du in [docs/raspberry-pi-hdmi.md](docs/raspberry-pi-hdmi.md).
 
-## API
+## Updates durchführen
+
+Wenn neue Funktionen oder Fehlerbehebungen für HomePiBoard erscheinen, kannst du deine Installation auf dem Raspberry Pi in Sekundenschnelle aktualisieren:
+
+### Option A: Mit dem automatischen Update-Skript (Empfohlen)
+
+Verbinde dich per SSH mit deinem Pi und führe das integrierte Skript aus:
+
+```bash
+cd ~/HomePiBoard
+./scripts/update.sh
+```
+
+*Das Skript erledigt automatisch alles Nötige:*
+- Lädt die neuesten Änderungen via `git pull` herunter
+- Installiert eventuell neue Paket-Abhängigkeiten (`npm install`)
+- Kompiliert das Frontend neu (`npm run build`)
+- Startet den Hintergrunddienst `homepiboard.service` unterbrechungsfrei neu
+
+### Option B: Manuell Schritt für Schritt
+
+Falls du das Update manuell ausführen möchtest:
+
+```bash
+cd ~/HomePiBoard
+git pull
+npm install
+npm run build
+sudo systemctl restart homepiboard
+```
+
+### Option C: Raspberry Pi OS & Chromium-Updates
+Um zusätzlich das Linux-Betriebssystem und den Chromium-Browser aktuell zu halten:
+
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+
 
 - `GET /api/settings` – aktuelle Konfiguration lesen
 - `GET /api/system` – Hardware-, Netzwerk- und System-Telemetrie lesen (CPU-Temp, RAM, IP, Uptime)
