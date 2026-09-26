@@ -47,7 +47,7 @@ Der Befehl führt alle Tests und anschließend den Produktionsbuild aus.
 
 ```bash
 npm run build
-HOMEPIBOARD_PIN=2468 npm start
+HOMEPIBOARD_PIN=0000 npm start
 ```
 
 Danach sind erreichbar:
@@ -55,9 +55,9 @@ Danach sind erreichbar:
 - Anzeige: `http://localhost:4173/`
 - Konfiguration: `http://localhost:4173/admin`
 
-`HOMEPIBOARD_PIN` muss gesetzt sein; ohne explizite PIN startet der Server nicht. Neu vergebene PINs müssen aus 4 bis 64 Ziffern bestehen. Eine längere PIN bietet zusätzlichen Schutz.
+Standardmäßig ist die Admin-PIN auf `0000` gesetzt (kann über `HOMEPIBOARD_PIN=...` oder auf der Einstellungsseite unter **Sicherheit & Admin-PIN** angepasst werden). Neu vergebene PINs müssen aus 4 bis 64 Ziffern bestehen.
 
-Nach dem ersten Start kann die PIN im Adminbereich unter **Sicherheit → Admin-PIN → PIN ändern** geändert werden. Die neue PIN wird ausschließlich als gesalzener Scrypt-Hash in `data/auth.json` gespeichert und bleibt nach Neustarts aktiv. Falls die PIN vergessen wurde, stoppe den Server, lösche `data/auth.json` und starte ihn mit einer neuen `HOMEPIBOARD_PIN` erneut.
+Nach dem ersten Start kann die PIN auf der Einstellungsseite unter **Sicherheit & Admin-PIN** geändert werden. Die neue PIN wird ausschließlich als gesalzener Scrypt-Hash in `data/auth.json` gespeichert und bleibt nach Neustarts aktiv. Falls die PIN vergessen wurde, stoppe den Server, lösche `data/auth.json` und starte ihn mit der Standard-PIN oder einer neuen `HOMEPIBOARD_PIN` erneut.
 
 Die zentrale Konfiguration wird beim ersten Speichern in `data/settings.json` angelegt. Wenn der Server vorübergehend nicht erreichbar ist, verwendet die Anzeige die zuletzt im Browser gespeicherte Konfiguration.
 
@@ -130,7 +130,7 @@ Sobald die Installation durchgelaufen ist, zeigt dir das Terminal direkt alle wi
   🌐 Web-Anzeige:        http://192.168.1.50:4173/
   ⚙️ Admin-Bereich:      http://192.168.1.50:4173/admin
 
-  🔑 Standard-PIN:       2468
+  🔑 Standard-PIN:       0000
 
 ===========================================================
   Tipp: Öffne http://192.168.1.50:4173/admin an deinem Laptop

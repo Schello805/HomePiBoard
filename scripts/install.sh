@@ -2,7 +2,7 @@
 # HomePiBoard One-Line Installer für Raspberry Pi OS Lite & Desktop
 set -euo pipefail
 
-DEFAULT_PIN="2468"
+DEFAULT_PIN="0000"
 REPO_URL="https://github.com/Schello805/HomePiBoard.git"
 INSTALL_DIR="${HOME}/HomePiBoard"
 

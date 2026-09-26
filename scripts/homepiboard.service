@@ -8,7 +8,7 @@ User=pi
 WorkingDirectory=/home/pi/HomePiBoard
 Environment=NODE_ENV=production
 Environment=PORT=4173
-Environment=HOMEPIBOARD_PIN=1234
+Environment=HOMEPIBOARD_PIN=0000
 ExecStart=/usr/bin/npm start
 Restart=always
 RestartSec=5

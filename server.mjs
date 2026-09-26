@@ -466,7 +466,7 @@ async function serveStatic(response, pathname, publicDirectory) {
 export function createHomePiBoardServer({
   dataDirectory = path.join(rootDirectory, 'data'),
   publicDirectory = path.join(rootDirectory, 'dist'),
-  adminPin = process.env.HOMEPIBOARD_PIN,
+  adminPin = process.env.HOMEPIBOARD_PIN || '0000',
   scryptFunction = scrypt,
   calendarFetch = fetch,
   lookupFunction = dnsLookup,
@@ -995,6 +995,6 @@ if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === imp
   const server = createHomePiBoardServer()
   server.listen(port, host, () => {
     console.log(`HomePiBoard läuft auf http://${host}:${port}`)
-    console.log('Admin-PIN ist über HOMEPIBOARD_PIN konfiguriert.')
+    console.log('Admin-PIN ist aktiv (Standard: 0000 oder über HOMEPIBOARD_PIN konfiguriert).')
   })
 }
