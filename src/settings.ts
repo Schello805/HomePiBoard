@@ -1,4 +1,4 @@
-export type WidgetType = 'web' | 'calendar' | 'text' | 'image'
+export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow'
 
 export type DashboardWidget = {
   id: string
@@ -7,29 +7,44 @@ export type DashboardWidget = {
   url: string
   columns: number
   rows: number
+  refreshIntervalMinutes?: number
+  intervalSeconds?: number
+  breakBefore?: boolean
+  showTitle?: boolean
 }
 
 export type DisplaySettings = {
-  version: 2
+  version: 3
   location: string
   weatherCity: string
   widgets: DashboardWidget[]
 }
 
+export const GRID_COLUMNS = 24
+export const GRID_ROWS = 14
+export const MAX_WIDGET_COLUMNS = GRID_COLUMNS * 100
+export const MAX_WIDGET_ROWS = GRID_ROWS * 100
+export const SETTINGS_VERSION = 3
+
+const VERSION_1_COLUMNS = 12
+const VERSION_1_ROWS = 4
+const VERSION_2_ROWS = 8
+
 export const defaultSettings: DisplaySettings = {
-  version: 2,
+  version: SETTINGS_VERSION,
   location: 'Zuhause',
   weatherCity: '',
   widgets: [],
 }
 
-const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image'])
+const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image', 'slideshow'])
 
 export const widgetConstraints: Record<WidgetType, { minColumns: number; minRows: number; defaultColumns: number; defaultRows: number }> = {
   web: { minColumns: 4, minRows: 2, defaultColumns: 12, defaultRows: 3 },
   calendar: { minColumns: 6, minRows: 5, defaultColumns: 8, defaultRows: 5 },
   text: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
   image: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
+  slideshow: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
 }
 
 const widgetTitles: Record<WidgetType, string> = {
@@ -37,6 +52,7 @@ const widgetTitles: Record<WidgetType, string> = {
   calendar: 'Kalender',
   text: 'Notiz',
   image: 'Bild',
+  slideshow: 'Diashow',
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -47,13 +63,13 @@ function text(value: unknown, fallback = '') {
   return typeof value === 'string' ? value : fallback
 }
 
-function dimension(value: unknown, fallback: number, minimum: number, maximum: number, multiplier = 1) {
-  return Math.max(minimum, Math.min(maximum, Math.round((Number(value) || fallback) * multiplier)))
+function dimension(value: unknown, fallback: number, minimum: number, maximum: number, multiplier = 1, round: (value: number) => number = Math.round) {
+  return Math.max(minimum, Math.min(maximum, round((Number(value) || fallback) * multiplier)))
 }
 
 export function createWidget(type: WidgetType, index: number, id = `widget-${index}`): DashboardWidget {
   const constraints = widgetConstraints[type]
-  return {
+  const widget: DashboardWidget = {
     id,
     type,
     title: widgetTitles[type],
@@ -61,15 +77,20 @@ export function createWidget(type: WidgetType, index: number, id = `widget-${ind
     columns: constraints.defaultColumns,
     rows: constraints.defaultRows,
   }
+  if (type === 'slideshow') {
+    widget.intervalSeconds = 8
+  }
+  return widget
 }
 
-export function layoutFits(widgets: DashboardWidget[]) {
-  const grid = Array.from({ length: 8 }, () => Array<boolean>(24).fill(false))
+function placeWidgets(widgets: Array<{ columns: number; rows: number }>, gridColumns: number, gridRows: number) {
+  const grid = Array.from({ length: gridRows }, () => Array<boolean>(gridColumns).fill(false))
+  const placements: Array<{ column: number; row: number }> = []
 
   for (const widget of widgets) {
     let placed = false
-    for (let row = 0; row <= 8 - widget.rows && !placed; row += 1) {
-      for (let column = 0; column <= 24 - widget.columns && !placed; column += 1) {
+    for (let row = 0; row <= gridRows - widget.rows && !placed; row += 1) {
+      for (let column = 0; column <= gridColumns - widget.columns && !placed; column += 1) {
         let available = true
         for (let y = row; y < row + widget.rows && available; y += 1) {
           for (let x = column; x < column + widget.columns; x += 1) {
@@ -83,19 +104,52 @@ export function layoutFits(widgets: DashboardWidget[]) {
         for (let y = row; y < row + widget.rows; y += 1) {
           for (let x = column; x < column + widget.columns; x += 1) grid[y]![x] = true
         }
+        placements.push({ column, row })
         placed = true
       }
     }
-    if (!placed) return false
+    if (!placed) return null
   }
 
-  return true
+  return placements
+}
+
+export function layoutFits(widgets: DashboardWidget[]) {
+  return widgets.every((widget) => (
+    Number.isInteger(widget.columns)
+    && Number.isInteger(widget.rows)
+    && widget.columns >= 1
+    && widget.rows >= 1
+    && widget.columns <= MAX_WIDGET_COLUMNS
+    && widget.rows <= MAX_WIDGET_ROWS
+  ))
 }
 
 export function normalizeSettings(value: unknown): DisplaySettings {
   const parsed = record(value)
-  const legacyLayout = parsed.version !== 2
+  const sourceVersion = Number(parsed.version)
+  const legacyLayout = !Number.isFinite(sourceVersion) || sourceVersion < 2
+  const columnMultiplier = legacyLayout ? GRID_COLUMNS / VERSION_1_COLUMNS : 1
+  const rowMultiplier = legacyLayout
+    ? GRID_ROWS / VERSION_1_ROWS
+    : sourceVersion === 2
+      ? GRID_ROWS / VERSION_2_ROWS
+      : 1
   const rawWidgets = Array.isArray(parsed.widgets) ? parsed.widgets : []
+  const migratesLayout = legacyLayout || sourceVersion === 2
+  const sourceColumns = legacyLayout ? VERSION_1_COLUMNS : GRID_COLUMNS
+  const sourceRows = legacyLayout ? VERSION_1_ROWS : VERSION_2_ROWS
+  const sourceWidgets = migratesLayout ? rawWidgets.map((value) => {
+    const widget = record(value)
+    const requestedType = text(widget.type) as WidgetType
+    const type = widgetTypes.has(requestedType) ? requestedType : 'web'
+    const constraints = widgetConstraints[type]
+    return {
+      columns: dimension(widget.columns, Math.max(1, Math.round(constraints.defaultColumns / columnMultiplier)), 1, sourceColumns),
+      rows: dimension(widget.rows, Math.max(1, Math.round(constraints.defaultRows / rowMultiplier)), 1, sourceRows),
+    }
+  }) : []
+  const sourcePlacements = migratesLayout ? placeWidgets(sourceWidgets, sourceColumns, sourceRows) : null
   const widgetIds = new Set<string>()
   const widgets = rawWidgets.map((value, index): DashboardWidget => {
     const widget = record(value)
@@ -111,13 +165,40 @@ export function normalizeSettings(value: unknown): DisplaySettings {
     }
     widgetIds.add(id)
 
+    const sourcePlacement = sourcePlacements?.[index]
+    const sourceWidget = sourceWidgets[index]
+    const maximumColumns = migratesLayout ? GRID_COLUMNS : MAX_WIDGET_COLUMNS
+    const maximumRows = migratesLayout ? GRID_ROWS : MAX_WIDGET_ROWS
+    const boundaryScaledRows = sourcePlacement && sourceWidget
+      ? Math.round((sourcePlacement.row + sourceWidget.rows) * rowMultiplier) - Math.round(sourcePlacement.row * rowMultiplier)
+      : null
+
+    const rawRefresh = Number(widget.refreshIntervalMinutes)
+    const refreshIntervalMinutes = type === 'web' && Number.isFinite(rawRefresh) && rawRefresh > 0
+      ? Math.max(1, Math.min(1440, Math.round(rawRefresh)))
+      : undefined
+
+    const rawInterval = Number(widget.intervalSeconds)
+    const intervalSeconds = type === 'slideshow'
+      ? (Number.isFinite(rawInterval) && rawInterval > 0 ? Math.max(2, Math.min(3600, Math.round(rawInterval))) : 8)
+      : undefined
+
+    const breakBefore = Boolean(widget.breakBefore)
+    const showTitle = Boolean(widget.showTitle)
+
     return {
       id,
       type,
-      title: text(widget.title) || `Web-Widget ${index + 1}`,
+      title: text(widget.title) || `${widgetTitles[type]} ${index + 1}`,
       url: text(widget.url),
-      columns: dimension(widget.columns, constraints.defaultColumns, constraints.minColumns, 24, legacyLayout ? 2 : 1),
-      rows: dimension(widget.rows, constraints.defaultRows, constraints.minRows, 8, legacyLayout ? 2 : 1),
+      columns: dimension(widget.columns, constraints.defaultColumns, constraints.minColumns, maximumColumns, columnMultiplier),
+      rows: boundaryScaledRows === null
+        ? dimension(widget.rows, constraints.defaultRows, constraints.minRows, maximumRows, rowMultiplier, migratesLayout ? Math.floor : Math.round)
+        : Math.max(constraints.minRows, Math.min(GRID_ROWS, boundaryScaledRows)),
+      ...(refreshIntervalMinutes !== undefined ? { refreshIntervalMinutes } : {}),
+      ...(intervalSeconds !== undefined ? { intervalSeconds } : {}),
+      ...(breakBefore ? { breakBefore: true } : {}),
+      ...(showTitle ? { showTitle: true } : {}),
     }
   })
 
@@ -127,13 +208,13 @@ export function normalizeSettings(value: unknown): DisplaySettings {
       type: 'web',
       title: 'Web-Widget',
       url: parsed.url,
-      columns: parsed.size === 'wide' ? 24 : 12,
-      rows: parsed.size === 'tall' ? 4 : 2,
+      columns: parsed.size === 'wide' ? GRID_COLUMNS : 12,
+      rows: Math.round((parsed.size === 'tall' ? 4 : 2) * GRID_ROWS / VERSION_2_ROWS),
     })
   }
 
   return {
-    version: 2,
+    version: SETTINGS_VERSION,
     location: text(parsed.location) || defaultSettings.location,
     weatherCity: text(parsed.weatherCity),
     widgets,

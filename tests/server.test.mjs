@@ -14,9 +14,11 @@ async function startServer({
   dataDirectory,
   adminPin = '2468',
   scryptFunction,
+  calendarFetch,
+  lookupFunction,
 } = {}) {
   dataDirectory ||= await mkdtemp(path.join(tmpdir(), 'homepiboard-'))
-  const server = createHomePiBoardServer({ dataDirectory, adminPin, scryptFunction })
+  const server = createHomePiBoardServer({ dataDirectory, adminPin, scryptFunction, calendarFetch, lookupFunction })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('Server did not start')
@@ -34,13 +36,13 @@ test('settings API persists normalized settings', async (context) => {
   const response = await fetch(`${running.url}/api/settings`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json', 'x-admin-pin': '2468' },
-    body: JSON.stringify({ version: 2, location: 'Flur', widgets: [{ title: 'Info', columns: 99, rows: 0 }] }),
+    body: JSON.stringify({ version: 3, location: 'Flur', widgets: [{ title: 'Info', columns: 99, rows: 0 }] }),
   })
 
   assert.equal(response.status, 200)
   const saved = await response.json()
   assert.equal(saved.location, 'Flur')
-  assert.equal(saved.widgets[0].columns, 24)
+  assert.equal(saved.widgets[0].columns, 99)
   assert.equal(saved.widgets[0].rows, 3)
 
   const stored = JSON.parse(await readFile(path.join(running.dataDirectory, 'settings.json'), 'utf8'))
@@ -129,7 +131,7 @@ test('new persistence directories sync each parent that received a directory ent
   )
 })
 
-test('settings API rejects layouts that do not fit the kiosk grid', async (context) => {
+test('settings API accepts layouts that extend beyond one screen', async (context) => {
   const running = await startServer()
   context.after(() => running.server.close())
 
@@ -137,12 +139,60 @@ test('settings API rejects layouts that do not fit the kiosk grid', async (conte
     method: 'PUT',
     headers: { 'content-type': 'application/json', 'x-admin-pin': '2468' },
     body: JSON.stringify({
-      version: 2,
-      widgets: Array.from({ length: 5 }, (_, index) => ({ id: `wide-${index}`, type: 'web', columns: 12, rows: 4 })),
+      version: 3,
+      widgets: Array.from({ length: 5 }, (_, index) => ({ id: `wide-${index}`, type: 'web', columns: 12, rows: 7 })),
     }),
   })
 
+  assert.equal(response.status, 200)
+  const saved = await response.json()
+  assert.equal(saved.widgets.length, 5)
+})
+
+test('calendar API fetches and parses the saved iCalendar feed', async (context) => {
+  const dataDirectory = await mkdtemp(path.join(tmpdir(), 'homepiboard-calendar-'))
+  await writeFile(path.join(dataDirectory, 'settings.json'), JSON.stringify({
+    version: 3,
+    widgets: [{ id: 'school', type: 'calendar', title: 'Schule', url: 'https://calendar.example/feed.ics', columns: 8, rows: 5 }],
+  }))
+  let requestedUrl = ''
+  const running = await startServer({
+    dataDirectory,
+    lookupFunction: async () => [{ address: '93.184.216.34', family: 4 }],
+    calendarFetch: async (url) => {
+      requestedUrl = String(url)
+      return new Response('BEGIN:VCALENDAR\nBEGIN:VEVENT\nDTSTART:20260928T081500Z\nSUMMARY:Elternabend\nEND:VEVENT\nEND:VCALENDAR', { headers: { 'content-type': 'text/calendar' } })
+    },
+  })
+  context.after(() => running.server.close())
+
+  const response = await fetch(`${running.url}/api/calendar/school`)
+  assert.equal(response.status, 200)
+  assert.equal(requestedUrl, 'https://calendar.example/feed.ics')
+  const body = await response.json()
+  assert.equal(body.events[0].summary, 'Elternabend')
+})
+
+test('calendar API refuses feeds resolving to private network addresses', async (context) => {
+  const dataDirectory = await mkdtemp(path.join(tmpdir(), 'homepiboard-calendar-private-'))
+  await writeFile(path.join(dataDirectory, 'settings.json'), JSON.stringify({
+    version: 3,
+    widgets: [{ id: 'private', type: 'calendar', title: 'Intern', url: 'https://calendar.internal/feed.ics', columns: 8, rows: 5 }],
+  }))
+  let fetched = false
+  const running = await startServer({
+    dataDirectory,
+    lookupFunction: async () => [{ address: '192.168.1.20', family: 4 }],
+    calendarFetch: async () => {
+      fetched = true
+      return new Response('')
+    },
+  })
+  context.after(() => running.server.close())
+
+  const response = await fetch(`${running.url}/api/calendar/private`)
   assert.equal(response.status, 422)
+  assert.equal(fetched, false)
 })
 
 test('concurrent settings writes all complete without temporary-file collisions', async (context) => {
@@ -152,7 +202,7 @@ test('concurrent settings writes all complete without temporary-file collisions'
   const responses = await Promise.all(Array.from({ length: 30 }, (_, index) => fetch(`${running.url}/api/settings`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json', 'x-admin-pin': '2468' },
-    body: JSON.stringify({ version: 2, location: `Ort ${index}`, widgets: [] }),
+    body: JSON.stringify({ version: 3, location: `Ort ${index}`, widgets: [] }),
   })))
 
   assert.deepEqual(responses.map((response) => response.status), Array(30).fill(200))
@@ -294,4 +344,53 @@ test('invalid JSON syntax in persisted credentials is a server error', async (co
   }
 
   assert.equal(response.status, 500)
+})
+
+test('upload API saves images up to 5MB and serves them via /uploads/', async (context) => {
+  const running = await startServer()
+  context.after(() => running.server.close())
+
+  const formData = new FormData()
+  formData.append('file', new File(['fake-png-data'], 'test-image.png', { type: 'image/png' }))
+
+  const uploadRes = await fetch(`${running.url}/api/upload`, {
+    method: 'POST',
+    headers: { 'x-admin-pin': '2468' },
+    body: formData,
+  })
+
+  assert.equal(uploadRes.status, 200)
+  const body = await uploadRes.json()
+  assert.match(body.url, /^\/uploads\/\d+-[a-f0-9]+\.png$/)
+
+  const getRes = await fetch(`${running.url}${body.url}`)
+  assert.equal(getRes.status, 200)
+  assert.equal(getRes.headers.get('content-type'), 'image/png')
+  assert.equal(await getRes.text(), 'fake-png-data')
+})
+
+test('upload API rejects unauthenticated requests or files exceeding 5MB', async (context) => {
+  const running = await startServer()
+  context.after(() => running.server.close())
+
+  const formData = new FormData()
+  formData.append('file', new File(['hello'], 'test.png', { type: 'image/png' }))
+
+  const unauthRes = await fetch(`${running.url}/api/upload`, {
+    method: 'POST',
+    headers: { 'x-admin-pin': 'wrong' },
+    body: formData,
+  })
+  assert.equal(unauthRes.status, 401)
+
+  const bigFile = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'big.png', { type: 'image/png' })
+  const bigFormData = new FormData()
+  bigFormData.append('file', bigFile)
+
+  const tooBigRes = await fetch(`${running.url}/api/upload`, {
+    method: 'POST',
+    headers: { 'x-admin-pin': '2468' },
+    body: bigFormData,
+  })
+  assert.equal(tooBigRes.status, 413)
 })

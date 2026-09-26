@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { createWidget, defaultSettings, layoutFits, normalizeSettings } from '../src/settings.ts'
+import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION } from '../src/settings.ts'
 
 test('normalizeSettings returns independent defaults for missing data', () => {
   const first = normalizeSettings(null)
@@ -11,13 +11,19 @@ test('normalizeSettings returns independent defaults for missing data', () => {
   assert.notEqual(first.widgets, second.widgets)
 })
 
-test('normalizeSettings migrates legacy widget sizes to the 24 by 8 grid', () => {
+test('the kiosk grid uses television-like 24 by 14 proportions', () => {
+  assert.equal(GRID_COLUMNS, 24)
+  assert.equal(GRID_ROWS, 14)
+  assert.equal(SETTINGS_VERSION, 3)
+})
+
+test('normalizeSettings migrates legacy widget sizes to the current grid', () => {
   const settings = normalizeSettings({
     location: 'Küche',
     widgets: [{ id: 'clock', title: 'Uhr', url: 'https://example.com', columns: 6, rows: 2 }],
   })
 
-  assert.equal(settings.version, 2)
+  assert.equal(settings.version, 3)
   assert.equal(settings.location, 'Küche')
   assert.deepEqual(settings.widgets[0], {
     id: 'clock',
@@ -25,14 +31,97 @@ test('normalizeSettings migrates legacy widget sizes to the 24 by 8 grid', () =>
     title: 'Uhr',
     url: 'https://example.com',
     columns: 12,
-    rows: 4,
+    rows: 7,
   })
 })
 
-test('normalizeSettings clamps sizes and rejects unsupported widget types', () => {
+test('legacy version 1 migration keeps valid stacked layouts inside the grid', () => {
+  const settings = normalizeSettings({
+    version: 1,
+    widgets: Array.from({ length: 4 }, (_, index) => ({ id: `legacy-stack-${index}`, type: 'web', columns: 12, rows: 1 })),
+  })
+
+  assert.equal(layoutFits(settings.widgets), true)
+})
+
+test('normalizeSettings preserves the physical height of version 2 widgets', () => {
   const settings = normalizeSettings({
     version: 2,
-    widgets: [{ id: '', type: 'script', title: '', url: 42, columns: 99, rows: -4 }],
+    widgets: [
+      { id: 'full-height', type: 'web', columns: 24, rows: 8 },
+      { id: 'half-height', type: 'web', columns: 24, rows: 4 },
+    ],
+  })
+
+  assert.equal(settings.version, 3)
+  assert.deepEqual(settings.widgets.map(({ columns, rows }) => ({ columns, rows })), [
+    { columns: 24, rows: 14 },
+    { columns: 24, rows: 7 },
+  ])
+})
+
+test('version 2 migration keeps valid stacked layouts inside the grid', () => {
+  const partitions = [
+    [2, 6],
+    [2, 2, 2, 2],
+  ]
+
+  for (const rows of partitions) {
+    const settings = normalizeSettings({
+      version: 2,
+      widgets: rows.map((widgetRows, index) => ({ id: `stack-${index}`, type: 'web', columns: 24, rows: widgetRows })),
+    })
+    assert.equal(layoutFits(settings.widgets), true)
+  }
+})
+
+test('version 2 migration preserves valid mixed-width row boundaries', () => {
+  const settings = normalizeSettings({
+    version: 2,
+    widgets: [
+      { id: 'upper-left', type: 'web', columns: 20, rows: 2 },
+      { id: 'lower-left', type: 'web', columns: 20, rows: 2 },
+      { id: 'bottom', type: 'web', columns: 24, rows: 4 },
+      { id: 'right', type: 'web', columns: 4, rows: 4 },
+    ],
+  })
+
+  assert.equal(layoutFits(settings.widgets), true)
+})
+
+test('normalizing migrated settings repeatedly does not rescale them again', () => {
+  const migrated = normalizeSettings({ version: 2, widgets: [{ type: 'web', columns: 24, rows: 8 }] })
+
+  assert.deepEqual(normalizeSettings(migrated), migrated)
+})
+
+test('legacy single-widget settings preserve their previous height', () => {
+  assert.equal(normalizeSettings({ url: 'https://example.com' }).widgets[0]?.rows, 4)
+  assert.equal(normalizeSettings({ url: 'https://example.com', size: 'tall' }).widgets[0]?.rows, 7)
+})
+
+test('normalizeSettings leaves current version dimensions unchanged', () => {
+  const settings = normalizeSettings({ version: 3, widgets: [{ type: 'web', columns: 24, rows: 8 }] })
+
+  assert.deepEqual(settings.widgets.map(({ columns, rows }) => ({ columns, rows })), [{ columns: 24, rows: 8 }])
+})
+
+test('normalizeSettings allows widgets to extend across multiple screens', () => {
+  const settings = normalizeSettings({
+    version: 3,
+    widgets: [{ id: 'wall', type: 'web', columns: 48, rows: 28 }],
+  })
+
+  assert.deepEqual(settings.widgets.map(({ columns, rows }) => ({ columns, rows })), [{ columns: 48, rows: 28 }])
+})
+
+test('normalizeSettings applies only a generous safety limit and rejects unsupported widget types', () => {
+  const settings = normalizeSettings({
+    version: 3,
+    widgets: [
+      { id: '', type: 'script', title: '', url: 42, columns: MAX_WIDGET_COLUMNS + 1, rows: -4 },
+      { id: 'tall', type: 'web', title: 'Hoch', url: '', columns: 24, rows: MAX_WIDGET_ROWS + 1 },
+    ],
   })
 
   assert.deepEqual(settings.widgets[0], {
@@ -40,14 +129,15 @@ test('normalizeSettings clamps sizes and rejects unsupported widget types', () =
     type: 'web',
     title: 'Web-Widget 1',
     url: '',
-    columns: 24,
+    columns: MAX_WIDGET_COLUMNS,
     rows: 2,
   })
+  assert.equal(settings.widgets[1]?.rows, MAX_WIDGET_ROWS)
 })
 
 test('normalizeSettings rounds dimensions and enforces safe minimum sizes by type', () => {
   const settings = normalizeSettings({
-    version: 2,
+    version: 3,
     widgets: [
       { type: 'calendar', columns: 5.6, rows: 2.2 },
       { type: 'image', columns: 2, rows: 1 },
@@ -73,17 +163,18 @@ test('createWidget returns useful defaults for each widget type', () => {
   })
 })
 
-test('layoutFits detects when widgets exceed the 24 by 8 kiosk grid', () => {
-  const fitting = Array.from({ length: 4 }, (_, index) => ({ ...createWidget('text', index + 1), columns: 12, rows: 4 }))
+test('layoutFits allows the canvas to grow right and down', () => {
+  const fitting = Array.from({ length: 4 }, (_, index) => ({ ...createWidget('text', index + 1), columns: 12, rows: 7 }))
   const overflowing = [...fitting, { ...createWidget('image', 5), columns: 4, rows: 2 }]
 
   assert.equal(layoutFits(fitting), true)
-  assert.equal(layoutFits(overflowing), false)
+  assert.equal(layoutFits(overflowing), true)
+  assert.equal(layoutFits([{ ...createWidget('web', 6), columns: MAX_WIDGET_COLUMNS + 1 }]), false)
 })
 
 test('normalizeSettings makes duplicate widget identifiers unique', () => {
   const normalized = normalizeSettings({
-    version: 2,
+    version: 3,
     widgets: [
       { id: 'duplicate', type: 'text' },
       { id: 'duplicate', type: 'image' },
@@ -92,3 +183,59 @@ test('normalizeSettings makes duplicate widget identifiers unique', () => {
 
   assert.equal(new Set(normalized.widgets.map((widget) => widget.id)).size, 2)
 })
+
+test('createWidget supports slideshow with 8s default interval', () => {
+  assert.deepEqual(createWidget('slideshow', 3), {
+    id: 'widget-3',
+    type: 'slideshow',
+    title: 'Diashow',
+    url: '',
+    columns: 8,
+    rows: 3,
+    intervalSeconds: 8,
+  })
+})
+
+test('normalizeSettings preserves and validates interval options', () => {
+  const normalized = normalizeSettings({
+    version: 3,
+    widgets: [
+      { type: 'web', refreshIntervalMinutes: 15 },
+      { type: 'slideshow', intervalSeconds: 10 },
+      { type: 'web', refreshIntervalMinutes: -5 },
+      { type: 'slideshow', intervalSeconds: 99999 },
+    ],
+  })
+
+  assert.equal(normalized.widgets[0]?.refreshIntervalMinutes, 15)
+  assert.equal(normalized.widgets[1]?.intervalSeconds, 10)
+  assert.equal(normalized.widgets[2]?.refreshIntervalMinutes, undefined)
+  assert.equal(normalized.widgets[3]?.intervalSeconds, 3600)
+})
+
+test('normalizeSettings preserves breakBefore option for 2D row placement', () => {
+  const normalized = normalizeSettings({
+    version: 3,
+    widgets: [
+      { type: 'web', breakBefore: true },
+      { type: 'calendar', breakBefore: false },
+    ],
+  })
+
+  assert.equal(normalized.widgets[0]?.breakBefore, true)
+  assert.equal(normalized.widgets[1]?.breakBefore, undefined)
+})
+
+test('normalizeSettings preserves showTitle option', () => {
+  const normalized = normalizeSettings({
+    version: 3,
+    widgets: [
+      { type: 'web', showTitle: true },
+      { type: 'image', showTitle: false },
+    ],
+  })
+
+  assert.equal(normalized.widgets[0]?.showTitle, true)
+  assert.equal(normalized.widgets[1]?.showTitle, undefined)
+})
+

@@ -1,7 +1,7 @@
 import { escapeHtml } from './dashboard-utils.ts'
-import { createWidget, defaultSettings, layoutFits, normalizeSettings, widgetConstraints, type DashboardWidget, type WidgetType } from './settings.ts'
+import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type WidgetType } from './settings.ts'
 import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
-import { bindWidgetFrames, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
+import { bindWidgetFrames, isBuiltInCalendar, parseSlideshowUrls, renderSlideshowCrudList, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
 
 const pinKey = 'homepiboard-admin-pin'
 
@@ -25,6 +25,85 @@ export function clearPinError(errorElement: { textContent: string }) {
   errorElement.textContent = ''
 }
 
+export function resizeWidgetDimensions(type: WidgetType, columns: number, rows: number, deltaColumns: number, deltaRows: number, currentColumns = columns, currentRows = rows) {
+  const constraints = widgetConstraints[type]
+  const resizedColumns = Math.max(constraints.minColumns, Math.min(MAX_WIDGET_COLUMNS, Math.round(columns + deltaColumns)))
+  const resizedRows = Math.max(constraints.minRows, Math.min(MAX_WIDGET_ROWS, Math.round(rows + deltaRows)))
+  return {
+    columns: resizedColumns,
+    rows: resizedRows,
+    changed: resizedColumns !== currentColumns || resizedRows !== currentRows,
+  }
+}
+
+export function resizeKeyboardDelta(key: string, accelerated = false): [number, number] | null {
+  const step = accelerated ? 4 : 1
+  const directions: Record<string, [number, number]> = {
+    ArrowLeft: [-step, 0],
+    ArrowRight: [step, 0],
+    ArrowUp: [0, -step],
+    ArrowDown: [0, step],
+  }
+  return directions[key] ?? null
+}
+
+export function resizePointerDelta(deltaX: number, deltaY: number, columnWidth: number, rowHeight: number): [number, number] {
+  const snap = (distance: number, cellSize: number) => {
+    const units = Math.floor(Math.abs(distance) / Math.max(1, cellSize) + 0.5)
+    return units === 0 ? 0 : Math.sign(distance) * units
+  }
+  return [snap(deltaX, columnWidth), snap(deltaY, rowHeight)]
+}
+
+export function resizeChangedFromStart(startColumns: number, startRows: number, currentColumns: number, currentRows: number) {
+  return startColumns !== currentColumns || startRows !== currentRows
+}
+
+export function lostPointerCaptureAction(intentionallyReleasing: boolean): 'cleanup' | 'cancel' {
+  return intentionallyReleasing ? 'cleanup' : 'cancel'
+}
+
+export function widgetPreviewAspectRatio(type: WidgetType, columns: number, rows: number, viewportWidth: number, viewportHeight: number, url = '') {
+  if (viewportWidth <= 720) {
+    const usesBuiltInCalendar = isBuiltInCalendar(type, url)
+    const minimumHeight = usesBuiltInCalendar ? 315 : 250
+    const preferredHeight = viewportHeight * (usesBuiltInCalendar ? 0.65 : 0.55)
+    const maximumHeight = usesBuiltInCalendar ? 520 : 460
+    const widgetHeight = Math.min(maximumHeight, Math.max(minimumHeight, preferredHeight))
+    return Math.max(1, viewportWidth) / widgetHeight
+  }
+  const gridWidth = Math.max(1, viewportWidth - 16)
+  const gridHeight = Math.max(1, viewportHeight - 87 + 8)
+  const gap = Math.min(14, Math.max(6, viewportWidth * 0.01))
+  const columnWidth = Math.max(1, (gridWidth - gap * (GRID_COLUMNS - 1)) / GRID_COLUMNS)
+  const rowHeight = Math.max(1, (gridHeight - gap * (GRID_ROWS - 1)) / GRID_ROWS)
+  const widgetWidth = columnWidth * columns + gap * Math.max(0, columns - 1)
+  const widgetHeight = rowHeight * rows + gap * Math.max(0, rows - 1)
+  return Math.min(4, Math.max(0.75, widgetWidth / widgetHeight))
+}
+
+export function compactFieldCharacters(value: string) {
+  const longestLine = value.split(/\r?\n/).reduce((longest, line) => Math.max(longest, line.length), 0)
+  return Math.min(80, Math.max(4, longestLine * 2))
+}
+
+type CompactFieldControl = {
+  tagName: string
+  type?: string
+  value: string
+  placeholder?: string
+  style: { width: string }
+  selectedOptions?: ArrayLike<{ textContent: string | null }>
+}
+
+export function syncCompactField(control: CompactFieldControl) {
+  const isSelect = control.tagName === 'SELECT'
+  const selectedText = isSelect ? control.selectedOptions?.[0]?.textContent?.trim() : ''
+  const content = selectedText || control.value || control.placeholder || ''
+  const chromeWidth = isSelect ? 38 : control.tagName === 'INPUT' && control.type === 'number' ? 40 : 32
+  control.style.width = `min(100%, calc(${compactFieldCharacters(content)}ch + ${chromeWidth}px))`
+}
+
 function renderWidgetEditor(widget: DashboardWidget, index: number) {
   return renderWidget(widget, true, index)
 }
@@ -35,20 +114,49 @@ export async function renderAdminPage(app: HTMLElement) {
   const settings = loaded.settings
 
   app.innerHTML = `<main class="admin-shell">
-    <header class="admin-header">
-      <a class="brand-mark" href="/" aria-label="HomePiBoard Anzeige"><img class="brand-logo" src="/homepiboard-logo.svg" alt="" /></a>
-      <div class="admin-header-actions"><span class="connection-status ${loaded.source === 'server' ? 'is-online' : ''}">${loaded.source === 'server' ? 'SERVER' : 'LOKAL'}</span><span class="save-state" id="save-state">GESPEICHERT</span><a class="back-link" href="/">Anzeige öffnen <span aria-hidden="true">↗</span></a></div>
-    </header>
-    <section class="admin-content" aria-labelledby="admin-title">
-      <div class="admin-intro"><span class="widget-kicker">Konfiguration</span><h1 id="admin-title">HomePiBoard <em>EDIT MODE</em></h1><p>Widgets anlegen, bearbeiten, sortieren und sicher im 24 × 8 Raster platzieren.</p></div>
-      <form class="admin-form" id="admin-form">
-        <section class="settings-section" aria-labelledby="general-title"><div class="section-heading"><div><span class="widget-kicker">Anzeige</span><h2 id="general-title">Allgemeine Einstellungen</h2></div></div><div class="admin-global-fields"><label for="admin-location">Bezeichnung<span>Text im Header</span><input id="admin-location" maxlength="24" value="${escapeHtml(settings.location)}" /></label><label for="admin-weather-city">Wetterort<span>Optional, zum Beispiel Berlin</span><input id="admin-weather-city" maxlength="40" value="${escapeHtml(settings.weatherCity)}" placeholder="Berlin" /></label></div></section>
-        <section class="settings-section" aria-labelledby="security-title"><div class="section-heading"><div><span class="widget-kicker">Sicherheit</span><h2 id="security-title">Admin-PIN</h2></div></div><div class="security-setting"><div><strong>PIN-Schutz</strong><p>Ändere die PIN für Einstellungen und Zurücksetzen direkt auf diesem Gerät.</p></div><button class="secondary-button" id="change-pin-button" type="button">PIN ändern</button></div></section>
-        <section class="settings-section" aria-labelledby="widgets-title"><div class="section-heading"><div><span class="widget-kicker">Inhalte</span><h2 id="widgets-title">Widgets</h2></div><span class="widget-count" id="widget-count"></span></div><div class="widget-editors" id="widget-editors">${settings.widgets.map(renderWidgetEditor).join('')}</div><div class="empty-editor-state" id="empty-editor-state"><strong>Noch keine Widgets</strong><span>Wähle unten einen Typ aus, um zu beginnen.</span></div><div class="add-widget-menu" aria-label="Widget hinzufügen"><span>Widget hinzufügen</span><button type="button" data-add-type="web">↗ Webseite</button><button type="button" data-add-type="calendar">▦ Kalender</button><button type="button" data-add-type="text">T Text</button><button type="button" data-add-type="image">▧ Bild</button></div><p class="layout-warning" id="layout-warning" role="alert"></p></section>
-        <div class="admin-actions"><button class="secondary-button" id="reset-button" type="button">Alles zurücksetzen</button><button class="save-button" id="save-button" type="submit">Änderungen speichern</button></div>
-        <p class="save-message" id="save-message" role="status"></p>
-      </form>
-    </section>
+    <form class="admin-form" id="admin-form">
+      <header class="admin-topbar">
+        <div class="admin-topbar-brand">
+          <a class="brand-mark" href="/" aria-label="HomePiBoard Anzeige"><img class="brand-logo" src="/homepiboard-logo.svg" alt="" /></a>
+          <span class="admin-brand-title">HomePiBoard <em>EDIT</em></span>
+        </div>
+        <div class="admin-global-fields">
+          <label class="topbar-field" for="admin-location"><span>Name</span><input id="admin-location" maxlength="24" value="${escapeHtml(settings.location)}" placeholder="Zuhause" /></label>
+          <label class="topbar-field" for="admin-weather-city"><span>Wetter</span><input id="admin-weather-city" maxlength="40" value="${escapeHtml(settings.weatherCity)}" placeholder="Berlin" /></label>
+          <button class="topbar-btn" id="change-pin-button" type="button" title="Admin-PIN ändern">🔑 PIN</button>
+        </div>
+        <div class="admin-header-actions">
+          <span class="connection-status ${loaded.source === 'server' ? 'is-online' : ''}">${loaded.source === 'server' ? 'SERVER' : 'LOKAL'}</span>
+          <span class="save-state" id="save-state">GESPEICHERT</span>
+          <button class="topbar-btn secondary" id="reset-button" type="button" title="Werkseinstellungen: Löscht alle Widgets und setzt Einstellungen auf Standard zurück">↺ Zurücksetzen</button>
+          <button class="save-button" id="save-button" type="submit">Speichern</button>
+          <a class="back-link" href="/" title="Zurück zur Anzeige">Anzeige ↗</a>
+        </div>
+      </header>
+      <div class="admin-subbar">
+        <div class="admin-subbar-info">
+          <span class="widget-count" id="widget-count"></span>
+          <span class="grid-hint">${GRID_COLUMNS} × ${GRID_ROWS} Raster • Ecke ↘ ziehen • ⚙ Einstellungen</span>
+        </div>
+        <div class="add-widget-menu" aria-label="Widget hinzufügen">
+          <span class="add-label">+ Widget:</span>
+          <button type="button" data-add-type="web">↗ Webseite</button>
+          <button type="button" data-add-type="calendar">▦ Kalender</button>
+          <button type="button" data-add-type="text">≡ Text</button>
+          <button type="button" data-add-type="image">▧ Bild</button>
+          <button type="button" data-add-type="slideshow">▨ Diashow</button>
+        </div>
+      </div>
+      <p class="layout-warning" id="layout-warning" role="alert"></p>
+      <div class="admin-canvas">
+        <div class="widget-editors" id="widget-editors">${settings.widgets.map(renderWidgetEditor).join('')}</div>
+        <div class="empty-editor-state" id="empty-editor-state">
+          <strong>Noch keine Widgets</strong>
+          <span>Klicke oben auf ein Widget, um es hinzuzufügen.</span>
+        </div>
+      </div>
+      <p class="save-message" id="save-message" role="status"></p>
+    </form>
   </main>
   <dialog class="pin-dialog" id="pin-dialog"><form method="dialog" id="pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Admin-Bereich</span><h2>PIN eingeben</h2></div><button class="close-button" id="pin-close" type="button" aria-label="Schließen">×</button></div><label for="admin-pin">Admin-PIN<input id="admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><p class="pin-error" id="pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="pin-cancel" type="button">Abbrechen</button><button class="save-button" id="pin-submit" value="default">Entsperren</button></div></form></dialog>
   <dialog class="pin-dialog" id="change-pin-dialog"><form id="change-pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Sicherheit</span><h2>Admin-PIN ändern</h2></div><button class="close-button" id="change-pin-close" type="button" aria-label="Schließen">×</button></div><label for="current-admin-pin">Aktuelle PIN<input id="current-admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><label for="new-admin-pin">Neue PIN<span>4 bis 64 Ziffern</span><input id="new-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required /></label><label for="confirm-admin-pin">Neue PIN wiederholen<input id="confirm-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required /></label><p class="pin-error" id="change-pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="change-pin-cancel" type="button">Abbrechen</button><button class="save-button" id="change-pin-submit" type="submit">PIN speichern</button></div></form></dialog>`
@@ -81,6 +189,16 @@ export async function renderAdminPage(app: HTMLElement) {
   let dirty = false
   let pinRequest: Promise<string | null> | null = null
 
+  function bindCompactFields(root: ParentNode) {
+    root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea').forEach((control) => {
+      syncCompactField(control)
+      if (control.dataset.compactWidthBound === 'true') return
+      control.dataset.compactWidthBound = 'true'
+      control.addEventListener('input', () => syncCompactField(control))
+      control.addEventListener('change', () => syncCompactField(control))
+    })
+  }
+
   function showMessage(text: string, error = false) {
     message.textContent = text
     message.classList.toggle('is-error', error)
@@ -108,13 +226,30 @@ export async function renderAdminPage(app: HTMLElement) {
   function readWidget(editor: HTMLElement): DashboardWidget {
     const type = editor.querySelector<HTMLSelectElement>('[data-field="type"]')!.value as WidgetType
     const constraints = widgetConstraints[type]
+    const refreshInput = editor.querySelector<HTMLInputElement>('[data-field="refreshIntervalMinutes"]')
+    const intervalInput = editor.querySelector<HTMLInputElement>('[data-field="intervalSeconds"]')
+    const refreshIntervalMinutes = type === 'web' && refreshInput
+      ? Math.max(0, Math.min(1440, Math.round(Number(refreshInput.value) || 0)))
+      : undefined
+    const intervalSeconds = type === 'slideshow' && intervalInput
+      ? Math.max(2, Math.min(3600, Math.round(Number(intervalInput.value) || 8)))
+      : undefined
+
+    const breakBefore = editor.dataset.breakBefore === 'true'
+    const showTitleInput = editor.querySelector<HTMLInputElement>('[data-field="showTitle"]')
+    const showTitle = Boolean(showTitleInput?.checked)
+
     return {
       id: editor.dataset.widgetId!,
       type,
       title: editor.querySelector<HTMLInputElement>('[data-field="title"]')!.value.trim() || widgetTypeLabel(type),
       url: editor.querySelector<HTMLTextAreaElement>('[data-field="url"]')!.value.trim(),
-      columns: Math.max(constraints.minColumns, Math.min(24, Math.round(Number(editor.querySelector<HTMLInputElement>('[data-field="columns"]')!.value) || constraints.defaultColumns))),
-      rows: Math.max(constraints.minRows, Math.min(8, Math.round(Number(editor.querySelector<HTMLInputElement>('[data-field="rows"]')!.value) || constraints.defaultRows))),
+      columns: Math.max(constraints.minColumns, Math.min(MAX_WIDGET_COLUMNS, Math.round(Number(editor.querySelector<HTMLInputElement>('[data-field="columns"]')!.value) || constraints.defaultColumns))),
+      rows: Math.max(constraints.minRows, Math.min(MAX_WIDGET_ROWS, Math.round(Number(editor.querySelector<HTMLInputElement>('[data-field="rows"]')!.value) || constraints.defaultRows))),
+      ...(refreshIntervalMinutes !== undefined ? { refreshIntervalMinutes } : {}),
+      ...(intervalSeconds !== undefined ? { intervalSeconds } : {}),
+      ...(breakBefore ? { breakBefore: true } : {}),
+      ...(showTitle ? { showTitle: true } : {}),
     }
   }
 
@@ -122,14 +257,52 @@ export async function renderAdminPage(app: HTMLElement) {
     return [...editorList.querySelectorAll<HTMLElement>('.widget-editor')].map(readWidget)
   }
 
+  function getWidgetRowGroups(editors: HTMLElement[]): HTMLElement[][] {
+    const rows: HTMLElement[][] = []
+    let currentRow: HTMLElement[] = []
+    let currentCols = 0
+
+    for (const editor of editors) {
+      const cols = Math.min(GRID_COLUMNS, Math.max(1, Number(editor.dataset.columns) || 12))
+      const breakBefore = editor.dataset.breakBefore === 'true'
+
+      if (breakBefore || currentCols + cols > GRID_COLUMNS) {
+        if (currentRow.length > 0) {
+          rows.push(currentRow)
+        }
+        currentRow = [editor]
+        currentCols = cols
+      } else {
+        currentRow.push(editor)
+        currentCols += cols
+      }
+    }
+    if (currentRow.length > 0) {
+      rows.push(currentRow)
+    }
+    return rows
+  }
+
   function updateEditorIndexes() {
     const editors = [...editorList.querySelectorAll<HTMLElement>('.widget-editor')]
+    const rows = getWidgetRowGroups(editors)
+
+    rows.forEach((row, rowIndex) => {
+      row.forEach((editor, colIndex) => {
+        const left = editor.querySelector<HTMLButtonElement>('[data-action="move-left"]')
+        const right = editor.querySelector<HTMLButtonElement>('[data-action="move-right"]')
+        const up = editor.querySelector<HTMLButtonElement>('[data-action="move-up"]')
+        const down = editor.querySelector<HTMLButtonElement>('[data-action="move-down"]')
+
+        if (left) left.disabled = colIndex === 0
+        if (right) right.disabled = colIndex === row.length - 1
+        if (up) up.disabled = rowIndex === 0 && editor.dataset.breakBefore !== 'true'
+        if (down) down.disabled = rowIndex === rows.length - 1 && row.length === 1
+      })
+    })
+
     editors.forEach((editor, index) => {
-      editor.querySelector<HTMLElement>('.widget-number')!.textContent = `Widget ${index + 1}`
-      const up = editor.querySelector<HTMLButtonElement>('[data-action="move-up"]')!
-      const down = editor.querySelector<HTMLButtonElement>('[data-action="move-down"]')!
-      up.disabled = index === 0
-      down.disabled = index === editors.length - 1
+      editor.querySelector<HTMLElement>('.widget-number')!.textContent = `#${index + 1}`
     })
     widgetCount.textContent = `${editors.length} ${editors.length === 1 ? 'Widget' : 'Widgets'}`
     emptyState.hidden = editors.length > 0
@@ -139,7 +312,7 @@ export async function renderAdminPage(app: HTMLElement) {
   function validateLayout() {
     const widgets = readWidgets()
     const valid = layoutFits(widgets)
-    layoutWarning.textContent = valid ? '' : 'Das aktuelle Layout passt nicht vollständig in das 24 × 8 Raster. Verkleinere Widgets oder entferne eines.'
+    layoutWarning.textContent = valid ? '' : 'Eine Widgetgröße überschreitet die technische Sicherheitsgrenze.'
     saveButton.disabled = !valid
     return valid
   }
@@ -153,18 +326,52 @@ export async function renderAdminPage(app: HTMLElement) {
     rows.min = String(constraints.minRows)
     columns.value = String(widget.columns)
     rows.value = String(widget.rows)
+    syncCompactField(columns)
+    syncCompactField(rows)
     editor.dataset.columns = String(widget.columns)
     editor.dataset.rows = String(widget.rows)
+    if (widget.breakBefore) {
+      editor.dataset.breakBefore = 'true'
+      editor.style.gridColumn = `1 / span ${Math.min(GRID_COLUMNS, widget.columns)}`
+    } else {
+      delete editor.dataset.breakBefore
+      editor.style.gridColumn = `span ${Math.min(GRID_COLUMNS, widget.columns)}`
+    }
+    const breakInput = editor.querySelector<HTMLInputElement>('[data-field="breakBefore"]')
+    if (breakInput) breakInput.checked = Boolean(widget.breakBefore)
+    const showTitleInput = editor.querySelector<HTMLInputElement>('[data-field="showTitle"]')
+    if (showTitleInput) showTitleInput.checked = Boolean(widget.showTitle)
+    editor.style.setProperty('--widget-columns', String(widget.columns))
+    editor.style.setProperty('--widget-rows', String(widget.rows))
+    editor.style.gridRow = `span ${widget.rows}`
+    editor.classList.toggle('is-full-width', widget.columns >= 24)
+    editor.style.setProperty('--widget-preview-aspect', String(widgetPreviewAspectRatio(widget.type, widget.columns, widget.rows, window.innerWidth, window.innerHeight, widget.url)))
     editor.querySelector<HTMLElement>('[data-editor-title]')!.textContent = widget.title
+    const dialogTitle = editor.querySelector<HTMLElement>('[data-dialog-title]')
+    if (dialogTitle) dialogTitle.textContent = widget.title
+    const previewTitle = editor.querySelector<HTMLElement>('.preview-header .kiosk-widget-title')
+    if (previewTitle) previewTitle.textContent = widget.title
     editor.querySelector<HTMLElement>('[data-type-badge]')!.textContent = widgetTypeLabel(widget.type)
     editor.querySelector<HTMLElement>('[data-dimension-label]')!.textContent = `${widget.columns} × ${widget.rows}`
+    editor.querySelector<HTMLOutputElement>('[data-resize-readout]')!.textContent = `${widget.columns} × ${widget.rows}`
     const content = editor.querySelector<HTMLTextAreaElement>('[data-field="url"]')!
-    content.placeholder = widget.type === 'text' ? 'Text eingeben' : 'https://example.com'
+    content.placeholder = widget.type === 'text'
+      ? 'Text eingeben'
+      : widget.type === 'slideshow'
+        ? 'https://example.com/bild1.jpg\nhttps://example.com/bild2.jpg'
+        : 'https://example.com'
+    const contentLabel = editor.querySelector<HTMLElement>('[data-content-label]')
+    if (contentLabel) {
+      contentLabel.textContent = widget.type === 'slideshow' ? 'Bild-URLs (eine pro Zeile)' : 'Inhalt / URL'
+    }
+    syncCompactField(content)
     if (refreshPreview) {
       const preview = editor.querySelector<HTMLElement>('[data-widget-preview]')!
+      const previewContent = editor.querySelector<HTMLElement>('[data-widget-preview-content]')!
       preview.setAttribute('aria-label', `Vorschau ${widget.title}`)
-      preview.innerHTML = `<div class="iframe-placeholder">${renderWidgetContent(widget)}</div>`
-      bindWidgetFrames(preview)
+      preview.classList.toggle('has-title', Boolean(widget.showTitle))
+      previewContent.innerHTML = `${widget.showTitle ? `<header class="kiosk-widget-header preview-header"><h2 class="kiosk-widget-title">${escapeHtml(widget.title)}</h2></header>` : ''}<div class="iframe-placeholder">${renderWidgetContent(widget)}</div>`
+      bindWidgetFrames(previewContent)
     }
     validateLayout()
   }
@@ -179,7 +386,12 @@ export async function renderAdminPage(app: HTMLElement) {
     updateEditorIndexes()
     markDirty()
     editor.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    editor.querySelector<HTMLInputElement>('[data-field="title"]')?.focus()
+    const dialog = editor.querySelector<HTMLDialogElement>('[data-widget-dialog]')
+    if (dialog && typeof dialog.showModal === 'function') {
+      dialog.showModal()
+      editor.querySelector<HTMLButtonElement>('[data-action="toggle"]')?.classList.add('is-active')
+      editor.querySelector<HTMLInputElement>('[data-field="title"]')?.focus()
+    }
   }
 
   function duplicateWidget(editor: HTMLElement) {
@@ -194,40 +406,382 @@ export async function renderAdminPage(app: HTMLElement) {
     copy.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
-  function moveEditor(editor: HTMLElement, direction: -1 | 1) {
-    const sibling = direction < 0 ? editor.previousElementSibling : editor.nextElementSibling
-    if (!sibling) return
-    if (direction < 0) editorList.insertBefore(editor, sibling)
-    else editorList.insertBefore(sibling, editor)
+  function moveEditor2D(editor: HTMLElement, action: 'left' | 'right' | 'up' | 'down') {
+    const editors = [...editorList.querySelectorAll<HTMLElement>('.widget-editor')]
+    const rows = getWidgetRowGroups(editors)
+    let rowIndex = -1
+    let colIndex = -1
+
+    for (let r = 0; r < rows.length; r++) {
+      const c = rows[r]!.indexOf(editor)
+      if (c !== -1) {
+        rowIndex = r
+        colIndex = c
+        break
+      }
+    }
+    if (rowIndex === -1) return
+
+    const currentRow = rows[rowIndex]!
+
+    if (action === 'left') {
+      if (colIndex > 0) {
+        const leftNeighbor = currentRow[colIndex - 1]!
+        editorList.insertBefore(editor, leftNeighbor)
+        if (leftNeighbor.dataset.breakBefore === 'true') {
+          delete leftNeighbor.dataset.breakBefore
+          editor.dataset.breakBefore = 'true'
+        }
+      }
+    } else if (action === 'right') {
+      if (colIndex < currentRow.length - 1) {
+        const rightNeighbor = currentRow[colIndex + 1]!
+        editorList.insertBefore(editor, rightNeighbor.nextElementSibling)
+        if (editor.dataset.breakBefore === 'true') {
+          delete editor.dataset.breakBefore
+          rightNeighbor.dataset.breakBefore = 'true'
+        }
+      }
+    } else if (action === 'down') {
+      if (currentRow.length > 1) {
+        if (colIndex === 0) {
+          const nextInRow = currentRow[1]!
+          if (editor.dataset.breakBefore === 'true') {
+            nextInRow.dataset.breakBefore = 'true'
+            delete editor.dataset.breakBefore
+          }
+          const lastInRow = currentRow[currentRow.length - 1]!
+          editorList.insertBefore(editor, lastInRow.nextElementSibling)
+          editor.dataset.breakBefore = 'true'
+        } else {
+          editor.dataset.breakBefore = 'true'
+        }
+      } else if (rowIndex < rows.length - 1) {
+        const nextRow = rows[rowIndex + 1]!
+        const lastInNextRow = nextRow[nextRow.length - 1]!
+        editorList.insertBefore(editor, lastInNextRow.nextElementSibling)
+      }
+    } else if (action === 'up') {
+      if (editor.dataset.breakBefore === 'true') {
+        delete editor.dataset.breakBefore
+      } else if (rowIndex > 0) {
+        const prevRow = rows[rowIndex - 1]!
+        const firstInPrevRow = prevRow[0]!
+        editorList.insertBefore(editor, firstInPrevRow)
+      }
+    }
+
+    refreshEditor(editor, false)
     updateEditorIndexes()
     markDirty()
-    editor.querySelector<HTMLButtonElement>(direction < 0 ? '[data-action="move-up"]' : '[data-action="move-down"]')?.focus()
+    editor.querySelector<HTMLButtonElement>(`[data-action="move-${action}"]`)?.focus()
   }
 
   function bindEditor(editor: HTMLElement) {
     if (editor.dataset.interactionsBound === 'true') return
     editor.dataset.interactionsBound = 'true'
+    const initialWidget = readWidget(editor)
+    if (initialWidget.breakBefore) {
+      editor.dataset.breakBefore = 'true'
+      editor.style.gridColumn = `1 / span ${Math.min(GRID_COLUMNS, initialWidget.columns)}`
+    } else {
+      editor.style.gridColumn = `span ${Math.min(GRID_COLUMNS, initialWidget.columns)}`
+    }
+    editor.style.gridRow = `span ${initialWidget.rows}`
+    editor.classList.toggle('is-full-width', initialWidget.columns >= 24)
+    editor.style.setProperty('--widget-preview-aspect', String(widgetPreviewAspectRatio(initialWidget.type, initialWidget.columns, initialWidget.rows, window.innerWidth, window.innerHeight, initialWidget.url)))
+    bindCompactFields(editor)
 
     editor.querySelectorAll<HTMLElement>('input, button, select, textarea').forEach((control) => control.addEventListener('pointerdown', (event) => event.stopPropagation()))
-    editor.querySelector<HTMLButtonElement>('[data-action="move-up"]')!.addEventListener('click', () => moveEditor(editor, -1))
-    editor.querySelector<HTMLButtonElement>('[data-action="move-down"]')!.addEventListener('click', () => moveEditor(editor, 1))
-    editor.querySelector<HTMLButtonElement>('[data-action="duplicate"]')!.addEventListener('click', () => duplicateWidget(editor))
-    editor.querySelector<HTMLButtonElement>('[data-action="remove"]')!.addEventListener('click', () => {
+    editor.querySelector<HTMLButtonElement>('[data-action="move-left"]')?.addEventListener('click', () => moveEditor2D(editor, 'left'))
+    editor.querySelector<HTMLButtonElement>('[data-action="move-right"]')?.addEventListener('click', () => moveEditor2D(editor, 'right'))
+    editor.querySelector<HTMLButtonElement>('[data-action="move-up"]')?.addEventListener('click', () => moveEditor2D(editor, 'up'))
+    editor.querySelector<HTMLButtonElement>('[data-action="move-down"]')?.addEventListener('click', () => moveEditor2D(editor, 'down'))
+    const removeHandler = () => {
       const title = readWidget(editor).title
-      if (!window.confirm(`„${title}“ wirklich entfernen?`)) return
+      if (!window.confirm(`„${title}“ wirklich löschen?`)) return
+      closeDialog()
       editor.remove()
       updateEditorIndexes()
       markDirty()
+    }
+    editor.querySelectorAll<HTMLButtonElement>('[data-action="remove"], [data-action="remove-dialog"]').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.stopPropagation()
+        removeHandler()
+      })
     })
-    editor.querySelector<HTMLButtonElement>('[data-action="toggle"]')!.addEventListener('click', (event) => {
-      const button = event.currentTarget as HTMLButtonElement
-      const collapsed = editor.classList.toggle('is-collapsed')
-      button.setAttribute('aria-expanded', String(!collapsed))
-      button.textContent = collapsed ? '⌄' : '⌃'
+
+    const dialog = editor.querySelector<HTMLDialogElement>('[data-widget-dialog]')
+    const toggleButton = editor.querySelector<HTMLButtonElement>('[data-action="toggle"]')
+    editor.querySelector<HTMLButtonElement>('[data-action="duplicate"]')?.addEventListener('click', () => duplicateWidget(editor))
+
+    const urlInput = editor.querySelector<HTMLTextAreaElement>('[data-field="url"]')!
+    const crudSection = editor.querySelector<HTMLElement>('[data-slideshow-crud]')
+
+    const refreshSlideshowCrud = () => {
+      if (!crudSection) return
+      const urls = parseSlideshowUrls(urlInput.value).slice(0, 10)
+      const countBadge = crudSection.querySelector<HTMLElement>('[data-slideshow-count]')
+      if (countBadge) countBadge.textContent = `Bilder (${urls.length} / 10)`
+      const list = crudSection.querySelector<HTMLElement>('[data-slideshow-list]')
+      if (list) {
+        list.innerHTML = renderSlideshowCrudList(urls)
+        list.querySelectorAll<HTMLButtonElement>('[data-action="slide-up"]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const idx = Number(btn.dataset.index)
+            if (idx > 0) {
+              const temp = urls[idx]!
+              urls[idx] = urls[idx - 1]!
+              urls[idx - 1] = temp
+              urlInput.value = urls.join('\n')
+              refreshEditor(editor)
+              markDirty()
+              refreshSlideshowCrud()
+            }
+          })
+        })
+        list.querySelectorAll<HTMLButtonElement>('[data-action="slide-down"]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const idx = Number(btn.dataset.index)
+            if (idx < urls.length - 1) {
+              const temp = urls[idx]!
+              urls[idx] = urls[idx + 1]!
+              urls[idx + 1] = temp
+              urlInput.value = urls.join('\n')
+              refreshEditor(editor)
+              markDirty()
+              refreshSlideshowCrud()
+            }
+          })
+        })
+        list.querySelectorAll<HTMLButtonElement>('[data-action="slide-delete"]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const idx = Number(btn.dataset.index)
+            urls.splice(idx, 1)
+            urlInput.value = urls.join('\n')
+            refreshEditor(editor)
+            markDirty()
+            refreshSlideshowCrud()
+          })
+        })
+      }
+    }
+
+    if (crudSection) {
+      const addUrlInput = crudSection.querySelector<HTMLInputElement>('[data-slideshow-url-input]')
+      const addUrlBtn = crudSection.querySelector<HTMLButtonElement>('[data-action="add-slideshow-url"]')
+      const handleAddUrl = () => {
+        if (!addUrlInput) return
+        const val = addUrlInput.value.trim()
+        if (!val) return
+        const urls = parseSlideshowUrls(urlInput.value)
+        if (urls.length >= 10) {
+          if (uploadStatus) uploadStatus.textContent = 'Maximal 10 Bilder pro Diashow erreicht.'
+          return
+        }
+        urls.push(val)
+        urlInput.value = urls.slice(0, 10).join('\n')
+        addUrlInput.value = ''
+        refreshEditor(editor)
+        markDirty()
+        refreshSlideshowCrud()
+      }
+      addUrlBtn?.addEventListener('click', handleAddUrl)
+      addUrlInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          handleAddUrl()
+        }
+      })
+      refreshSlideshowCrud()
+    }
+
+    editor.querySelector<HTMLButtonElement>('[data-action="clear-image"]')?.addEventListener('click', () => {
+      urlInput.value = ''
+      editor.querySelector<HTMLElement>('[data-single-image-item]')?.remove()
+      refreshEditor(editor)
+      markDirty()
     })
+
+    urlInput.addEventListener('input', () => {
+      refreshSlideshowCrud()
+    })
+
+    const fileInput = editor.querySelector<HTMLInputElement>('[data-action="upload"]')
+    const uploadStatus = editor.querySelector<HTMLElement>('[data-upload-status]')
+    fileInput?.addEventListener('change', async () => {
+      const files = fileInput.files
+      if (!files || files.length === 0) return
+
+      let currentPin = sessionStorage.getItem(pinKey) || (await requestPin())
+      if (!currentPin) {
+        if (uploadStatus) uploadStatus.textContent = 'Upload abgebrochen (PIN erforderlich).'
+        fileInput.value = ''
+        return
+      }
+
+      const currentType = editor.querySelector<HTMLSelectElement>('[data-field="type"]')?.value
+      const existingUrls = currentType === 'slideshow' ? parseSlideshowUrls(urlInput.value) : []
+
+      if (currentType === 'slideshow' && existingUrls.length >= 10) {
+        if (uploadStatus) uploadStatus.textContent = 'Maximal 10 Bilder pro Diashow erreicht.'
+        fileInput.value = ''
+        return
+      }
+
+      let addedCount = 0
+      for (let i = 0; i < files.length; i++) {
+        if (currentType === 'slideshow' && existingUrls.length >= 10) {
+          if (uploadStatus) uploadStatus.textContent = `Maximal 10 Bilder erreicht (${addedCount} hinzugefügt).`
+          break
+        }
+
+        const file = files[i]!
+        if (file.size > 5 * 1024 * 1024) {
+          if (uploadStatus) uploadStatus.textContent = `„${file.name}“ ist größer als 5 MB.`
+          continue
+        }
+        if (uploadStatus) uploadStatus.textContent = `Lade „${file.name}“ hoch …`
+
+        const formData = new FormData()
+        formData.append('file', file)
+
+        try {
+          let res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'x-admin-pin': currentPin },
+            body: formData,
+          })
+          if (res.status === 401) {
+            sessionStorage.removeItem(pinKey)
+            const retryPin = await requestPin()
+            if (!retryPin) {
+              if (uploadStatus) uploadStatus.textContent = 'PIN erforderlich.'
+              break
+            }
+            currentPin = retryPin
+            res = await fetch('/api/upload', {
+              method: 'POST',
+              headers: { 'x-admin-pin': currentPin },
+              body: formData,
+            })
+          }
+
+          const data = await res.json() as { url?: string; error?: string }
+          if (!res.ok || !data.url) {
+            throw new Error(data.error || 'Upload fehlgeschlagen.')
+          }
+
+          if (currentType === 'slideshow') {
+            existingUrls.push(data.url)
+            urlInput.value = existingUrls.slice(0, 10).join('\n')
+            addedCount++
+          } else {
+            urlInput.value = data.url
+          }
+          refreshEditor(editor)
+          markDirty()
+          if (uploadStatus) {
+            uploadStatus.textContent = currentType === 'slideshow'
+              ? `„${file.name}“ hinzugefügt (${existingUrls.length}/10)`
+              : `„${file.name}“ hochgeladen!`
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Fehler beim Upload.'
+          if (uploadStatus) uploadStatus.textContent = msg
+        }
+      }
+      fileInput.value = ''
+      refreshSlideshowCrud()
+    })
+
+    const openDialog = () => {
+      if (!dialog) return
+      if (typeof dialog.showModal === 'function') {
+        dialog.showModal()
+      } else {
+        dialog.setAttribute('open', '')
+      }
+      toggleButton?.setAttribute('aria-expanded', 'true')
+      toggleButton?.classList.add('is-active')
+    }
+
+    const closeDialog = () => {
+      if (!dialog) return
+      if (typeof dialog.close === 'function') {
+        dialog.close()
+      } else {
+        dialog.removeAttribute('open')
+      }
+      toggleButton?.setAttribute('aria-expanded', 'false')
+      toggleButton?.classList.remove('is-active')
+      refreshEditor(editor)
+    }
+
+    toggleButton?.addEventListener('click', (event) => {
+      event.stopPropagation()
+      openDialog()
+    })
+
+    editor.querySelectorAll<HTMLButtonElement>('[data-action="close-dialog"]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation()
+        closeDialog()
+      })
+    })
+
+    editor.querySelectorAll<HTMLButtonElement>('[data-action="save-dialog"]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation()
+        closeDialog()
+        markDirty()
+      })
+    })
+
+    dialog?.addEventListener('cancel', () => {
+      toggleButton?.setAttribute('aria-expanded', 'false')
+      toggleButton?.classList.remove('is-active')
+      refreshEditor(editor)
+    })
+
+    dialog?.addEventListener('click', (event) => {
+      if (event.target === dialog) {
+        closeDialog()
+      }
+    })
+
     editor.querySelector<HTMLInputElement>('[data-field="title"]')!.addEventListener('input', () => {
       refreshEditor(editor, false)
       markDirty()
+    })
+    editor.querySelectorAll<HTMLInputElement>('input[data-field="columns"], input[data-field="rows"]').forEach((control) => {
+      control.addEventListener('input', () => {
+        refreshEditor(editor, false)
+        markDirty()
+      })
+    })
+    const breakInput = editor.querySelector<HTMLInputElement>('[data-field="breakBefore"]')
+    breakInput?.addEventListener('change', () => {
+      if (breakInput.checked) editor.dataset.breakBefore = 'true'
+      else delete editor.dataset.breakBefore
+      refreshEditor(editor, false)
+      updateEditorIndexes()
+      markDirty()
+    })
+    editor.querySelector<HTMLSelectElement>('[data-field="type"]')!.addEventListener('change', () => {
+      const widget = readWidget(editor)
+      const index = [...editorList.children].indexOf(editor)
+      editor.outerHTML = renderWidgetEditor(widget, index)
+      const newEditor = editorList.children[index] as HTMLElement
+      bindEditor(newEditor)
+      bindWidgetFrames(newEditor)
+      markDirty()
+      const newDialog = newEditor.querySelector<HTMLDialogElement>('[data-widget-dialog]')
+      if (newDialog && typeof newDialog.showModal === 'function') {
+        newDialog.showModal()
+        newEditor.querySelector<HTMLButtonElement>('[data-action="toggle"]')?.classList.add('is-active')
+      }
     })
     editor.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[data-field]').forEach((control) => {
       control.addEventListener('change', () => {
@@ -235,9 +789,107 @@ export async function renderAdminPage(app: HTMLElement) {
         markDirty()
       })
     })
-    editor.addEventListener('dragstart', (event) => {
+    const resizeHandle = editor.querySelector<HTMLButtonElement>('[data-resize-handle]')!
+    const applyResize = (deltaColumns: number, deltaRows: number, startColumns = readWidget(editor).columns, startRows = readWidget(editor).rows, markAsDirty = true) => {
+      const type = editor.querySelector<HTMLSelectElement>('[data-field="type"]')!.value as WidgetType
+      const current = readWidget(editor)
+      const resized = resizeWidgetDimensions(type, startColumns, startRows, deltaColumns, deltaRows, current.columns, current.rows)
+      if (!resized.changed) return false
+      editor.querySelector<HTMLInputElement>('[data-field="columns"]')!.value = String(resized.columns)
+      editor.querySelector<HTMLInputElement>('[data-field="rows"]')!.value = String(resized.rows)
+      editor.style.gridColumn = `span ${Math.min(GRID_COLUMNS, resized.columns)}`
+      editor.style.gridRow = `span ${resized.rows}`
+      refreshEditor(editor, false)
+      if (markAsDirty) markDirty()
+      return true
+    }
+    resizeHandle.addEventListener('keydown', (event) => {
+      const direction = resizeKeyboardDelta(event.key, event.shiftKey)
+      if (!direction) return
+      event.preventDefault()
+      applyResize(direction[0], direction[1])
+    })
+    let activeResizePointer: number | null = null
+    resizeHandle.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || activeResizePointer !== null) return
+      event.preventDefault()
+      event.stopPropagation()
+      activeResizePointer = event.pointerId
+      const start = readWidget(editor)
+      const startX = event.clientX
+      const startY = event.clientY
+      const containerRect = editorList.getBoundingClientRect()
+      const gap = 10
+      const columnWidth = Math.max(16, (containerRect.width + gap) / GRID_COLUMNS)
+      const rowHeight = Math.max(24, (window.innerHeight - 100 - (GRID_ROWS - 1) * gap) / GRID_ROWS)
+      let intentionallyReleasing = false
+      editor.classList.add('is-resizing')
+      document.body.style.cursor = 'nwse-resize'
+      resizeHandle.setPointerCapture(event.pointerId)
+
+      const move = (moveEvent: PointerEvent) => {
+        if (moveEvent.pointerId !== activeResizePointer) return
+        const [deltaColumns, deltaRows] = resizePointerDelta(moveEvent.clientX - startX, moveEvent.clientY - startY, columnWidth, rowHeight)
+        applyResize(
+          deltaColumns,
+          deltaRows,
+          start.columns,
+          start.rows,
+          false,
+        )
+      }
+      const cleanup = () => {
+        if (activeResizePointer !== event.pointerId) return
+        resizeHandle.removeEventListener('pointermove', move)
+        resizeHandle.removeEventListener('pointerup', finish)
+        resizeHandle.removeEventListener('pointercancel', cancelPointer)
+        resizeHandle.removeEventListener('lostpointercapture', lostCapture)
+        window.removeEventListener('keydown', cancelWithEscape)
+        editor.classList.remove('is-resizing')
+        document.body.style.cursor = ''
+        activeResizePointer = null
+      }
+      const finish = (finishEvent: PointerEvent) => {
+        if (finishEvent.pointerId !== activeResizePointer) return
+        const current = readWidget(editor)
+        if (resizeChangedFromStart(start.columns, start.rows, current.columns, current.rows)) markDirty()
+        intentionallyReleasing = true
+        if (resizeHandle.hasPointerCapture(finishEvent.pointerId)) resizeHandle.releasePointerCapture(finishEvent.pointerId)
+        cleanup()
+      }
+      const cancelResize = () => {
+        applyResize(0, 0, start.columns, start.rows, false)
+        intentionallyReleasing = true
+        if (resizeHandle.hasPointerCapture(event.pointerId)) resizeHandle.releasePointerCapture(event.pointerId)
+        cleanup()
+        resizeHandle.focus()
+      }
+      const cancelPointer = (cancelEvent: PointerEvent) => {
+        if (cancelEvent.pointerId === activeResizePointer) cancelResize()
+      }
+      const cancelWithEscape = (keyEvent: KeyboardEvent) => {
+        if (keyEvent.key !== 'Escape' || activeResizePointer !== event.pointerId) return
+        keyEvent.preventDefault()
+        cancelResize()
+      }
+      const lostCapture = (lostEvent: PointerEvent) => {
+        if (lostEvent.pointerId !== activeResizePointer) return
+        if (lostPointerCaptureAction(intentionallyReleasing) === 'cancel') cancelResize()
+        else cleanup()
+      }
+      resizeHandle.addEventListener('pointermove', move)
+      resizeHandle.addEventListener('pointerup', finish)
+      resizeHandle.addEventListener('pointercancel', cancelPointer)
+      resizeHandle.addEventListener('lostpointercapture', lostCapture)
+      window.addEventListener('keydown', cancelWithEscape)
+    })
+    const dragHandle = editor.querySelector<HTMLElement>('.drag-handle')!
+    dragHandle.addEventListener('dragstart', (event) => {
       editor.classList.add('is-dragging')
       event.dataTransfer?.setData('text/plain', editor.dataset.widgetId || '')
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move'
+      }
     })
     editor.addEventListener('dragend', () => editor.classList.remove('is-dragging'))
     editor.addEventListener('dragover', (event) => {
@@ -264,6 +916,7 @@ export async function renderAdminPage(app: HTMLElement) {
       let active = true
       pinError.textContent = ''
       pinInput.value = ''
+      syncCompactField(pinInput)
       pinSubmit.disabled = false
       pinDialog.showModal()
       pinInput.focus()
@@ -333,7 +986,14 @@ export async function renderAdminPage(app: HTMLElement) {
     }
   }
 
+  bindCompactFields(app)
   editorList.querySelectorAll<HTMLElement>('.widget-editor').forEach(bindEditor)
+  window.addEventListener('resize', () => {
+    editorList.querySelectorAll<HTMLElement>('.widget-editor').forEach((editor) => {
+      const widget = readWidget(editor)
+      editor.style.setProperty('--widget-preview-aspect', String(widgetPreviewAspectRatio(widget.type, widget.columns, widget.rows, window.innerWidth, window.innerHeight, widget.url)))
+    })
+  })
   bindWidgetFrames(editorList)
   updateEditorIndexes()
 
@@ -345,6 +1005,7 @@ export async function renderAdminPage(app: HTMLElement) {
   }
   changePinButton.addEventListener('click', () => {
     changePinForm.reset()
+    bindCompactFields(changePinForm)
     changePinError.textContent = ''
     changePinSubmit.disabled = false
     changePinSubmit.textContent = 'PIN speichern'
@@ -394,7 +1055,7 @@ export async function renderAdminPage(app: HTMLElement) {
       return
     }
     const nextSettings = normalizeSettings({
-      version: 2,
+      version: SETTINGS_VERSION,
       location: app.querySelector<HTMLInputElement>('#admin-location')!.value.trim() || defaultSettings.location,
       weatherCity: app.querySelector<HTMLInputElement>('#admin-weather-city')!.value.trim(),
       widgets: readWidgets(),
@@ -416,7 +1077,7 @@ export async function renderAdminPage(app: HTMLElement) {
   })
 
   app.querySelector<HTMLButtonElement>('#reset-button')!.addEventListener('click', async () => {
-    if (!window.confirm('Alle Widgets und Einstellungen wirklich zurücksetzen?')) return
+    if (!window.confirm('Achtung: Möchtest du wirklich alle Widgets löschen und das Board auf die Werkseinstellungen (Standard) zurücksetzen?')) return
     try {
       const saved = await saveWithPin(defaultSettings)
       if (!saved) return

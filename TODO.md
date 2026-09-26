@@ -24,12 +24,21 @@
 - [x] Ladezustand und manuelles Neuladen für iframe-Widgets ergänzen
 - [x] Systemd- und Chromium-Autostart dokumentieren
 
+- [x] Drag-and-drop zum Sortieren der Widget-Reihenfolge ergänzen
+- [x] Weitere kleine Header-Module ergänzen: Netzwerkstatus
+- [x] Diashow-Widget ergänzen
+- [x] Automatische iframe-Aktualisierung in konfigurierbaren Intervallen ergänzen
+- [x] Freies Widget-Resizing über Eckgriff mit 24-Spalten-Raster-Fluss
+- [x] Platzsparender Editmode mit identischem Kiosk-Grid und zentrierter Topbar
+- [x] Modal-Dialog für Widget-Einstellungen zur visuellen Entlastung des Arbeitsbereichs
+- [x] 4-Wege-Positionierung (←, →, ↑, ↓) und expliziter Zeilenumbruch ("In neuer Zeile beginnen")
+- [x] Papierkorb-Löschfunktion im Widget-Header und im Einstellungsdialog
+- [x] Direkter Bilder-Upload (PNG, JPG, WebP, GIF, SVG bis 5 MB) mit Serverablage
+- [x] Checkbox zur optionalen Anzeige des Widget-Titels in der Kiosk-Ansicht
+
 ## Als Nächstes
 
-- [x] Drag-and-drop zum Sortieren der Widget-Reihenfolge ergänzen
-- [ ] Weitere kleine Header-Module ergänzen: Netzwerkstatus
-- [ ] Diashow-Widget ergänzen
-- [ ] Automatische iframe-Aktualisierung in konfigurierbaren Intervallen ergänzen
 - [ ] Kiosk-Autostart auf einem echten Raspberry Pi testen
 - [ ] Netzwerk- und Offline-Verhalten prüfen
 - [ ] Produktionsbuild auf dem Raspberry Pi testen
+

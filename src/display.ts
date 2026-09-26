@@ -22,9 +22,45 @@ async function loadWeather(city: string, target: HTMLElement) {
   }
 }
 
+export function initNetworkStatus(target: HTMLElement, initialSource: 'server' | 'local') {
+  const update = (online: boolean, label = online ? 'ONLINE' : 'OFFLINE', title = online ? 'Netzwerkverbindung aktiv' : 'Keine Netzwerkverbindung') => {
+    target.textContent = label
+    target.title = title
+    target.classList.toggle('is-online', online)
+    target.classList.toggle('is-offline', !online)
+  }
+
+  if (initialSource === 'local') {
+    update(false, 'LOKAL', 'Server nicht erreichbar (Offline-Modus)')
+  } else {
+    update(typeof navigator !== 'undefined' ? navigator.onLine : true)
+  }
+
+  window.addEventListener('online', () => update(true))
+  window.addEventListener('offline', () => update(false, 'OFFLINE', 'Keine Netzwerkverbindung'))
+
+  window.setInterval(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      update(false, 'OFFLINE', 'Keine Netzwerkverbindung')
+      return
+    }
+    try {
+      const res = await fetch('/api/settings', { method: 'GET', cache: 'no-store' })
+      if (res.ok) {
+        update(true, 'ONLINE', 'Server erreichbar')
+      } else {
+        update(false, 'LOKAL', 'Server antwortet nicht regulär')
+      }
+    } catch {
+      update(false, 'LOKAL', 'Server nicht erreichbar')
+    }
+  }, 30000)
+}
+
 export async function renderDisplayPage(app: HTMLElement) {
   const store = createSettingsStore()
   const { settings, source } = await store.load()
+  const isOnline = source === 'server' && (typeof navigator === 'undefined' || navigator.onLine)
   const widgets = settings.widgets.length
     ? settings.widgets.map((widget) => renderWidget(widget)).join('')
     : '<div class="empty-display"><span class="widget-kicker">Noch keine Widgets</span><a href="/admin">Admin öffnen <span>↗</span></a></div>'
@@ -34,7 +70,7 @@ export async function renderDisplayPage(app: HTMLElement) {
       <header class="header-bar">
         <div class="brand-mark"><img class="brand-logo" src="/homepiboard-logo.svg" alt="HomePiBoard" /></div>
         <div class="header-status">
-          ${source === 'local' ? '<span class="connection-status" title="Server nicht erreichbar">LOKAL</span>' : ''}
+          <span class="connection-status ${isOnline ? 'is-online' : 'is-offline'}" id="network-status" title="Netzwerkstatus">${isOnline ? 'ONLINE' : (source === 'local' ? 'LOKAL' : 'OFFLINE')}</span>
           <span class="weather-location">${escapeHtml(settings.weatherCity || settings.location)}</span>
           <span class="status-divider"></span>
           <span class="weather-status" id="weather"></span>
@@ -49,6 +85,7 @@ export async function renderDisplayPage(app: HTMLElement) {
   const clock = app.querySelector<HTMLElement>('#clock')!
   const date = app.querySelector<HTMLElement>('#date')!
   const weather = app.querySelector<HTMLElement>('#weather')!
+  const networkStatus = app.querySelector<HTMLElement>('#network-status')!
   const updateTime = () => {
     const now = new Date()
     clock.textContent = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
@@ -57,6 +94,7 @@ export async function renderDisplayPage(app: HTMLElement) {
 
   updateTime()
   window.setInterval(updateTime, 1000)
+  initNetworkStatus(networkStatus, source)
   bindWidgetFrames(app)
   if (settings.weatherCity) await loadWeather(settings.weatherCity, weather)
 }

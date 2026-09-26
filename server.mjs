@@ -1,11 +1,14 @@
 import { createServer } from 'node:http'
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
+import { lookup as dnsLookup } from 'node:dns/promises'
 import { mkdir, open, readFile, realpath, rename, unlink } from 'node:fs/promises'
+import { isIP } from 'node:net'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 
-import { defaultSettings, layoutFits, normalizeSettings } from './src/settings.ts'
+import { defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, normalizeSettings } from './src/settings.ts'
+import { parseCalendarFeed } from './src/calendar-feed.ts'
 
 const rootDirectory = path.dirname(fileURLToPath(import.meta.url))
 const scrypt = promisify(scryptCallback)
@@ -15,6 +18,9 @@ const mimeTypes = new Map([
   ['.js', 'text/javascript; charset=utf-8'],
   ['.json', 'application/json; charset=utf-8'],
   ['.png', 'image/png'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.gif', 'image/gif'],
   ['.svg', 'image/svg+xml'],
   ['.webp', 'image/webp'],
 ])
@@ -24,6 +30,82 @@ class RequestBodyError extends Error {
     super('invalid-request-body')
     this.name = 'RequestBodyError'
   }
+}
+
+class CalendarFeedError extends Error {
+  constructor(status, message) {
+    super(message)
+    this.name = 'CalendarFeedError'
+    this.status = status
+  }
+}
+
+function isPrivateNetworkAddress(address) {
+  const normalized = address.toLowerCase().replace(/^\[|\]$/g, '')
+  if (normalized === '::' || normalized === '::1') return true
+  if (/^(fc|fd|fe[89ab])/.test(normalized)) return true
+  const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1]
+  const ipv4 = mapped || (isIP(normalized) === 4 ? normalized : '')
+  if (!ipv4) return false
+  const [first, second] = ipv4.split('.').map(Number)
+  return first === 0
+    || first === 10
+    || first === 127
+    || (first === 169 && second === 254)
+    || (first === 172 && second >= 16 && second <= 31)
+    || (first === 192 && second === 168)
+    || (first === 100 && second >= 64 && second <= 127)
+    || (first === 198 && (second === 18 || second === 19))
+    || first >= 224
+}
+
+async function validateCalendarFeedUrl(value, lookupFunction) {
+  let url
+  try {
+    url = new URL(value)
+  } catch {
+    throw new CalendarFeedError(422, 'Die Kalender-URL ist ungültig.')
+  }
+  if (url.protocol !== 'https:' || url.username || url.password) {
+    throw new CalendarFeedError(422, 'Kalender-Feeds müssen eine öffentliche HTTPS-Adresse verwenden.')
+  }
+  let addresses
+  try {
+    addresses = isIP(url.hostname)
+      ? [{ address: url.hostname }]
+      : await lookupFunction(url.hostname, { all: true, verbatim: true })
+  } catch {
+    throw new CalendarFeedError(502, 'Die Kalender-Adresse konnte nicht aufgelöst werden.')
+  }
+  if (!addresses.length || addresses.some(({ address }) => isPrivateNetworkAddress(address))) {
+    throw new CalendarFeedError(422, 'Private Netzwerkadressen sind für Kalender-Feeds nicht erlaubt.')
+  }
+  return url
+}
+
+async function downloadCalendarFeed(value, calendarFetch, lookupFunction) {
+  let url = await validateCalendarFeedUrl(value, lookupFunction)
+  for (let redirects = 0; redirects <= 3; redirects += 1) {
+    let response
+    try {
+      response = await calendarFetch(url, { redirect: 'manual', signal: AbortSignal.timeout(10_000) })
+    } catch {
+      throw new CalendarFeedError(502, 'Der Kalender-Feed ist nicht erreichbar.')
+    }
+    const location = response.headers.get('location')
+    if (response.status >= 300 && response.status < 400 && location) {
+      if (redirects === 3) throw new CalendarFeedError(502, 'Der Kalender-Feed hat zu viele Weiterleitungen.')
+      url = await validateCalendarFeedUrl(new URL(location, url).href, lookupFunction)
+      continue
+    }
+    if (!response.ok) throw new CalendarFeedError(502, `Der Kalender-Feed antwortet mit Status ${response.status}.`)
+    const declaredLength = Number(response.headers.get('content-length'))
+    if (Number.isFinite(declaredLength) && declaredLength > 1_000_000) throw new CalendarFeedError(502, 'Der Kalender-Feed ist zu groß.')
+    const content = await response.text()
+    if (Buffer.byteLength(content, 'utf8') > 1_000_000) throw new CalendarFeedError(502, 'Der Kalender-Feed ist zu groß.')
+    return parseCalendarFeed(content)
+  }
+  throw new CalendarFeedError(502, 'Der Kalender-Feed konnte nicht geladen werden.')
 }
 
 function json(response, status, body) {
@@ -131,7 +213,11 @@ async function durableAtomicWrite(targetFile, content, mode = 0o600) {
   let temporaryHandle
   try {
     temporaryHandle = await open(temporaryFile, 'wx', mode)
-    await temporaryHandle.writeFile(content, 'utf8')
+    if (typeof content === 'string') {
+      await temporaryHandle.writeFile(content, 'utf8')
+    } else {
+      await temporaryHandle.writeFile(content)
+    }
     await temporaryHandle.sync()
     await temporaryHandle.close()
     temporaryHandle = undefined
@@ -189,6 +275,8 @@ export function createHomePiBoardServer({
   publicDirectory = path.join(rootDirectory, 'dist'),
   adminPin = process.env.HOMEPIBOARD_PIN,
   scryptFunction = scrypt,
+  calendarFetch = fetch,
+  lookupFunction = dnsLookup,
 } = {}) {
   if (typeof adminPin !== 'string' || adminPin.length === 0) {
     throw new Error('HOMEPIBOARD_PIN muss explizit gesetzt sein.')
@@ -298,6 +386,24 @@ export function createHomePiBoardServer({
         return
       }
 
+      if (url.pathname.startsWith('/api/calendar/') && request.method === 'GET') {
+        const widgetId = decodeURIComponent(url.pathname.slice('/api/calendar/'.length))
+        const settings = await loadSettings(settingsFile)
+        const widget = settings.widgets.find((candidate) => candidate.id === widgetId && candidate.type === 'calendar' && candidate.url.trim())
+        if (!widget) {
+          json(response, 404, { error: 'Kalender-Widget nicht gefunden.' })
+          return
+        }
+        try {
+          const events = await downloadCalendarFeed(widget.url, calendarFetch, lookupFunction)
+          json(response, 200, { events })
+        } catch (error) {
+          if (error instanceof CalendarFeedError) json(response, error.status, { error: error.message })
+          else throw error
+        }
+        return
+      }
+
       if (url.pathname === '/api/auth' && request.method === 'POST') {
         const body = await readJsonBody(request)
         const result = await runAuthenticated(request, body.pin, async () => undefined)
@@ -313,7 +419,7 @@ export function createHomePiBoardServer({
       if (url.pathname === '/api/settings' && request.method === 'PUT') {
         const result = await runAuthenticated(request, request.headers['x-admin-pin'], async () => {
           const settings = normalizeSettings(await readJsonBody(request))
-          if (!layoutFits(settings.widgets)) return { settings, validationError: 'Das Widget-Layout passt nicht in das 24 × 8 Raster.' }
+          if (!layoutFits(settings.widgets)) return { settings, validationError: `Das Widget-Layout passt nicht in das ${GRID_COLUMNS} × ${GRID_ROWS} Raster.` }
           await persistSettings(settings)
           return { settings, validationError: '' }
         })
@@ -344,6 +450,84 @@ export function createHomePiBoardServer({
         }
         response.writeHead(204)
         response.end()
+        return
+      }
+
+      if (url.pathname.startsWith('/uploads/') && request.method === 'GET') {
+        const filename = path.basename(url.pathname)
+        const filePath = path.join(dataDirectory, 'uploads', filename)
+        const ext = path.extname(filename).toLowerCase()
+        const mime = mimeTypes.get(ext)
+        if (!mime) {
+          response.writeHead(403)
+          response.end('Forbidden')
+          return
+        }
+        try {
+          const content = await readFile(filePath)
+          response.writeHead(200, {
+            'content-type': mime,
+            'cache-control': 'public, max-age=31536000, immutable',
+          })
+          response.end(content)
+        } catch (error) {
+          if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+            response.writeHead(404)
+            response.end('Not found')
+            return
+          }
+          throw error
+        }
+        return
+      }
+
+      if (url.pathname === '/api/upload' && request.method === 'POST') {
+        const result = await runAuthenticated(request, request.headers['x-admin-pin'], async () => {
+          let formData
+          try {
+            const webReq = new Response(request, { headers: request.headers })
+            formData = await webReq.formData()
+          } catch {
+            throw new RequestBodyError()
+          }
+
+          const file = formData.get('file')
+          if (!file || typeof file !== 'object' || typeof file.arrayBuffer !== 'function') {
+            return { status: 400, error: 'Keine Datei übertragen.' }
+          }
+
+          const maxSizeBytes = 5 * 1024 * 1024
+          if (file.size > maxSizeBytes) {
+            return { status: 413, error: 'Die Datei ist größer als 5 MB.' }
+          }
+
+          const name = file.name || 'image.png'
+          const rawExt = path.extname(name).toLowerCase()
+          const allowedExts = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'])
+          const ext = allowedExts.has(rawExt) ? rawExt : '.png'
+
+          const buffer = Buffer.from(await file.arrayBuffer())
+          if (buffer.length > maxSizeBytes) {
+            return { status: 413, error: 'Die Datei ist größer als 5 MB.' }
+          }
+
+          const uploadDir = path.join(dataDirectory, 'uploads')
+          const safeName = `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`
+          const targetFile = path.join(uploadDir, safeName)
+
+          await durableAtomicWrite(targetFile, buffer, 0o644)
+          return { status: 200, url: `/uploads/${safeName}` }
+        })
+
+        if (result.status !== 'accepted') {
+          respondToAuthenticationFailure(result, response)
+          return
+        }
+        if (result.value.error) {
+          json(response, result.value.status, { error: result.value.error })
+          return
+        }
+        json(response, 200, { url: result.value.url })
         return
       }
 
