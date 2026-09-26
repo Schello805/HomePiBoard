@@ -840,6 +840,9 @@ button:has(.loading-spinner) {
 .update-badge.is-error { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
 .update-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .update-log-box { background: #080908; border: 1px solid var(--line); border-radius: 4px; padding: 8px; max-height: 140px; overflow-y: auto; font-family: monospace; font-size: 0.68rem; color: #a3a3a3; white-space: pre-wrap; line-height: 1.4; }
+.update-indicator-dot { color: #fbbf24; font-size: 0.85rem; margin-left: 5px; display: inline-block; vertical-align: middle; line-height: 1; animation: pulse-update-dot 2s infinite ease-in-out; }
+@keyframes pulse-update-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.3); } }
+
 
 
 @keyframes rise-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

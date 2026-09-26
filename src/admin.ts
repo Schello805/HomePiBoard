@@ -1638,6 +1638,9 @@ export async function renderAdminPage(app: HTMLElement) {
       updateCurrentVersion.title = data.currentCommitMsg || ''
 
       if (data.updateAvailable) {
+        if (displaySettingsButton) {
+          displaySettingsButton.innerHTML = '⚙ System <span class="update-indicator-dot" title="Neues Update verfügbar">●</span>'
+        }
         updateBadge.className = 'update-badge is-available'
         updateBadge.textContent = `⚡ Update verfügbar (${data.remoteCommit})`
         if (data.pendingCommits && data.pendingCommits.length) {
@@ -1650,6 +1653,9 @@ export async function renderAdminPage(app: HTMLElement) {
           triggerUpdateBtn.disabled = false
         }
       } else {
+        if (displaySettingsButton) {
+          displaySettingsButton.innerHTML = '⚙ System'
+        }
         updateBadge.className = 'update-badge is-uptodate'
         updateBadge.textContent = '✓ Auf neuestem Stand'
         updateHint!.textContent = 'Dein HomePiBoard ist auf dem aktuellsten Stand von GitHub.'
@@ -1767,6 +1773,10 @@ export async function renderAdminPage(app: HTMLElement) {
 
   updateCheckBtn?.addEventListener('click', () => checkUpdateStatus(true))
   triggerUpdateBtn?.addEventListener('click', triggerUpdate)
+  if (typeof window !== 'undefined') {
+    window.setTimeout(() => checkUpdateStatus(true), 2500)
+    window.setInterval(() => checkUpdateStatus(true), 10 * 60 * 1000)
+  }
 
   app.querySelector<HTMLFormElement>('#admin-form')!.addEventListener('submit', async (event) => {
     event.preventDefault()
