@@ -9,8 +9,35 @@ const typeLabels: Record<WidgetType, string> = {
   image: 'BILD',
   slideshow: 'DIASHOW',
   waste: 'MÜLL',
-  media: 'MEDIA',
+  media: 'RADIO',
 }
+
+export interface RadioStationPreset {
+  id: string
+  name: string
+  slogan: string
+  streamUrl: string
+  category: string
+}
+
+export const GERMAN_RADIO_STATIONS: RadioStationPreset[] = [
+  { id: '1live', name: '1LIVE', slogan: 'WDR - Eins Live', streamUrl: 'https://wdr-1live-live.icecastssl.wdr.de/wdr/1live/live/mp3/128/stream.mp3', category: 'WDR' },
+  { id: 'wdr2', name: 'WDR 2', slogan: 'WDR - Pop & Information', streamUrl: 'https://wdr-wdr2-koeln.icecastssl.wdr.de/wdr/wdr2/koeln/mp3/128/stream.mp3', category: 'WDR' },
+  { id: 'swr3', name: 'SWR3', slogan: 'SWR - Mehr Hits, mehr Kicks', streamUrl: 'https://liveradio.swr.de/sw282p3/swr3/mp3/128/stream.mp3', category: 'SWR' },
+  { id: 'bayern3', name: 'Bayern 3', slogan: 'BR - Hits und Bayern', streamUrl: 'https://dispatcher.rndfnk.com/br/br3/live/mp3/mid', category: 'BR' },
+  { id: 'antenne-bayern', name: 'ANTENNE BAYERN', slogan: 'Bayerns bester Musikmix', streamUrl: 'https://stream.antenne.de/antenne', category: 'Privat' },
+  { id: 'ndr2', name: 'NDR 2', slogan: 'NDR - Genau meine Musik', streamUrl: 'https://icecast.ndr.de/ndr/ndr2/hamburg/mp3/128/stream.mp3', category: 'NDR' },
+  { id: 'dlf', name: 'Deutschlandfunk', slogan: 'Nachrichten, Politik & Kultur', streamUrl: 'https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3', category: 'Dlf' },
+  { id: 'radiobob', name: 'RADIO BOB!', slogan: 'BOBs Rock\'n Roll Radio', streamUrl: 'https://streams.radiobob.de/bob-live/mp3-192/streams.radiobob.de/', category: 'Rock' },
+  { id: 'rockantenne', name: 'ROCK ANTENNE', slogan: 'Der beste Rock nonstop', streamUrl: 'https://stream.rockantenne.de/rockantenne/stream/mp3', category: 'Rock' },
+  { id: 'sunshine-live', name: 'sunshine live', slogan: 'Electronic Music Radio', streamUrl: 'https://stream.sunshine-live.de/live/mp3-192/stream.sunshine-live.de/', category: 'Electro' },
+  { id: 'bigfm', name: 'bigFM', slogan: 'Deutschlands meiste neue Musik', streamUrl: 'https://stream.bigfm.de/bigfm-deutschland/mp3-128/', category: 'Charts' },
+  { id: 'ffh', name: 'Hit Radio FFH', slogan: 'Einfach näher dran', streamUrl: 'https://mp3.ffh.de/radioffh/hqlivestream.mp3', category: 'Privat' },
+  { id: 'mdr-jump', name: 'MDR JUMP', slogan: 'MDR - Im Osten zuhause', streamUrl: 'https://mdr-284320-0.sslstream.dlf.de/mdr/jump/live/mp3/128/stream.mp3', category: 'MDR' },
+  { id: 'njoy', name: 'N-JOY', slogan: 'NDR - Enjoy the Music', streamUrl: 'https://icecast.ndr.de/ndr/njoy/live/mp3/128/stream.mp3', category: 'NDR' },
+  { id: '80s80s', name: '80s80s Radio', slogan: 'Real 80s - Real Music', streamUrl: 'https://streams.80s80s.de/web/mp3-192/', category: 'Retro' },
+  { id: 'custom', name: 'Eigener Webstream', slogan: 'Benutzerdefinierte Stream-URL', streamUrl: '', category: 'Benutzerdefiniert' },
+]
 
 export interface ParsedWasteItem {
   name: string
@@ -262,25 +289,48 @@ export function wasteContent(widget: DashboardWidget) {
 }
 
 export function mediaContent(widget: DashboardWidget) {
-  const title = (widget.mediaTitle ?? 'Keine Wiedergabe').trim() || 'Keine Wiedergabe'
-  const artist = (widget.mediaArtist ?? '').trim()
+  const streamUrl = safeResourceUrl(widget.url || '', 'web') || (widget.url ? widget.url.trim() : '')
+  const title = (widget.mediaTitle ?? (widget.title && widget.title !== 'Radio' && widget.title !== 'Now Playing' ? widget.title : '1LIVE')).trim() || '1LIVE'
+  const artist = (widget.mediaArtist ?? 'Live Webradio').trim() || 'Live Webradio'
   const album = (widget.mediaAlbum ?? '').trim()
   const coverUrl = safeResourceUrl(widget.mediaCoverUrl ?? '', 'image')
   const isPlaying = widget.mediaPlaying !== false && title !== 'Keine Wiedergabe'
 
-  return `<div class="media-widget-container ${isPlaying ? 'is-playing' : 'is-paused'}" data-media-widget>
+  return `<div class="media-widget-container ${isPlaying ? 'is-playing' : 'is-paused'}" data-media-widget data-stream-url="${escapeHtml(streamUrl)}">
     <div class="media-cover-wrapper">
-      ${coverUrl ? `<img class="media-cover" src="${escapeHtml(coverUrl)}" alt="Cover" />` : '<div class="media-cover-placeholder" aria-hidden="true">🎵</div>'}
-      <div class="media-badge-status" aria-hidden="true">${isPlaying ? '▶' : '⏸'}</div>
+      ${coverUrl ? `<img class="media-cover" src="${escapeHtml(coverUrl)}" alt="Cover" />` : `
+      <div class="media-cover-radio" aria-hidden="true">
+        <svg class="media-radio-icon" viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path>
+          <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path>
+          <circle cx="12" cy="12" r="2"></circle>
+          <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path>
+          <path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"></path>
+        </svg>
+      </div>`}
+      <button type="button" class="media-badge-status media-play-btn" data-action="toggle-play" aria-label="Wiedergabe umschalten" title="Wiedergabe starten/stoppen">
+        <span class="media-play-icon" aria-hidden="true">${isPlaying ? '⏸' : '▶'}</span>
+      </button>
     </div>
     <div class="media-info">
+      <div class="media-header-tag">
+        <span class="media-live-badge"><span class="media-live-dot"></span> LIVE RADIO</span>
+        <span class="media-status-text" data-media-status>${isPlaying ? 'Auf Sendung' : 'Bereit'}</span>
+      </div>
       <strong class="media-title" data-media-field="title">${escapeHtml(title)}</strong>
-      ${artist ? `<span class="media-artist" data-media-field="artist">${escapeHtml(artist)}</span>` : '<span class="media-artist" data-media-field="artist">Bereit</span>'}
+      <span class="media-artist" data-media-field="artist">${escapeHtml(artist)}</span>
       ${album ? `<span class="media-album" data-media-field="album">${escapeHtml(album)}</span>` : ''}
-      <div class="media-equalizer-bars ${isPlaying ? 'is-animated' : ''}" aria-hidden="true">
-        <span></span><span></span><span></span><span></span>
+      <div class="media-controls-row">
+        <div class="media-equalizer-bars ${isPlaying ? 'is-animated' : ''}" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="media-volume-control" title="Lautstärke">
+          <span class="media-volume-icon" aria-hidden="true">🔊</span>
+          <input type="range" class="media-volume-slider" data-action="volume-slider" min="0" max="1" step="0.05" value="0.8" aria-label="Lautstärke" />
+        </div>
       </div>
     </div>
+    ${streamUrl ? `<audio preload="none" data-media-audio src="${escapeHtml(streamUrl)}"></audio>` : ''}
   </div>`
 }
 
@@ -464,7 +514,7 @@ function editorMarkup(widget: DashboardWidget, index: number) {
             <option value="image" ${widget.type === 'image' ? 'selected' : ''}>Bild</option>
             <option value="slideshow" ${widget.type === 'slideshow' ? 'selected' : ''}>Diashow</option>
             <option value="waste" ${widget.type === 'waste' ? 'selected' : ''}>Müllkalender</option>
-            <option value="media" ${widget.type === 'media' ? 'selected' : ''}>Media-Player</option>
+            <option value="media" ${widget.type === 'media' ? 'selected' : ''}>Radio (Live-Stream)</option>
           </select></label>
           <label for="${controlId}-title">Titel<input id="${controlId}-title" data-field="title" value="${escapeHtml(widget.title)}" maxlength="30" /></label>
           <label class="content-field checkbox-label" for="${controlId}-show-title"><input type="checkbox" id="${controlId}-show-title" data-field="showTitle" ${widget.showTitle ? 'checked' : ''} /><span>Titel in der Anzeige anzeigen</span></label>
@@ -484,14 +534,40 @@ function editorMarkup(widget: DashboardWidget, index: number) {
           <p class="editor-field-hint">💡 Entweder Webcal-URL deines Landratsamtes eintragen (synchronisiert live) oder heruntergeladene .ics-Datei direkt hochladen.</p>
           ` : widget.type === 'media' ? `
           <div class="media-form-group">
-            <label for="${controlId}-media-title">Titel<input id="${controlId}-media-title" data-field="mediaTitle" value="${escapeHtml(widget.mediaTitle || '')}" placeholder="Songtitel" /></label>
-            <label for="${controlId}-media-artist">Künstler<input id="${controlId}-media-artist" data-field="mediaArtist" value="${escapeHtml(widget.mediaArtist || '')}" placeholder="Künstler" /></label>
-            <label for="${controlId}-media-album">Album<input id="${controlId}-media-album" data-field="mediaAlbum" value="${escapeHtml(widget.mediaAlbum || '')}" placeholder="Album" /></label>
-            <label for="${controlId}-media-cover">Cover-Bild URL<input id="${controlId}-media-cover" data-field="mediaCoverUrl" type="url" value="${escapeHtml(widget.mediaCoverUrl || '')}" placeholder="https://..." /></label>
-            <label class="content-field checkbox-label" for="${controlId}-media-playing"><input type="checkbox" id="${controlId}-media-playing" data-field="mediaPlaying" ${widget.mediaPlaying !== false ? 'checked' : ''} /><span>Wiedergabe aktiv (animierter Equalizer)</span></label>
+            <label for="${controlId}-media-preset">Deutscher Radiosender
+              <select id="${controlId}-media-preset" data-action="radio-preset">
+                ${GERMAN_RADIO_STATIONS.map((st) => {
+                  const isSelected = (widget.url === st.streamUrl) || (!widget.url && st.id === '1live')
+                  return `<option value="${st.id}" data-url="${escapeHtml(st.streamUrl)}" data-name="${escapeHtml(st.name)}" data-slogan="${escapeHtml(st.slogan)}" ${isSelected ? 'selected' : ''}>${escapeHtml(st.name)} (${escapeHtml(st.category)} - ${escapeHtml(st.slogan)})</option>`
+                }).join('')}
+              </select>
+            </label>
+            <label class="content-field" for="${controlId}-media-url">
+              <span>Stream-URL (Live-Audio Stream)</span>
+              <input type="url" id="${controlId}-media-url" data-field="url" value="${escapeHtml(widget.url || '')}" placeholder="https://...stream.mp3" />
+            </label>
+            <div class="grid-2-cols" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <label for="${controlId}-media-title">Sender-Name / Titel
+                <input id="${controlId}-media-title" data-field="mediaTitle" value="${escapeHtml(widget.mediaTitle || '')}" placeholder="z. B. 1LIVE" />
+              </label>
+              <label for="${controlId}-media-artist">Zusatztext / Slogan
+                <input id="${controlId}-media-artist" data-field="mediaArtist" value="${escapeHtml(widget.mediaArtist || '')}" placeholder="z. B. WDR - Eins Live" />
+              </label>
+            </div>
+            <div class="media-actions-bar" style="display:flex;align-items:center;gap:12px;margin-top:6px;">
+              <button type="button" class="secondary-button" data-action="test-radio-stream" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:0.8rem;">
+                <span class="preview-play-icon">▶</span> <span>Sender antesten</span>
+              </button>
+              <span class="editor-field-status" data-radio-test-status style="font-size:0.8rem;color:var(--muted);"></span>
+            </div>
+            <label class="content-field checkbox-label" for="${controlId}-media-playing" style="margin-top:8px;">
+              <input type="checkbox" id="${controlId}-media-playing" data-field="mediaPlaying" ${widget.mediaPlaying !== false ? 'checked' : ''} />
+              <span>Autoplay / Sofort abspielen bei Start</span>
+            </label>
+            <input type="hidden" id="${controlId}-media-album" data-field="mediaAlbum" value="${escapeHtml(widget.mediaAlbum || '')}" />
+            <input type="hidden" id="${controlId}-media-cover" data-field="mediaCoverUrl" value="${escapeHtml(widget.mediaCoverUrl || '')}" />
           </div>
-          <p class="editor-field-hint">💡 Live-Status kann per HTTP <code>POST /api/media</code> aktualisiert werden.</p>
-          <input type="hidden" id="${controlId}-url" data-field="url" value="${escapeHtml(widget.url)}" />
+          <p class="editor-field-hint">💡 Wähle einen der beliebtesten deutschen Sender aus. Stream-URL und Sender-Details werden automatisch ausgefüllt und die Tonausgabe erfolgt direkt über den Lautsprecher bzw. Monitor.</p>
           ` : `
           ${(widget.type === 'image' || widget.type === 'slideshow') ? `<div class="content-field upload-field"><label class="upload-zone" for="${controlId}-upload"><input type="file" id="${controlId}-upload" data-action="upload" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" ${widget.type === 'slideshow' ? 'multiple' : ''} style="display: none;" /><span class="upload-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>${widget.type === 'slideshow' ? 'Bilder hochladen (max. 10 Bilder, je max. 5 MB)' : 'Bild hochladen (max. 5 MB)'}</span></span><span class="upload-status" data-upload-status aria-live="polite"></span></label></div>` : ''}
           ${widget.type === 'image' && widget.url ? `

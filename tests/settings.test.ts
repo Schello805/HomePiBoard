@@ -274,8 +274,9 @@ test('createWidget and normalizeSettings support waste and media widgets', () =>
 
   const media = createWidget('media', 2)
   assert.equal(media.type, 'media')
-  assert.equal(media.mediaTitle, 'Keine Wiedergabe')
+  assert.equal(media.mediaTitle, '1LIVE')
   assert.equal(media.mediaPlaying, false)
+  assert.match(media.url, /stream\.mp3/)
 
   const normalized = normalizeSettings({
     version: 3,

@@ -6,7 +6,7 @@ Eine schlanke Digital-Signage-Anzeige für zu Hause. HomePiBoard ist für einen 
 
 - 24×14-Widget-Raster für Webseite, Kalender, Text, Bild, Diashow, Müllkalender & Media
 - 🗑️ **Müllkalender-Widget:** Farbige Abfalltonnen (Restmüll, Bio, Papier, Gelber Sack, Glas) mit Dringlichkeits-Highlight
-- 🎵 **Media-Player ("Now Playing"):** Spotify/Sonos/HomeAssistant Musikstatus mit Cover und animiertem Equalizer
+- 📻 **Webradio & Stream-Player ("Now Playing"):** Vorkonfigurierte deutsche Radiosender (1LIVE, SWR3, Antenne Bayern, Deutschlandfunk, WDR 2, Radio BOB!, etc.) & eigene Stream-URLs mit direkter Tonausgabe über Lautsprecher/Monitor, Touch-Play/Pause, Lautstärkeregler und animiertem Equalizer
 - 🌙 **Automatischer Nachtmodus & Display-Dimmen:** Zeitgesteuertes Dimmen, Nacht-Uhr, Wake-on-Tap & Pixel-Shift (Burn-In-Schutz für 24/7-Betrieb)
 - 🔔 **Smarte Webhook-Benachrichtigungen:** `POST /api/notify` mit Popup-Banner und integriertem Zweiklang-Türgong (synthetisiert via Web Audio API)
 - Freies Resizing und 4-Wege-Positionierung im Platzspar-Editmodus

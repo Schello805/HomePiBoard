@@ -421,5 +421,71 @@ export async function renderDisplayPage(app: HTMLElement) {
 
   initNetworkStatus(networkStatus, source)
   bindWidgetFrames(app)
+  bindRadioWidgets(app)
   if (settings.weatherCity) await loadWeather(settings.weatherCity, weather)
 }
+
+export function bindRadioWidgets(root: ParentNode) {
+  const widgets = root.querySelectorAll<HTMLElement>('[data-media-widget]')
+  widgets.forEach((widget) => {
+    const streamUrl = widget.dataset.streamUrl || ''
+    const playBtn = widget.querySelector<HTMLButtonElement>('[data-action="toggle-play"]')
+    const audio = widget.querySelector<HTMLAudioElement>('audio[data-media-audio]')
+    const eqBars = widget.querySelector('.media-equalizer-bars')
+    const statusText = widget.querySelector<HTMLElement>('[data-media-status]')
+    const volumeSlider = widget.querySelector<HTMLInputElement>('[data-action="volume-slider"]')
+    const playIcon = widget.querySelector<HTMLElement>('.media-play-icon')
+
+    if (!audio || !streamUrl) return
+
+    const setPlayingState = (isPlaying: boolean) => {
+      widget.classList.toggle('is-playing', isPlaying)
+      widget.classList.toggle('is-paused', !isPlaying)
+      if (eqBars) eqBars.classList.toggle('is-animated', isPlaying)
+      if (playIcon) playIcon.textContent = isPlaying ? '⏸' : '▶'
+      if (statusText) statusText.textContent = isPlaying ? 'Auf Sendung' : 'Bereit'
+    }
+
+    const togglePlay = async () => {
+      try {
+        if (!audio.paused) {
+          audio.pause()
+          audio.src = ''
+          setPlayingState(false)
+        } else {
+          audio.src = streamUrl
+          audio.load()
+          await audio.play()
+          setPlayingState(true)
+        }
+      } catch (err) {
+        console.error('Radio stream playback error:', err)
+        setPlayingState(false)
+        if (statusText) statusText.textContent = 'Stream-Fehler'
+      }
+    }
+
+    playBtn?.addEventListener('click', (e) => {
+      e.stopPropagation()
+      void togglePlay()
+    })
+
+    volumeSlider?.addEventListener('input', (e) => {
+      e.stopPropagation()
+      const val = Math.max(0, Math.min(1, Number(volumeSlider.value) || 0.8))
+      audio.volume = val
+    })
+
+    audio.addEventListener('play', () => setPlayingState(true))
+    audio.addEventListener('pause', () => setPlayingState(false))
+    audio.addEventListener('error', () => {
+      setPlayingState(false)
+      if (statusText) statusText.textContent = 'Stream-Fehler'
+    })
+
+    if (widget.classList.contains('is-playing')) {
+      void togglePlay()
+    }
+  })
+}
+

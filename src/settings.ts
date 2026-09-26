@@ -86,7 +86,7 @@ const widgetTitles: Record<WidgetType, string> = {
   image: 'Bild',
   slideshow: 'Diashow',
   waste: 'Müllkalender',
-  media: 'Now Playing',
+  media: 'Radio',
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -116,8 +116,10 @@ export function createWidget(type: WidgetType, index: number, id = `widget-${ind
   } else if (type === 'waste') {
     widget.wasteItems = 'Morgen: Gelber Sack\nMontag: Restmüll\n15.10.: Papiertonne\n22.10.: Biomüll'
   } else if (type === 'media') {
-    widget.mediaTitle = 'Keine Wiedergabe'
-    widget.mediaArtist = 'Bereit'
+    widget.title = '1LIVE'
+    widget.url = 'https://wdr-1live-live.icecastssl.wdr.de/wdr/1live/live/mp3/128/stream.mp3'
+    widget.mediaTitle = '1LIVE'
+    widget.mediaArtist = 'WDR - Eins Live'
     widget.mediaPlaying = false
   }
   return widget

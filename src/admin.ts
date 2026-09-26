@@ -247,7 +247,7 @@ export async function renderAdminPage(app: HTMLElement) {
           <button type="button" data-add-type="image">▧ Bild</button>
           <button type="button" data-add-type="slideshow">▨ Diashow</button>
           <button type="button" data-add-type="waste">🗑️ Müll</button>
-          <button type="button" data-add-type="media">🎵 Media</button>
+          <button type="button" data-add-type="media">📻 Radio</button>
         </div>
       </div>
       <p class="layout-warning" id="layout-warning" role="alert"></p>
@@ -1056,6 +1056,67 @@ export async function renderAdminPage(app: HTMLElement) {
       icsFileInput.value = ''
     })
 
+    const radioPresetSelect = editor.querySelector<HTMLSelectElement>('[data-action="radio-preset"]')
+    const radioUrlInput = editor.querySelector<HTMLInputElement>('[data-field="url"]')
+    const radioTitleInput = editor.querySelector<HTMLInputElement>('[data-field="mediaTitle"]')
+    const radioArtistInput = editor.querySelector<HTMLInputElement>('[data-field="mediaArtist"]')
+    const mainTitleInput = editor.querySelector<HTMLInputElement>('[data-field="title"]')
+    const testRadioBtn = editor.querySelector<HTMLButtonElement>('[data-action="test-radio-stream"]')
+    const testRadioStatus = editor.querySelector<HTMLElement>('[data-radio-test-status]')
+
+    radioPresetSelect?.addEventListener('change', () => {
+      const selected = radioPresetSelect.selectedOptions[0]
+      if (!selected) return
+      const url = selected.dataset.url ?? ''
+      const name = selected.dataset.name ?? ''
+      const slogan = selected.dataset.slogan ?? ''
+      if (selected.value !== 'custom') {
+        if (radioUrlInput) radioUrlInput.value = url
+        if (radioTitleInput) radioTitleInput.value = name
+        if (radioArtistInput) radioArtistInput.value = slogan
+        if (mainTitleInput && (!mainTitleInput.value || mainTitleInput.value === 'Radio' || mainTitleInput.value === '1LIVE' || mainTitleInput.value === 'Now Playing')) {
+          mainTitleInput.value = name
+        }
+        refreshEditor(editor)
+        markDirty()
+      }
+    })
+
+    let testAudio: HTMLAudioElement | null = null
+    const cleanupTestAudio = () => {
+      if (testAudio) {
+        testAudio.pause()
+        testAudio.src = ''
+        testAudio = null
+        if (testRadioBtn) testRadioBtn.innerHTML = '<span class="preview-play-icon">▶</span> <span>Sender antesten</span>'
+        if (testRadioStatus) testRadioStatus.textContent = ''
+      }
+    }
+
+    testRadioBtn?.addEventListener('click', () => {
+      const streamUrl = radioUrlInput?.value.trim()
+      if (!streamUrl) {
+        if (testRadioStatus) testRadioStatus.textContent = 'Keine Stream-URL angegeben'
+        return
+      }
+      if (testAudio && !testAudio.paused) {
+        cleanupTestAudio()
+      } else {
+        if (testRadioStatus) testRadioStatus.textContent = 'Verbinde mit Stream …'
+        if (testRadioBtn) testRadioBtn.innerHTML = '<span class="preview-play-icon">⏸</span> <span>Stoppen</span>'
+        testAudio = new Audio(streamUrl)
+        testAudio.volume = 0.8
+        testAudio.play().then(() => {
+          if (testRadioStatus) testRadioStatus.textContent = '🔊 Live-Audio aktiv'
+        }).catch((err) => {
+          console.error(err)
+          if (testRadioStatus) testRadioStatus.textContent = 'Stream konnte nicht geladen werden'
+          if (testRadioBtn) testRadioBtn.innerHTML = '<span class="preview-play-icon">▶</span> <span>Sender antesten</span>'
+          testAudio = null
+        })
+      }
+    })
+
     const openDialog = () => {
       if (!dialog) return
       if (typeof dialog.showModal === 'function') {
@@ -1068,6 +1129,7 @@ export async function renderAdminPage(app: HTMLElement) {
     }
 
     const closeDialog = () => {
+      cleanupTestAudio()
       if (!dialog) return
       if (typeof dialog.close === 'function') {
         dialog.close()

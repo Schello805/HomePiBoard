@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { calendarAgendaMarkup, isWasteCalendarFeed, parseSlideshowUrls, parseWasteItems, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent } from '../src/widgets.ts'
+import { GERMAN_RADIO_STATIONS, calendarAgendaMarkup, isWasteCalendarFeed, parseSlideshowUrls, parseWasteItems, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent } from '../src/widgets.ts'
 
 test('renderWidget escapes text content', () => {
   const markup = renderWidget({ id: 'note', type: 'text', title: '<Titel>', url: '<script>', columns: 6, rows: 2 })
@@ -352,6 +352,66 @@ test('editorMarkup for waste widget includes ics upload and webcal feed fields',
   assert.match(wasteEditor, /data-field="url"/)
   assert.match(wasteEditor, /https:\/\/landkreis\.de\/abfall\.ics/)
   assert.match(wasteEditor, /data-field="wasteItems"/)
+})
+
+test('GERMAN_RADIO_STATIONS includes verified stations with HTTPS streams', () => {
+  assert.ok(GERMAN_RADIO_STATIONS.length >= 10)
+  const names = GERMAN_RADIO_STATIONS.map((s) => s.name)
+  assert.ok(names.includes('1LIVE'))
+  assert.ok(names.includes('WDR 2'))
+  assert.ok(names.includes('SWR3'))
+  assert.ok(names.includes('ANTENNE BAYERN'))
+  assert.ok(names.includes('Deutschlandfunk'))
+  assert.ok(names.includes('RADIO BOB!'))
+
+  for (const station of GERMAN_RADIO_STATIONS) {
+    if (station.id !== 'custom') {
+      assert.match(station.streamUrl, /^https:\/\//)
+    }
+  }
+})
+
+test('media widget renders radio stream controls, live badge, audio element and volume slider', () => {
+  const radioHtml = renderWidgetContent({
+    id: 'radio-1',
+    type: 'media',
+    title: '1LIVE',
+    url: 'https://wdr-1live-live.icecastssl.wdr.de/wdr/1live/live/mp3/128/stream.mp3',
+    columns: 8,
+    rows: 3,
+    mediaTitle: '1LIVE',
+    mediaArtist: 'WDR - Eins Live',
+    mediaPlaying: true,
+  })
+
+  assert.match(radioHtml, /data-media-widget/)
+  assert.match(radioHtml, /data-stream-url="https:\/\/wdr-1live-live\.icecastssl\.wdr\.de/)
+  assert.match(radioHtml, /data-action="toggle-play"/)
+  assert.match(radioHtml, /LIVE RADIO/)
+  assert.match(radioHtml, /data-media-field="title">1LIVE</)
+  assert.match(radioHtml, /data-media-field="artist">WDR - Eins Live</)
+  assert.match(radioHtml, /data-action="volume-slider"/)
+  assert.match(radioHtml, /<audio preload="none" data-media-audio src="https:\/\/wdr-1live-live\.icecastssl\.wdr\.de/)
+})
+
+test('editorMarkup exposes German radio preset selector and stream test button', () => {
+  const radioEditor = renderWidget({
+    id: 'r-edit',
+    type: 'media',
+    title: '1LIVE',
+    url: 'https://wdr-1live-live.icecastssl.wdr.de/wdr/1live/live/mp3/128/stream.mp3',
+    columns: 8,
+    rows: 3,
+    mediaTitle: '1LIVE',
+    mediaArtist: 'WDR - Eins Live',
+  }, true)
+
+  assert.match(radioEditor, /data-action="radio-preset"/)
+  assert.match(radioEditor, /data-action="test-radio-stream"/)
+  assert.match(radioEditor, /1LIVE/)
+  assert.match(radioEditor, /SWR3/)
+  assert.match(radioEditor, /data-field="url"/)
+  assert.match(radioEditor, /data-field="mediaTitle"/)
 })
 
 
