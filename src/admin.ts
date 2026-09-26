@@ -2,6 +2,7 @@ import { escapeHtml } from './dashboard-utils.ts'
 import { playNotificationSound } from './display.ts'
 import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type WidgetType } from './settings.ts'
 import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
+import { parseCalendarFeed } from './calendar-feed.ts'
 import { bindWidgetFrames, isBuiltInCalendar, parseSlideshowUrls, renderSlideshowCrudList, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
 
 const pinKey = 'homepiboard-admin-pin'
@@ -564,18 +565,25 @@ export async function renderAdminPage(app: HTMLElement) {
     if (previewTitle) previewTitle.textContent = widget.title
     editor.querySelector<HTMLElement>('[data-type-badge]')!.textContent = widgetTypeLabel(widget.type)
     editor.querySelector<HTMLElement>('[data-dimension-label]')!.textContent = `${widget.columns} × ${widget.rows}`
-    editor.querySelector<HTMLOutputElement>('[data-resize-readout]')!.textContent = `${widget.columns} × ${widget.rows}`
-    const content = editor.querySelector<HTMLTextAreaElement>('[data-field="url"]')!
-    content.placeholder = widget.type === 'text'
-      ? 'Text eingeben'
-      : widget.type === 'slideshow'
-        ? 'https://example.com/bild1.jpg\nhttps://example.com/bild2.jpg'
-        : 'https://example.com'
+    const content = editor.querySelector<HTMLTextAreaElement | HTMLInputElement>('[data-field="url"]')
+    if (content) {
+      if (widget.type === 'text') {
+        content.placeholder = 'Text eingeben'
+      } else if (widget.type === 'slideshow') {
+        content.placeholder = 'https://example.com/bild1.jpg\nhttps://example.com/bild2.jpg'
+      } else if (widget.type === 'waste') {
+        content.placeholder = 'https://.../abfall.ics oder webcal://...'
+      } else if (widget.type === 'calendar') {
+        content.placeholder = 'https://... oder webcal://...'
+      } else {
+        content.placeholder = 'https://example.com'
+      }
+      syncCompactField(content)
+    }
     const contentLabel = editor.querySelector<HTMLElement>('[data-content-label]')
     if (contentLabel) {
       contentLabel.textContent = widget.type === 'slideshow' ? 'Bild-URLs (eine pro Zeile)' : 'Inhalt / URL'
     }
-    syncCompactField(content)
     if (refreshPreview) {
       const preview = editor.querySelector<HTMLElement>('[data-widget-preview]')!
       const previewContent = editor.querySelector<HTMLElement>('[data-widget-preview-content]')!
@@ -905,6 +913,52 @@ export async function renderAdminPage(app: HTMLElement) {
       }
       fileInput.value = ''
       refreshSlideshowCrud()
+    })
+
+    const icsFileInput = editor.querySelector<HTMLInputElement>('[data-action="upload-ics"]')
+    const icsUploadStatus = editor.querySelector<HTMLElement>('[data-upload-status]')
+    icsFileInput?.addEventListener('change', () => {
+      const file = icsFileInput.files?.[0]
+      if (!file) return
+
+      const reader = new FileReader()
+      reader.onload = () => {
+        try {
+          const content = String(reader.result || '')
+          const events = parseCalendarFeed(content)
+          const now = new Date()
+          const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+          const upcoming = events
+            .filter((event) => {
+              const time = new Date(event.end || event.start).getTime()
+              return time >= startOfToday
+            })
+            .slice(0, 30)
+
+          if (!upcoming.length) {
+            if (icsUploadStatus) icsUploadStatus.textContent = 'Keine anstehenden Termine in .ics gefunden.'
+            return
+          }
+
+          const wasteTextarea = editor.querySelector<HTMLTextAreaElement>('[data-field="wasteItems"]')
+          if (wasteTextarea) {
+            wasteTextarea.value = upcoming.map((e) => `${e.summary.replace(/[:|]/g, ' - ')}: ${e.start.slice(0, 10)}`).join('\n')
+          }
+          if (icsUploadStatus) {
+            icsUploadStatus.textContent = `✓ ${upcoming.length} Termine importiert (${file.name})`
+          }
+          refreshEditor(editor)
+          markDirty()
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Fehler beim Lesen der .ics-Datei.'
+          if (icsUploadStatus) icsUploadStatus.textContent = msg
+        }
+      }
+      reader.onerror = () => {
+        if (icsUploadStatus) icsUploadStatus.textContent = 'Fehler beim Laden der Datei.'
+      }
+      reader.readAsText(file)
+      icsFileInput.value = ''
     })
 
     const openDialog = () => {

@@ -63,7 +63,8 @@ function isPrivateNetworkAddress(address) {
 async function validateCalendarFeedUrl(value, lookupFunction) {
   let url
   try {
-    url = new URL(value)
+    const normalized = String(value || '').trim().replace(/^webcal:\/\//i, 'https://')
+    url = new URL(normalized)
   } catch {
     throw new CalendarFeedError(422, 'Die Kalender-URL ist ungültig.')
   }
@@ -572,7 +573,7 @@ export function createHomePiBoardServer({
       if (url.pathname.startsWith('/api/calendar/') && request.method === 'GET') {
         const widgetId = decodeURIComponent(url.pathname.slice('/api/calendar/'.length))
         const settings = await loadSettings(settingsFile)
-        const widget = settings.widgets.find((candidate) => candidate.id === widgetId && candidate.type === 'calendar' && candidate.url.trim())
+        const widget = settings.widgets.find((candidate) => candidate.id === widgetId && (candidate.type === 'calendar' || candidate.type === 'waste') && candidate.url.trim())
         if (!widget) {
           json(response, 404, { error: 'Kalender-Widget nicht gefunden.' })
           return

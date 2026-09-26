@@ -22,7 +22,7 @@ export interface ParsedWasteItem {
   isUrgent: boolean
 }
 
-export function parseWasteItems(raw: string | undefined): ParsedWasteItem[] {
+export function parseWasteItems(raw: string | undefined, now = new Date()): ParsedWasteItem[] {
   const content = (raw && raw.trim()) ? raw : 'Restmüll: In 2 Tagen\nBiomüll: Donnerstag\nGelber Sack: Nächste Woche\nPapiermüll: In 10 Tagen'
   const lines = content.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean)
 
@@ -37,7 +37,7 @@ export function parseWasteItems(raw: string | undefined): ParsedWasteItem[] {
       customColor = parts[1]!.trim()
     }
 
-    const colonIndex = line.indexOf(':')
+    const colonIndex = line.lastIndexOf(':')
     if (colonIndex !== -1) {
       name = line.slice(0, colonIndex).trim()
       date = line.slice(colonIndex + 1).trim()
@@ -47,10 +47,10 @@ export function parseWasteItems(raw: string | undefined): ParsedWasteItem[] {
     let color = customColor
     let icon = '🗑️'
 
-    if (lower.includes('bio') || lower.includes('grün') || lower.includes('kompost')) {
+    if (lower.includes('bio') || lower.includes('grün') || lower.includes('kompost') || lower.includes('garten') || lower.includes('baum')) {
       if (!color) color = '#38a169'
-      icon = '🍏'
-    } else if (lower.includes('gelb') || lower.includes('wertstoff') || lower.includes('plastik') || lower.includes('sack')) {
+      icon = lower.includes('tannen') || lower.includes('weihnacht') ? '🎄' : '🍏'
+    } else if (lower.includes('gelb') || lower.includes('wertstoff') || lower.includes('plastik') || lower.includes('sack') || lower.includes('dual')) {
       if (!color) color = '#d69e2e'
       icon = '♻️'
     } else if (lower.includes('papier') || lower.includes('blau') || lower.includes('pappe') || lower.includes('karton')) {
@@ -59,6 +59,12 @@ export function parseWasteItems(raw: string | undefined): ParsedWasteItem[] {
     } else if (lower.includes('glas')) {
       if (!color) color = '#319795'
       icon = '🍾'
+    } else if (lower.includes('sperr')) {
+      if (!color) color = '#805ad5'
+      icon = '🛋️'
+    } else if (lower.includes('schad') || lower.includes('problem') || lower.includes('gift') || lower.includes('gefahr')) {
+      if (!color) color = '#e53e3e'
+      icon = '⚠️'
     } else {
       if (!color) color = '#718096'
       icon = '🗑️'
@@ -74,10 +80,11 @@ export function parseWasteItems(raw: string | undefined): ParsedWasteItem[] {
     const isoMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})$/)
     if (isoMatch) {
       const target = new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]))
-      const now = new Date()
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
       const diffDays = Math.round((target.getTime() - startOfToday) / (1000 * 60 * 60 * 24))
-      if (diffDays === 0) {
+      if (diffDays < 0) {
+        badgeText = 'Vorüber'
+      } else if (diffDays === 0) {
         badgeText = 'Heute!'
         isUrgent = true
       } else if (diffDays === 1) {
@@ -94,9 +101,17 @@ export function parseWasteItems(raw: string | undefined): ParsedWasteItem[] {
   })
 }
 
-export function wasteContent(widget: DashboardWidget) {
-  const items = parseWasteItems(widget.wasteItems)
-  const itemsHtml = items.map((item) => `
+export function isWasteCalendarFeed(widget: DashboardWidget): boolean {
+  if (widget.type !== 'waste') return false
+  const url = (widget.url || '').trim()
+  return /^https?:\/\//i.test(url) || /^webcal:\/\//i.test(url)
+}
+
+export function renderWasteItemsHtml(items: ParsedWasteItem[]): string {
+  if (!items.length) {
+    return '<div class="calendar-feed-empty" role="status">Keine anstehenden Termine eingetragen.</div>'
+  }
+  return items.map((item) => `
     <div class="waste-item ${item.isUrgent ? 'is-urgent' : ''}" style="--bin-color: ${escapeHtml(item.color)}">
       <div class="waste-bin-icon" aria-hidden="true">${item.icon}</div>
       <div class="waste-details">
@@ -106,8 +121,33 @@ export function wasteContent(widget: DashboardWidget) {
       <span class="waste-badge">${escapeHtml(item.badgeText)}</span>
     </div>
   `).join('')
+}
 
-  return `<div class="waste-widget-container" data-waste-widget>${itemsHtml}</div>`
+export function renderWasteEvents(events: CalendarFeedEvent[], now = new Date()): string {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const upcoming = events
+    .filter((event) => {
+      const time = new Date(event.end || event.start).getTime()
+      return time >= startOfToday
+    })
+    .slice(0, 10)
+
+  if (!upcoming.length) {
+    return '<div class="calendar-feed-empty" role="status">Keine anstehenden Müllabfuhren gefunden.</div>'
+  }
+
+  const lines = upcoming.map((e) => `${e.summary.replace(/[:|]/g, ' - ')}: ${e.start.slice(0, 10)}`).join('\n')
+  const items = parseWasteItems(lines, now)
+  return renderWasteItemsHtml(items)
+}
+
+export function wasteContent(widget: DashboardWidget) {
+  if (isWasteCalendarFeed(widget)) {
+    const cachedItems = widget.wasteItems ? renderWasteItemsHtml(parseWasteItems(widget.wasteItems)) : ''
+    return `<div class="waste-widget-container" data-waste-feed data-waste-widget-id="${escapeHtml(widget.id)}">${cachedItems || '<div class="waste-loading-status" role="status">Müllkalender-Abo wird geladen …</div>'}</div>`
+  }
+  const items = parseWasteItems(widget.wasteItems)
+  return `<div class="waste-widget-container" data-waste-widget>${renderWasteItemsHtml(items)}</div>`
 }
 
 export function energyContent(widget: DashboardWidget) {
@@ -359,8 +399,19 @@ function editorMarkup(widget: DashboardWidget, index: number) {
           <label for="${controlId}-title">Titel<input id="${controlId}-title" data-field="title" value="${escapeHtml(widget.title)}" maxlength="30" /></label>
           <label class="content-field checkbox-label" for="${controlId}-show-title"><input type="checkbox" id="${controlId}-show-title" data-field="showTitle" ${widget.showTitle ? 'checked' : ''} /><span>Titel in der Anzeige anzeigen</span></label>
           ${widget.type === 'waste' ? `
-          <label class="content-field" for="${controlId}-waste"><span data-content-label>Abholtermine (Format: Tonne: Datum oder z.B. In 2 Tagen, eine pro Zeile)</span><textarea id="${controlId}-waste" data-field="wasteItems" rows="5" placeholder="Restmüll: In 2 Tagen&#10;Biomüll: Donnerstag&#10;Gelber Sack: 2026-10-02&#10;Papiermüll: In 10 Tagen">${escapeHtml(widget.wasteItems || '')}</textarea></label>
-          <input type="hidden" id="${controlId}-url" data-field="url" value="${escapeHtml(widget.url)}" />
+          <label class="content-field" for="${controlId}-waste-url"><span>iCal-Abo / Webcal URL (vom Landratsamt / Entsorger)</span><input type="text" id="${controlId}-waste-url" data-field="url" value="${escapeHtml(widget.url)}" placeholder="https://.../abfall.ics oder webcal://..." /></label>
+          <div class="content-field upload-field">
+            <label class="upload-zone" for="${controlId}-ics-upload">
+              <input type="file" id="${controlId}-ics-upload" data-action="upload-ics" accept=".ics,text/calendar" style="display: none;" />
+              <span class="upload-btn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>📂 .ics-Datei importieren (vom Landratsamt / PC)</span>
+              </span>
+              <span class="upload-status" data-upload-status aria-live="polite"></span>
+            </label>
+          </div>
+          <label class="content-field" for="${controlId}-waste"><span data-content-label>Abholtermine (aus .ics oder manuell)</span><textarea id="${controlId}-waste" data-field="wasteItems" rows="5" placeholder="Restmüll: In 2 Tagen&#10;Biomüll: Donnerstag&#10;Gelber Sack: 2026-10-02&#10;Papiermüll: In 10 Tagen">${escapeHtml(widget.wasteItems || '')}</textarea></label>
+          <p class="editor-field-hint">💡 Entweder Webcal-URL deines Landratsamtes eintragen (synchronisiert live) oder heruntergeladene .ics-Datei direkt hochladen.</p>
           ` : widget.type === 'energy' ? `
           <div class="energy-form-group">
             <label for="${controlId}-solar">Solarerzeugung (W)<input id="${controlId}-solar" data-field="energySolar" type="number" min="0" value="${widget.energySolar ?? 750}" /></label>
@@ -510,5 +561,29 @@ export function bindWidgetFrames(root: ParentNode = document) {
         const message = error instanceof Error ? error.message : 'Kalender konnte nicht geladen werden.'
         container.innerHTML = `<div class="calendar-feed-error" role="alert"><strong>Kalender konnte nicht geladen werden.</strong><span>${escapeHtml(message)}</span></div>`
       })
+  })
+
+  root.querySelectorAll<HTMLElement>('[data-waste-feed]').forEach((container) => {
+    if (container.dataset.wasteBound === 'true') return
+    container.dataset.wasteBound = 'true'
+    const widgetId = container.dataset.wasteWidgetId
+    if (!widgetId) return
+
+    const loadWasteFeed = () => {
+      void fetch(`/api/calendar/${encodeURIComponent(widgetId)}`, { cache: 'no-store' })
+        .then(async (response) => {
+          const body = await response.json() as { events?: CalendarFeedEvent[]; error?: string }
+          if (!response.ok) throw new Error(body.error || 'Müllkalender konnte nicht geladen werden.')
+          container.innerHTML = renderWasteEvents(Array.isArray(body.events) ? body.events : [])
+        })
+        .catch((error: unknown) => {
+          if (!container.querySelector('.waste-item')) {
+            const message = error instanceof Error ? error.message : 'Müllkalender konnte nicht geladen werden.'
+            container.innerHTML = `<div class="calendar-feed-error" role="alert"><strong>Müllkalender-Abo Fehler</strong><span>${escapeHtml(message)}</span></div>`
+          }
+        })
+    }
+    loadWasteFeed()
+    window.setInterval(loadWasteFeed, 30 * 60 * 1000)
   })
 }

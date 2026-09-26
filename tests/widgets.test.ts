@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { calendarAgendaMarkup, parseSlideshowUrls, renderSlideshowCrudList, renderWidget, renderWidgetContent } from '../src/widgets.ts'
+import { calendarAgendaMarkup, isWasteCalendarFeed, parseSlideshowUrls, parseWasteItems, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent } from '../src/widgets.ts'
 
 test('renderWidget escapes text content', () => {
   const markup = renderWidget({ id: 'note', type: 'text', title: '<Titel>', url: '<script>', columns: 6, rows: 2 })
@@ -309,6 +309,59 @@ test('editorMarkup exposes custom input fields for waste, energy, and media widg
   assert.match(mediaEditor, /data-field="mediaTitle"/)
   assert.match(mediaEditor, /value="Yesterday"/)
   assert.match(mediaEditor, /data-field="mediaPlaying" checked/)
+})
+
+test('waste widget recognizes calendar feed url and renders feed container', () => {
+  const widget = {
+    id: 'waste-feed-widget',
+    type: 'waste' as const,
+    title: 'Müllabfuhr',
+    url: 'webcal://example.com/muell.ics',
+    columns: 6,
+    rows: 4,
+  }
+  assert.equal(isWasteCalendarFeed(widget), true)
+
+  const html = renderWidgetContent(widget)
+  assert.match(html, /data-waste-feed/)
+  assert.match(html, /data-waste-widget-id="waste-feed-widget"/)
+  assert.match(html, /Müllkalender-Abo wird geladen/)
+})
+
+test('renderWasteEvents transforms upcoming calendar events into categorized bin cards', () => {
+  const events = [
+    { start: '2026-10-01T06:00:00Z', end: '2026-10-01T08:00:00Z', summary: 'Restmüll', location: '', allDay: false },
+    { start: '2026-10-02T06:00:00Z', end: '2026-10-02T08:00:00Z', summary: 'Biotonne: Abholung', location: '', allDay: false },
+    { start: '2026-10-05T06:00:00Z', end: '2026-10-05T08:00:00Z', summary: 'Gelber Sack', location: '', allDay: false },
+    { start: '2026-10-15T06:00:00Z', end: '2026-10-15T08:00:00Z', summary: 'Altpapier', location: '', allDay: false },
+  ]
+  const fakeNow = new Date(2026, 9, 1) // 2026-10-01
+  const html = renderWasteEvents(events, fakeNow)
+
+  assert.match(html, /Restmüll/)
+  assert.match(html, /Heute!/)
+  assert.match(html, /Biotonne/)
+  assert.match(html, /Morgen!/)
+  assert.match(html, /Gelber Sack/)
+  assert.match(html, /Altpapier/)
+})
+
+test('editorMarkup for waste widget includes ics upload and webcal feed fields', () => {
+  const wasteEditor = renderWidget({
+    id: 'w-editor',
+    type: 'waste',
+    title: 'Müllkalender',
+    url: 'https://landkreis.de/abfall.ics',
+    columns: 6,
+    rows: 4,
+    wasteItems: 'Restmüll: Morgen',
+  }, true)
+
+  assert.match(wasteEditor, /data-action="upload-ics"/)
+  assert.match(wasteEditor, /\.ics-Datei importieren/)
+  assert.match(wasteEditor, /data-field="url"/)
+  assert.match(wasteEditor, /https:\/\/landkreis\.de\/abfall\.ics/)
+  assert.match(wasteEditor, /data-field="wasteItems"/)
 })
 
 

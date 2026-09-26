@@ -173,6 +173,30 @@ test('calendar API fetches and parses the saved iCalendar feed', async (context)
   assert.equal(body.events[0].summary, 'Elternabend')
 })
 
+test('calendar API fetches and parses waste calendar feeds including webcal:// URLs', async (context) => {
+  const dataDirectory = await mkdtemp(path.join(tmpdir(), 'homepiboard-waste-'))
+  await writeFile(path.join(dataDirectory, 'settings.json'), JSON.stringify({
+    version: 3,
+    widgets: [{ id: 'waste-feed', type: 'waste', title: 'Abfallwirtschaft', url: 'webcal://abfall.example/termine.ics', columns: 8, rows: 5 }],
+  }))
+  let requestedUrl = ''
+  const running = await startServer({
+    dataDirectory,
+    lookupFunction: async () => [{ address: '93.184.216.34', family: 4 }],
+    calendarFetch: async (url) => {
+      requestedUrl = String(url)
+      return new Response('BEGIN:VCALENDAR\nBEGIN:VEVENT\nDTSTART:20261005\nSUMMARY:Restabfall 2-wöchentlich\nEND:VEVENT\nEND:VCALENDAR', { headers: { 'content-type': 'text/calendar' } })
+    },
+  })
+  context.after(() => running.server.close())
+
+  const response = await fetch(`${running.url}/api/calendar/waste-feed`)
+  assert.equal(response.status, 200)
+  assert.equal(requestedUrl, 'https://abfall.example/termine.ics')
+  const body = await response.json()
+  assert.equal(body.events[0].summary, 'Restabfall 2-wöchentlich')
+})
+
 test('calendar API refuses feeds resolving to private network addresses', async (context) => {
   const dataDirectory = await mkdtemp(path.join(tmpdir(), 'homepiboard-calendar-private-'))
   await writeFile(path.join(dataDirectory, 'settings.json'), JSON.stringify({
