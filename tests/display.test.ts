@@ -112,3 +112,110 @@ test('bindRadioWidgets wires toggle-play button and volume slider to audio eleme
   assert.equal(classList.has('is-paused'), false)
 })
 
+test('bindRadioWidgets autoplays stream when is-playing is present', async () => {
+  let playCalled = false
+  const mockAudio = {
+    paused: true,
+    src: '',
+    volume: 1,
+    load() {},
+    play() {
+      playCalled = true
+      this.paused = false
+      return Promise.resolve()
+    },
+    pause() {
+      this.paused = true
+    },
+    addEventListener() {},
+  }
+
+  const classList = new Set<string>(['is-playing'])
+  const statusEl = { textContent: '' }
+  const widget = {
+    dataset: { streamUrl: 'https://stream.example.com/live.mp3' },
+    classList: {
+      contains: (c: string) => classList.has(c),
+      toggle: (c: string, force: boolean) => {
+        if (force) classList.add(c)
+        else classList.delete(c)
+      },
+    },
+    querySelector(sel: string) {
+      if (sel.includes('data-media-audio')) return mockAudio
+      if (sel.includes('media-equalizer-bars')) return { classList: { toggle() {} } }
+      if (sel.includes('data-media-status')) return statusEl
+      if (sel.includes('media-play-icon')) return { textContent: '' }
+      return null
+    },
+  }
+
+  const root = {
+    querySelectorAll(sel: string) {
+      if (sel === '[data-media-widget]') return [widget]
+      return []
+    },
+  } as unknown as ParentNode
+
+  bindRadioWidgets(root)
+  // Allow microtask to resolve startAudio(true)
+  await Promise.resolve()
+  await Promise.resolve()
+
+  assert.equal(playCalled, true)
+  assert.equal(classList.has('is-playing'), true)
+  assert.equal(statusEl.textContent, 'Auf Sendung')
+})
+
+test('bindRadioWidgets handles NotAllowedError by waiting for user gesture', async () => {
+  const notAllowedError = new Error('play() failed because the user didn\'t interact with the document first.')
+  notAllowedError.name = 'NotAllowedError'
+
+  const mockAudio = {
+    paused: true,
+    src: '',
+    volume: 1,
+    load() {},
+    play() {
+      return Promise.reject(notAllowedError)
+    },
+    pause() {},
+    addEventListener() {},
+  }
+
+  const classList = new Set<string>(['is-playing'])
+  const statusEl = { textContent: '' }
+  const widget = {
+    dataset: { streamUrl: 'https://stream.example.com/live.mp3' },
+    classList: {
+      contains: (c: string) => classList.has(c),
+      toggle: (c: string, force: boolean) => {
+        if (force) classList.add(c)
+        else classList.delete(c)
+      },
+    },
+    querySelector(sel: string) {
+      if (sel.includes('data-media-audio')) return mockAudio
+      if (sel.includes('media-equalizer-bars')) return { classList: { toggle() {} } }
+      if (sel.includes('data-media-status')) return statusEl
+      if (sel.includes('media-play-icon')) return { textContent: '' }
+      return null
+    },
+  }
+
+  const root = {
+    querySelectorAll(sel: string) {
+      if (sel === '[data-media-widget]') return [widget]
+      return []
+    },
+  } as unknown as ParentNode
+
+  bindRadioWidgets(root)
+  await Promise.resolve()
+  await Promise.resolve()
+
+  assert.equal(classList.has('is-waiting-for-gesture'), true)
+  assert.equal(statusEl.textContent, 'Tippen für Ton')
+})
+
+

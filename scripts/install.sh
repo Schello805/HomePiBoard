@@ -24,7 +24,8 @@ sudo apt-get install -y --no-install-recommends \
   x11-xserver-utils \
   xserver-xorg-legacy \
   openbox \
-  libgl1-mesa-dri
+  libgl1-mesa-dri \
+  alsa-utils
 
 # Chromium Browser installieren (auf Debian 12 / arm64 heißt das Paket 'chromium')
 if ! command -v chromium >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1; then
@@ -37,6 +38,15 @@ sudo tee /etc/X11/Xwrapper.config > /dev/null << 'WRAPPER_EOF'
 allowed_users=anybody
 needs_root_rights=yes
 WRAPPER_EOF
+
+# Audio-Berechtigungen und HDMI-Soundausgabe konfigurieren
+echo "  -> Konfiguriere Audio-Berechtigungen und HDMI-Sound..."
+sudo usermod -aG audio,video,render "${USER}" 2>/dev/null || true
+amixer sset Master unmute 2>/dev/null || amixer sset PCM unmute 2>/dev/null || true
+amixer sset Master 100% 2>/dev/null || amixer sset PCM 100% 2>/dev/null || true
+if command -v raspi-config >/dev/null 2>&1; then
+  sudo raspi-config nonint do_audio 2 2>/dev/null || true
+fi
 
 # 2. Node.js 22 LTS prüfen / installieren
 echo "[2/6] Prüfe Node.js Installation..."

@@ -54,11 +54,14 @@ while true; do
     --no-first-run \
     --fast \
     --fast-start \
-    --disable-features=Translate \
+    --disable-features=Translate,PreloadMediaEngagementData,MediaEngagementBypassAutoplayPolicies \
     --disable-pinch \
     --overscroll-history-navigation=0 \
     --check-for-update-interval=31536000 \
     --autoplay-policy=no-user-gesture-required \
+    --disable-gesture-requirement-for-media-playback \
+    --enable-features=AudioServiceOutOfProcess \
+    --allow-running-insecure-content \
     "$URL" || true
   sleep 2
 done

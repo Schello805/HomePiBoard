@@ -441,33 +441,75 @@ export function bindRadioWidgets(root: ParentNode) {
     const setPlayingState = (isPlaying: boolean) => {
       widget.classList.toggle('is-playing', isPlaying)
       widget.classList.toggle('is-paused', !isPlaying)
+      widget.classList.toggle('is-waiting-for-gesture', false)
       if (eqBars) eqBars.classList.toggle('is-animated', isPlaying)
       if (playIcon) playIcon.textContent = isPlaying ? '⏸' : '▶'
       if (statusText) statusText.textContent = isPlaying ? 'Auf Sendung' : 'Bereit'
     }
 
-    const togglePlay = async () => {
+    const startAudio = async (isAutoplay = false): Promise<boolean> => {
       try {
-        if (!audio.paused) {
-          audio.pause()
-          audio.src = ''
-          setPlayingState(false)
-        } else {
+        if (!audio.src || audio.src !== streamUrl) {
           audio.src = streamUrl
-          audio.load()
-          await audio.play()
-          setPlayingState(true)
         }
-      } catch (err) {
+        if (typeof audio.load === 'function' && (!audio.readyState || audio.readyState === 0)) {
+          audio.load()
+        }
+        const vol = Math.max(0, Math.min(1, Number(volumeSlider?.value) || 0.8))
+        audio.volume = vol
+        await audio.play()
+        setPlayingState(true)
+        return true
+      } catch (err: unknown) {
+        const isNotAllowed = err instanceof Error && (err.name === 'NotAllowedError' || /user gesture|interact|notallowed/i.test(err.message))
+        if (isAutoplay && isNotAllowed) {
+          console.warn('Radio Autoplay: Browser erfordert Nutzerinteraktion. Warte auf ersten Klick oder Touch...')
+          widget.classList.toggle('is-playing', false)
+          widget.classList.toggle('is-paused', true)
+          widget.classList.toggle('is-waiting-for-gesture', true)
+          if (eqBars) eqBars.classList.toggle('is-animated', false)
+          if (playIcon) playIcon.textContent = '▶'
+          if (statusText) statusText.textContent = 'Tippen für Ton'
+
+          const onFirstInteraction = () => {
+            if (typeof window !== 'undefined') {
+              window.removeEventListener('pointerdown', onFirstInteraction)
+              window.removeEventListener('click', onFirstInteraction)
+              window.removeEventListener('keydown', onFirstInteraction)
+            }
+            widget.classList.toggle('is-waiting-for-gesture', false)
+            void startAudio(false)
+          }
+
+          if (typeof window !== 'undefined') {
+            window.addEventListener('pointerdown', onFirstInteraction, { passive: true })
+            window.addEventListener('click', onFirstInteraction, { passive: true })
+            window.addEventListener('keydown', onFirstInteraction, { passive: true })
+          }
+          return false
+        }
+
         console.error('Radio stream playback error:', err)
         setPlayingState(false)
         if (statusText) statusText.textContent = 'Stream-Fehler'
+        return false
+      }
+    }
+
+    const togglePlay = () => {
+      if (!audio.paused) {
+        audio.pause()
+        audio.src = ''
+        setPlayingState(false)
+        return Promise.resolve()
+      } else {
+        return startAudio(false)
       }
     }
 
     playBtn?.addEventListener('click', (e) => {
       e.stopPropagation()
-      void togglePlay()
+      return togglePlay()
     })
 
     volumeSlider?.addEventListener('input', (e) => {
@@ -484,7 +526,7 @@ export function bindRadioWidgets(root: ParentNode) {
     })
 
     if (widget.classList.contains('is-playing')) {
-      void togglePlay()
+      void startAudio(true)
     }
   })
 }

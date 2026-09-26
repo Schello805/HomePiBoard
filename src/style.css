@@ -1054,6 +1054,16 @@ button:has(.loading-spinner) {
   border-color: var(--acid);
   box-shadow: 0 0 10px rgba(184, 240, 91, 0.4);
 }
+.media-widget-container.is-waiting-for-gesture .media-play-btn {
+  background: var(--acid);
+  color: #0d120d;
+  border-color: var(--acid);
+  animation: pulseGesture 2s infinite ease-in-out;
+}
+@keyframes pulseGesture {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 4px rgba(184, 240, 91, 0.4); }
+  50% { transform: scale(1.14); box-shadow: 0 0 14px rgba(184, 240, 91, 0.85); }
+}
 .media-play-icon {
   font-size: 0.75rem;
   line-height: 1;

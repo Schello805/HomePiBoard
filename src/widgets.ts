@@ -330,7 +330,7 @@ export function mediaContent(widget: DashboardWidget) {
         </div>
       </div>
     </div>
-    ${streamUrl ? `<audio preload="none" data-media-audio src="${escapeHtml(streamUrl)}"></audio>` : ''}
+    ${streamUrl ? `<audio preload="auto" playsinline data-media-audio src="${escapeHtml(streamUrl)}"></audio>` : ''}
   </div>`
 }
 

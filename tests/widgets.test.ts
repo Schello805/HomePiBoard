@@ -391,7 +391,7 @@ test('media widget renders radio stream controls, live badge, audio element and 
   assert.match(radioHtml, /data-media-field="title">1LIVE</)
   assert.match(radioHtml, /data-media-field="artist">WDR - Eins Live</)
   assert.match(radioHtml, /data-action="volume-slider"/)
-  assert.match(radioHtml, /<audio preload="none" data-media-audio src="https:\/\/wdr-1live-live\.icecastssl\.wdr\.de/)
+  assert.match(radioHtml, /<audio preload="auto" playsinline data-media-audio src="https:\/\/wdr-1live-live\.icecastssl\.wdr\.de/)
 })
 
 test('editorMarkup exposes German radio preset selector and stream test button', () => {
