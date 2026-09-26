@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { bindRadioWidgets, calculatePixelShift, isNightTime } from '../src/display.ts'
+import { bindRadioWidgets, calculatePixelShift, initScreenWakeLock, isNightTime } from '../src/display.ts'
 
 test('isNightTime detects nighttime within standard window', () => {
   const at1am = new Date(2026, 8, 26, 1, 30)
@@ -223,5 +223,12 @@ test('bindRadioWidgets handles NotAllowedError by waiting for user gesture', asy
   assert.equal(classList.has('is-waiting-for-gesture'), true)
   assert.equal(statusEl.textContent, 'Tippen für Ton')
 })
+
+test('initScreenWakeLock safely handles environments without navigator or wakeLock', () => {
+  assert.doesNotThrow(() => {
+    initScreenWakeLock()
+  })
+})
+
 
 

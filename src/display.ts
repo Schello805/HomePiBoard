@@ -429,11 +429,49 @@ export async function renderDisplayPage(app: HTMLElement) {
 
   window.setInterval(updateLiveWidgets, 10000)
 
+  initScreenWakeLock()
   initNetworkStatus(networkStatus, source)
   bindWidgetFrames(app)
   bindRadioWidgets(app)
   if (settings.weatherCity) await loadWeather(settings.weatherCity, weather)
 }
+
+export function initScreenWakeLock() {
+  if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) {
+    return
+  }
+
+  let wakeLockSentinel: unknown = null
+
+  const acquireLock = async () => {
+    try {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        wakeLockSentinel = await (navigator.wakeLock as { request: (type: string) => Promise<unknown> }).request('screen')
+      }
+    } catch {
+      // Wake lock not allowed or unavailable
+    }
+  }
+
+  void acquireLock()
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        void acquireLock()
+      }
+    })
+  }
+
+  if (typeof window !== 'undefined') {
+    window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && !wakeLockSentinel) {
+        void acquireLock()
+      }
+    }, 60000)
+  }
+}
+
 
 export function bindRadioWidgets(root: ParentNode, options: { allowAutoplay?: boolean } = {}) {
   const widgets = root.querySelectorAll<HTMLElement>('[data-media-widget]')

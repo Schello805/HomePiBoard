@@ -298,6 +298,11 @@ export async function performSystemUpdate({ cwd = rootDirectory, restartProcess 
 
   log.push('4/4: Aktualisiere HDMI Monitor Anzeige...')
   try {
+    await exec('bash', ['./scripts/disable-sleep.sh'], { cwd, timeout: 20000 })
+  } catch {
+    // ignore
+  }
+  try {
     await exec('pkill', ['-f', 'chromium|chrome'], { timeout: 3000 })
     log.push('✓ Kiosk-Browser auf HDMI neu geladen.')
   } catch {

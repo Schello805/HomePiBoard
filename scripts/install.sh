@@ -112,16 +112,20 @@ sudo systemctl enable homepiboard.service
 sudo systemctl restart homepiboard.service
 
 # 6. Kiosk-Autostart auf HDMI konfigurieren
-echo "[6/6] Konfiguriere Kiosk-Autostart für HDMI..."
+echo "[6/6] Konfiguriere Kiosk-Autostart & Always-On für HDMI..."
 chmod +x "${INSTALL_DIR}/scripts/kiosk.sh"
+chmod +x "${INSTALL_DIR}/scripts/disable-sleep.sh"
+"${INSTALL_DIR}/scripts/disable-sleep.sh" || true
 
 # xinitrc für OS Lite Kiosk vorbereiten
 cat << XINIT_EOF > "${HOME}/.xinitrc"
 #!/usr/bin/env sh
 # Bildschirmschoner und Stromsparmodus deaktivieren
+xset s 0 0 || true
 xset s off || true
 xset -dpms || true
 xset s noblank || true
+xset dpms 0 0 0 || true
 
 # Openbox im Hintergrund
 openbox &

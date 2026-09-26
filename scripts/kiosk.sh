@@ -8,12 +8,30 @@ WAIT_COUNT=0
 
 echo "[HomePiBoard] Starte Kiosk-Modus für HDMI-Ausgabe..."
 
-# Bildschirmschoner und Energiesparmodus deaktivieren (X11)
+# Bildschirmschoner, DPMS und Energiesparmodus deaktivieren (X11 & Konsole)
 if command -v xset >/dev/null 2>&1; then
+  xset s 0 0 || true
   xset s off || true
   xset -dpms || true
   xset s noblank || true
+  xset dpms 0 0 0 || true
 fi
+
+if command -v setterm >/dev/null 2>&1; then
+  setterm --blank 0 --powersave off --powerdown 0 2>/dev/null || true
+fi
+
+# Dauerhafter Wächter: Verhindert Re-Blanking / DPMS-Standby alle 60 Sekunden
+(
+  while true; do
+    if command -v xset >/dev/null 2>&1; then
+      xset -dpms 2>/dev/null || true
+      xset s off 2>/dev/null || true
+      xset s 0 0 2>/dev/null || true
+    fi
+    sleep 60
+  done
+) &
 
 # Mauszeiger verstecken falls unclutter vorhanden
 if command -v unclutter >/dev/null 2>&1; then
