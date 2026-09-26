@@ -110,6 +110,12 @@ test('bindRadioWidgets wires toggle-play button and volume slider to audio eleme
   assert.equal(playCalled, true)
   assert.equal(classList.has('is-playing'), true)
   assert.equal(classList.has('is-paused'), false)
+
+  // Test clicking button again pauses audio
+  await boundButtonClickHandler!({ stopPropagation() {} })
+  assert.equal(mockAudio.paused, true)
+  assert.equal(classList.has('is-playing'), false)
+  assert.equal(classList.has('is-paused'), true)
 })
 
 test('bindRadioWidgets autoplays stream when is-playing is present', async () => {

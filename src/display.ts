@@ -396,22 +396,32 @@ export async function renderDisplayPage(app: HTMLElement) {
   const updateLiveWidgets = async () => {
     try {
       const mediaRes = await fetch('/api/media', { cache: 'no-store' })
-      if (mediaRes.ok) {
-        const mediaData = await mediaRes.json() as { title: string; artist: string; album: string; coverUrl?: string; isPlaying: boolean }
-        app.querySelectorAll('[data-media-widget]').forEach((widget) => {
-          const titleEl = widget.querySelector('[data-media-field="title"]')
-          const artistEl = widget.querySelector('[data-media-field="artist"]')
-          const albumEl = widget.querySelector('[data-media-field="album"]')
-          const eqBars = widget.querySelector('.media-equalizer-bars')
-          const playBadge = widget.querySelector('.media-badge-status')
-
-          if (titleEl && mediaData.title) titleEl.textContent = mediaData.title
-          if (artistEl && mediaData.artist) artistEl.textContent = mediaData.artist
-          if (albumEl && mediaData.album) albumEl.textContent = mediaData.album
-          if (eqBars) eqBars.classList.toggle('is-animated', Boolean(mediaData.isPlaying))
-          if (playBadge) playBadge.textContent = mediaData.isPlaying ? '▶' : '⏸'
-        })
+      if (!mediaRes.ok) return
+      const mediaData = await mediaRes.json() as { title?: string; artist?: string; album?: string; coverUrl?: string; isPlaying?: boolean }
+      
+      // Nur aktualisieren wenn ein externer Streamer (Spotify, HomeAssistant etc.) echte Daten sendet
+      if (!mediaData || !mediaData.title || mediaData.title === 'Keine Wiedergabe') {
+        return
       }
+
+      app.querySelectorAll<HTMLElement>('[data-media-widget]').forEach((widget) => {
+        // Falls das Widget ein lokales Webradio mit eigener Stream-URL abspielt, nicht überschreiben
+        if (widget.dataset.streamUrl) {
+          return
+        }
+
+        const titleEl = widget.querySelector('[data-media-field="title"]')
+        const artistEl = widget.querySelector('[data-media-field="artist"]')
+        const albumEl = widget.querySelector('[data-media-field="album"]')
+        const eqBars = widget.querySelector('.media-equalizer-bars')
+        const playIcon = widget.querySelector('.media-play-icon')
+
+        if (titleEl) titleEl.textContent = mediaData.title || ''
+        if (artistEl) artistEl.textContent = mediaData.artist || ''
+        if (albumEl) albumEl.textContent = mediaData.album || ''
+        if (eqBars) eqBars.classList.toggle('is-animated', Boolean(mediaData.isPlaying))
+        if (playIcon) playIcon.textContent = mediaData.isPlaying ? '⏸' : '▶'
+      })
     } catch {
       // live media offline
     }
@@ -425,7 +435,7 @@ export async function renderDisplayPage(app: HTMLElement) {
   if (settings.weatherCity) await loadWeather(settings.weatherCity, weather)
 }
 
-export function bindRadioWidgets(root: ParentNode) {
+export function bindRadioWidgets(root: ParentNode, options: { allowAutoplay?: boolean } = {}) {
   const widgets = root.querySelectorAll<HTMLElement>('[data-media-widget]')
   widgets.forEach((widget) => {
     const streamUrl = widget.dataset.streamUrl || ''
@@ -434,7 +444,6 @@ export function bindRadioWidgets(root: ParentNode) {
     const eqBars = widget.querySelector('.media-equalizer-bars')
     const statusText = widget.querySelector<HTMLElement>('[data-media-status]')
     const volumeSlider = widget.querySelector<HTMLInputElement>('[data-action="volume-slider"]')
-    const playIcon = widget.querySelector<HTMLElement>('.media-play-icon')
 
     if (!audio || !streamUrl) return
 
@@ -443,7 +452,26 @@ export function bindRadioWidgets(root: ParentNode) {
       widget.classList.toggle('is-paused', !isPlaying)
       widget.classList.toggle('is-waiting-for-gesture', false)
       if (eqBars) eqBars.classList.toggle('is-animated', isPlaying)
-      if (playIcon) playIcon.textContent = isPlaying ? '⏸' : '▶'
+      
+      const icons = typeof widget.querySelectorAll === 'function'
+        ? widget.querySelectorAll<HTMLElement>('.media-play-icon')
+        : (widget.querySelector('.media-play-icon') ? [widget.querySelector('.media-play-icon') as HTMLElement] : [])
+      if (icons.length) {
+        icons.forEach((icon) => {
+          icon.textContent = isPlaying ? '⏸' : '▶'
+        })
+      } else if (playBtn) {
+        playBtn.innerHTML = `<span class="media-play-icon" aria-hidden="true">${isPlaying ? '⏸' : '▶'}</span>`
+      }
+
+      if (playBtn) {
+        playBtn.setAttribute?.('title', isPlaying ? 'Wiedergabe pausieren' : 'Wiedergabe starten')
+        playBtn.setAttribute?.('aria-label', isPlaying ? 'Pause' : 'Abspielen')
+      }
+      const coverWrapper = widget.querySelector<HTMLElement>('.media-cover-wrapper')
+      if (coverWrapper) {
+        coverWrapper.setAttribute?.('title', isPlaying ? 'Wiedergabe pausieren' : 'Wiedergabe starten')
+      }
       if (statusText) statusText.textContent = isPlaying ? 'Auf Sendung' : 'Bereit'
     }
 
@@ -468,7 +496,10 @@ export function bindRadioWidgets(root: ParentNode) {
           widget.classList.toggle('is-paused', true)
           widget.classList.toggle('is-waiting-for-gesture', true)
           if (eqBars) eqBars.classList.toggle('is-animated', false)
-          if (playIcon) playIcon.textContent = '▶'
+          const icons = typeof widget.querySelectorAll === 'function'
+            ? widget.querySelectorAll<HTMLElement>('.media-play-icon')
+            : (widget.querySelector('.media-play-icon') ? [widget.querySelector('.media-play-icon') as HTMLElement] : [])
+          icons.forEach((icon) => { icon.textContent = '▶' })
           if (statusText) statusText.textContent = 'Tippen für Ton'
 
           const onFirstInteraction = () => {
@@ -498,8 +529,18 @@ export function bindRadioWidgets(root: ParentNode) {
 
     const togglePlay = () => {
       if (!audio.paused) {
-        audio.pause()
-        audio.src = ''
+        try {
+          audio.pause()
+          audio.src = ''
+          if (typeof audio.removeAttribute === 'function') {
+            audio.removeAttribute('src')
+          }
+          if (typeof audio.load === 'function') {
+            audio.load()
+          }
+        } catch {
+          // ignore
+        }
         setPlayingState(false)
         return Promise.resolve()
       } else {
@@ -507,9 +548,14 @@ export function bindRadioWidgets(root: ParentNode) {
       }
     }
 
-    playBtn?.addEventListener('click', (e) => {
-      e.stopPropagation()
-      return togglePlay()
+    const toggleTriggers = typeof widget.querySelectorAll === 'function'
+      ? widget.querySelectorAll<HTMLElement>('[data-action="toggle-play"]')
+      : (playBtn ? [playBtn] : [])
+    toggleTriggers.forEach((trigger) => {
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation()
+        return togglePlay()
+      })
     })
 
     volumeSlider?.addEventListener('input', (e) => {
@@ -521,11 +567,15 @@ export function bindRadioWidgets(root: ParentNode) {
     audio.addEventListener('play', () => setPlayingState(true))
     audio.addEventListener('pause', () => setPlayingState(false))
     audio.addEventListener('error', () => {
+      // Nur einen Fehler anzeigen, wenn Audio aktiv abspielen sollte und eine Quelle hat
+      if (audio.paused || !audio.getAttribute('src')) {
+        return
+      }
       setPlayingState(false)
       if (statusText) statusText.textContent = 'Stream-Fehler'
     })
 
-    if (widget.classList.contains('is-playing')) {
+    if (options.allowAutoplay !== false && widget.classList.contains('is-playing')) {
       void startAudio(true)
     }
   })

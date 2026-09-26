@@ -297,7 +297,7 @@ export function mediaContent(widget: DashboardWidget) {
   const isPlaying = widget.mediaPlaying !== false && title !== 'Keine Wiedergabe'
 
   return `<div class="media-widget-container ${isPlaying ? 'is-playing' : 'is-paused'}" data-media-widget data-stream-url="${escapeHtml(streamUrl)}">
-    <div class="media-cover-wrapper">
+    <div class="media-cover-wrapper" data-action="toggle-play" role="button" tabindex="0" title="${isPlaying ? 'Wiedergabe pausieren' : 'Wiedergabe starten'}" aria-label="Wiedergabe umschalten">
       ${coverUrl ? `<img class="media-cover" src="${escapeHtml(coverUrl)}" alt="Cover" />` : `
       <div class="media-cover-radio" aria-hidden="true">
         <svg class="media-radio-icon" viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
