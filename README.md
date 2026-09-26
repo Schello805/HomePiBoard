@@ -57,63 +57,74 @@ Nach dem ersten Start kann die PIN im Adminbereich unter **Sicherheit → Admin-
 
 Die zentrale Konfiguration wird beim ersten Speichern in `data/settings.json` angelegt. Wenn der Server vorübergehend nicht erreichbar ist, verwendet die Anzeige die zuletzt im Browser gespeicherte Konfiguration.
 
-## Installation auf einem Raspberry Pi
+## 🚀 Schnellanleitung: Installation auf dem Raspberry Pi
 
-Repository klonen und Build erstellen:
+### Schritt 1: Raspberry Pi OS Lite mit dem Raspberry Pi Imager flashen
+1. Lade den offiziellen [Raspberry Pi Imager](https://www.raspberrypi.com/software/) herunter und starte ihn.
+2. Wähle dein Raspberry-Pi-Modell aus (z. B. Raspberry Pi 4, 5 oder Zero 2W).
+3. Als Betriebssystem wählst du:
+   **Raspberry Pi OS (other) → Raspberry Pi OS Lite (64-bit)** *(oder 32-bit für ältere Modelle)*.
+4. Klicke auf **Weiter** und öffne die **OS-Anpassungen (Zahnrad / Einstellungen)**:
+   - **Hostname:** z. B. `raspberrypi`
+   - **Benutzername & Passwort:** z. B. Benutzer `pi` und dein Wunschpasswort
+   - **WLAN konfigurieren:** SSID und Passwort deines WLANs eintragen
+   - **SSH aktivieren:** Reiter *Dienste* → *SSH aktivieren* (Passwort-Authentifizierung)
+5. SD-Karte flashen, in den Raspberry Pi einstecken, per HDMI an den Bildschirm/TV anschließen und Strom anschließen.
 
-```bash
-git clone https://github.com/Schello805/HomePiBoard.git
-cd HomePiBoard
-npm install
-npm run check
-```
-
-### Systemd-Service
-
-`/etc/systemd/system/homepiboard.service` anlegen:
-
-```ini
-[Unit]
-Description=HomePiBoard signage server
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/HomePiBoard
-Environment=NODE_ENV=production
-Environment=PORT=4173
-Environment=HOMEPIBOARD_PIN=EINE_EIGENE_PIN_MIT_MINDESTENS_4_ZIFFERN
-ExecStart=/usr/bin/node /home/pi/HomePiBoard/server.mjs
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Anschließend aktivieren:
+### Schritt 2: Per SSH auf den Raspberry Pi verbinden
+Öffne auf deinem PC, Mac oder Laptop ein Terminal (oder PowerShell unter Windows):
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now homepiboard
-sudo systemctl status homepiboard
+ssh pi@raspberrypi.local
 ```
+*(Gib dein bei der Image-Erstellung vergebenes Passwort ein).*
 
-Pfade und Benutzername müssen gegebenenfalls an die lokale Installation angepasst werden.
-
-### Chromium im Kiosk-Modus
-
-Chromium kann nach dem Start der grafischen Sitzung mit folgendem Ziel geöffnet werden:
+### Schritt 3: Paketlisten aktualisieren & curl / git installieren
+Führe auf dem Pi folgenden Befehl aus:
 
 ```bash
-chromium --kiosk --noerrdialogs --disable-infobars http://localhost:4173/
+sudo apt update && sudo apt install -y curl git
 ```
 
-Je nach Raspberry-Pi-OS-Version kann der Programmname auch `chromium-browser` lauten. Der Befehl kann über die Autostart-Konfiguration der verwendeten Desktop-Sitzung gestartet werden.
+### Schritt 4: Vollautomatische 1-Klick-Installation starten
+Kopiere diesen One-Liner und drücke Enter:
 
-Ausführliche Hinweise zur Einrichtung, HDMI-Kiosk-Autostart und CEC-Bildschirmabschaltung findest du in [docs/raspberry-pi-hdmi.md](docs/raspberry-pi-hdmi.md). Ein fertiges Kiosk-Skript liegt unter [scripts/kiosk.sh](scripts/kiosk.sh).
+```bash
+curl -sSL https://raw.githubusercontent.com/Schello805/HomePiBoard/main/scripts/install.sh | bash
+```
+
+*Das Installationsskript erledigt alles vollautomatisch:*
+- Installiert die leichtgewichtige X11-Kioskumgebung & Chromium für OS Lite
+- Installiert Node.js 22 LTS
+- Klont das Repository nach `~/HomePiBoard` und baut das optimierte Bundle
+- Richtet den systemd-Dienst `homepiboard.service` für automatischen Start beim Booten ein
+- Richtet den randlosen Kiosk-Vollbildmodus auf dem HDMI-Ausgang ein
+- Versteckt den Mauszeiger nach 2 Sekunden Inaktivität
+
+---
+
+### Ausgabe am Ende der Installation
+
+Sobald die Installation durchgelaufen ist, zeigt dir das Terminal direkt alle wichtigen Verbindungsdaten an:
+
+```text
+===========================================================
+  🎉 HomePiBoard wurde erfolgreich installiert!
+===========================================================
+
+  📺 HDMI-Anzeige:       http://localhost:4173/ (startet auf HDMI)
+  🌐 Web-Anzeige:        http://192.168.1.50:4173/
+  ⚙️ Admin-Bereich:      http://192.168.1.50:4173/admin
+
+  🔑 Standard-PIN:       2468
+
+===========================================================
+  Tipp: Öffne http://192.168.1.50:4173/admin an deinem Laptop
+  oder Smartphone, um deine Anzeige zu konfigurieren.
+===========================================================
+```
+
+Nach einem Neustrat (`sudo reboot`) startet die HDMI-Anzeige automatisch im Vollbild. Ausführliche Tipps zu HDMI-Auflösungen und nächtlicher CEC-Abschaltung findest du in [docs/raspberry-pi-hdmi.md](docs/raspberry-pi-hdmi.md).
 
 ## API
 
