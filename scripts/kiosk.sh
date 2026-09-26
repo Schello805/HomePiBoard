@@ -51,10 +51,11 @@ while true; do
     --kiosk \
     --noerrdialogs \
     --disable-infobars \
+    --disable-translate \
     --no-first-run \
     --fast \
     --fast-start \
-    --disable-features=Translate,PreloadMediaEngagementData,MediaEngagementBypassAutoplayPolicies \
+    --disable-features=Translate,TranslateUI,PreloadMediaEngagementData,MediaEngagementBypassAutoplayPolicies \
     --disable-pinch \
     --overscroll-history-navigation=0 \
     --check-for-update-interval=31536000 \
