@@ -503,6 +503,10 @@ export async function renderAdminPage(app: HTMLElement) {
     if (previewTitle) previewTitle.textContent = widget.title
     editor.querySelector<HTMLElement>('[data-type-badge]')!.textContent = widgetTypeLabel(widget.type)
     editor.querySelector<HTMLElement>('[data-dimension-label]')!.textContent = `${widget.columns} × ${widget.rows}`
+    const overlaySize = editor.querySelector<HTMLElement>('[data-overlay-size]')
+    if (overlaySize) overlaySize.textContent = `${widget.columns} × ${widget.rows}`
+    const readout = editor.querySelector<HTMLElement>('[data-resize-readout]')
+    if (readout) readout.textContent = `${widget.columns} × ${widget.rows}`
     const content = editor.querySelector<HTMLTextAreaElement | HTMLInputElement>('[data-field="url"]')
     if (content) {
       if (widget.type === 'text') {
@@ -1085,11 +1089,17 @@ export async function renderAdminPage(app: HTMLElement) {
       if (markAsDirty) markDirty()
       return true
     }
+    let keyResizeTimeout: number | undefined
     resizeHandle.addEventListener('keydown', (event) => {
       const direction = resizeKeyboardDelta(event.key, event.shiftKey)
       if (!direction) return
       event.preventDefault()
+      editor.classList.add('is-resizing')
       applyResize(direction[0], direction[1])
+      window.clearTimeout(keyResizeTimeout)
+      keyResizeTimeout = window.setTimeout(() => {
+        editor.classList.remove('is-resizing')
+      }, 700)
     })
     let activeResizePointer: number | null = null
     resizeHandle.addEventListener('pointerdown', (event) => {

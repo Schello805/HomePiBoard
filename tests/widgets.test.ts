@@ -414,5 +414,16 @@ test('editorMarkup exposes German radio preset selector and stream test button',
   assert.match(radioEditor, /data-field="mediaTitle"/)
 })
 
+test('editorMarkup includes a widget resize overlay with size readout', () => {
+  const editor = renderWidget({
+    id: 'w-overlay',
+    type: 'web',
+    title: 'Website',
+    url: 'https://example.com',
+    columns: 24,
+    rows: 9,
+  }, true)
 
-
+  assert.match(editor, /class="widget-resize-overlay"/)
+  assert.match(editor, /data-overlay-size>24 × 9</)
+})

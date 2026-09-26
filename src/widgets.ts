@@ -498,6 +498,12 @@ function editorMarkup(widget: DashboardWidget, index: number) {
         </div>
       </div>
     </div>
+    <div class="widget-resize-overlay" data-resize-overlay aria-hidden="true">
+      <div class="widget-resize-overlay-badge">
+        <span class="widget-resize-overlay-size" data-overlay-size>${widget.columns} × ${widget.rows}</span>
+        <span class="widget-resize-overlay-label">Spalten × Zeilen</span>
+      </div>
+    </div>
     <button class="widget-resize-handle" type="button" data-resize-handle aria-label="Widgetgröße ziehen. Pfeiltasten ändern Breite und Höhe." aria-describedby="${controlId}-dimensions" title="Ecke ziehen, um Größe anzupassen (Breite &amp; Höhe)">
       <output class="widget-resize-readout" data-resize-readout aria-hidden="true">${widget.columns} × ${widget.rows}</output>
       <svg class="resize-handle-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="2" y2="12"/><line x1="12" y1="6" x2="6" y2="12"/><line x1="12" y1="10" x2="10" y2="12"/></svg>
