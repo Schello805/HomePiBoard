@@ -869,6 +869,17 @@ button:disabled { cursor: not-allowed; opacity: 0.42; }
   font-size: 1.5rem;
   line-height: 1;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 36px;
+}
+.waste-wheelie-bin {
+  width: 26px;
+  height: 32px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
 }
 .waste-details {
   display: flex;

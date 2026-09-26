@@ -22,6 +22,49 @@ export interface ParsedWasteItem {
   isUrgent: boolean
 }
 
+export function renderWheelieBinSvg(color: string): string {
+  return `<svg class="waste-wheelie-bin" viewBox="0 0 28 34" width="28" height="34" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="6" cy="29" r="3.5" fill="#171923" stroke="#4a5568" stroke-width="1.2"/><circle cx="22" cy="29" r="3.5" fill="#171923" stroke="#4a5568" stroke-width="1.2"/><circle cx="6" cy="29" r="1.2" fill="#a0aec0"/><circle cx="22" cy="29" r="1.2" fill="#a0aec0"/><path d="M5.5 9.5H22.5L20.5 28.5C20.4 29.6 19.5 30.5 18.4 30.5H9.6C8.5 30.5 7.6 29.6 7.5 28.5L5.5 9.5Z" fill="${escapeHtml(color)}" stroke="rgba(0,0,0,0.35)" stroke-width="1"/><path d="M10 13V26M14 13V26M18 13V26" stroke="rgba(0,0,0,0.22)" stroke-width="1.2" stroke-linecap="round"/><path d="M10.7 13V26M14.7 13V26M18.7 13V26" stroke="rgba(255,255,255,0.18)" stroke-width="0.8" stroke-linecap="round"/><path d="M3.5 8.5H5.5" stroke="#2d3748" stroke-width="2" stroke-linecap="round"/><rect x="3.5" y="6" width="21" height="3.5" rx="1.5" fill="${escapeHtml(color)}" stroke="rgba(0,0,0,0.4)" stroke-width="1"/><path d="M11 3.5C11 2.7 11.7 2 12.5 2H15.5C16.3 2 17 2.7 17 3.5V6H11V3.5Z" fill="${escapeHtml(color)}" stroke="rgba(0,0,0,0.3)" stroke-width="0.8"/></svg>`
+}
+
+function looksLikeDate(text: string): boolean {
+  const trimmed = text.trim().toLowerCase()
+  if (!trimmed) return false
+  if (/^(heute|morgen|übermorgen|in \d+|nächste|naechste)\b/i.test(trimmed)) return true
+  if (/^(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|mo|di|mi|do|fr|sa|so)\b/i.test(trimmed)) return true
+  if (/^\d{1,2}\.\d{1,2}/.test(trimmed)) return true
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return true
+  if (/\b(tage|tagen|woche|wochen)\b/i.test(trimmed)) return true
+  return false
+}
+
+function hasWasteKeyword(text: string): boolean {
+  const lower = text.toLowerCase()
+  return (
+    lower.includes('müll') ||
+    lower.includes('muell') ||
+    lower.includes('tonne') ||
+    lower.includes('sack') ||
+    lower.includes('abfall') ||
+    lower.includes('abfuhr') ||
+    lower.includes('papier') ||
+    lower.includes('pappe') ||
+    lower.includes('karton') ||
+    lower.includes('bio') ||
+    lower.includes('grün') ||
+    lower.includes('gruen') ||
+    lower.includes('kompost') ||
+    lower.includes('gelb') ||
+    lower.includes('wertstoff') ||
+    lower.includes('plastik') ||
+    lower.includes('glas') ||
+    lower.includes('rest') ||
+    lower.includes('sperr') ||
+    lower.includes('schad') ||
+    lower.includes('problem') ||
+    lower.includes('dual')
+  )
+}
+
 export function parseWasteItems(raw: string | undefined, now = new Date()): ParsedWasteItem[] {
   const content = (raw && raw.trim()) ? raw : 'Restmüll: In 2 Tagen\nBiomüll: Donnerstag\nGelber Sack: Nächste Woche\nPapiermüll: In 10 Tagen'
   const lines = content.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean)
@@ -39,35 +82,47 @@ export function parseWasteItems(raw: string | undefined, now = new Date()): Pars
 
     const colonIndex = line.lastIndexOf(':')
     if (colonIndex !== -1) {
-      name = line.slice(0, colonIndex).trim()
-      date = line.slice(colonIndex + 1).trim()
+      const part1 = line.slice(0, colonIndex).trim()
+      const part2 = line.slice(colonIndex + 1).trim()
+
+      if ((looksLikeDate(part1) && !looksLikeDate(part2)) || (hasWasteKeyword(part2) && !hasWasteKeyword(part1))) {
+        name = part2
+        date = part1
+      } else {
+        name = part1
+        date = part2
+      }
     }
 
     const lower = name.toLowerCase()
     let color = customColor
-    let icon = '🗑️'
+    let icon = ''
 
-    if (lower.includes('bio') || lower.includes('grün') || lower.includes('kompost') || lower.includes('garten') || lower.includes('baum')) {
+    if (lower.includes('tannen') || lower.includes('weihnacht')) {
       if (!color) color = '#38a169'
-      icon = lower.includes('tannen') || lower.includes('weihnacht') ? '🎄' : '🍏'
-    } else if (lower.includes('gelb') || lower.includes('wertstoff') || lower.includes('plastik') || lower.includes('sack') || lower.includes('dual')) {
-      if (!color) color = '#d69e2e'
-      icon = '♻️'
-    } else if (lower.includes('papier') || lower.includes('blau') || lower.includes('pappe') || lower.includes('karton')) {
-      if (!color) color = '#3182ce'
-      icon = '📦'
-    } else if (lower.includes('glas')) {
-      if (!color) color = '#319795'
-      icon = '🍾'
+      icon = '🎄'
     } else if (lower.includes('sperr')) {
       if (!color) color = '#805ad5'
       icon = '🛋️'
     } else if (lower.includes('schad') || lower.includes('problem') || lower.includes('gift') || lower.includes('gefahr')) {
       if (!color) color = '#e53e3e'
       icon = '⚠️'
+    } else if (lower.includes('bio') || lower.includes('grün') || lower.includes('kompost') || lower.includes('garten') || lower.includes('braun')) {
+      if (!color) color = lower.includes('braun') ? '#8c5843' : '#38a169'
+      icon = renderWheelieBinSvg(color)
+    } else if (lower.includes('gelb') || lower.includes('wertstoff') || lower.includes('plastik') || lower.includes('sack') || lower.includes('dual')) {
+      if (!color) color = '#eab308'
+      icon = renderWheelieBinSvg(color)
+    } else if (lower.includes('papier') || lower.includes('blau') || lower.includes('pappe') || lower.includes('karton')) {
+      if (!color) color = '#3182ce'
+      icon = renderWheelieBinSvg(color)
+    } else if (lower.includes('glas')) {
+      if (!color) color = '#319795'
+      icon = renderWheelieBinSvg(color)
     } else {
-      if (!color) color = '#718096'
-      icon = '🗑️'
+      // Standard: Restmüll / Schwarze Tonne
+      if (!color) color = '#374151'
+      icon = renderWheelieBinSvg(color)
     }
 
     let badgeText = date || 'Geplant'
@@ -75,12 +130,16 @@ export function parseWasteItems(raw: string | undefined, now = new Date()): Pars
     const lowerDate = date.toLowerCase()
     if (lowerDate.includes('heute') || lowerDate.includes('morgen') || lowerDate === '1 tag' || lowerDate === 'in 1 tag') {
       isUrgent = true
+      if (lowerDate.includes('heute')) badgeText = 'Heute!'
+      else if (lowerDate.includes('morgen') && !lowerDate.includes('übermorgen')) badgeText = 'Morgen!'
     }
 
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+
+    // 1. ISO-Datum: YYYY-MM-DD
     const isoMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})$/)
     if (isoMatch) {
       const target = new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]))
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
       const diffDays = Math.round((target.getTime() - startOfToday) / (1000 * 60 * 60 * 24))
       if (diffDays < 0) {
         badgeText = 'Vorüber'
@@ -93,7 +152,60 @@ export function parseWasteItems(raw: string | undefined, now = new Date()): Pars
       } else if (diffDays > 1 && diffDays <= 7) {
         badgeText = `In ${diffDays} Tagen`
       } else if (diffDays > 7) {
-        badgeText = `${isoMatch[3]}.${isoMatch[2]}.`
+        badgeText = `In ${diffDays} Tagen`
+      }
+    }
+
+    // 2. Deutsches Datumsformat: DD.MM. oder DD.MM.YYYY
+    const germanMatch = date.match(/^(\d{1,2})\.(\d{1,2})\.?(?:(\d{4}))?$/)
+    if (germanMatch) {
+      const day = Number(germanMatch[1])
+      const month = Number(germanMatch[2]) - 1
+      const year = germanMatch[3] ? Number(germanMatch[3]) : now.getFullYear()
+      const target = new Date(year, month, day)
+      let diffDays = Math.round((target.getTime() - startOfToday) / (1000 * 60 * 60 * 24))
+      if (diffDays < -30 && !germanMatch[3]) {
+        target.setFullYear(year + 1)
+        diffDays = Math.round((target.getTime() - startOfToday) / (1000 * 60 * 60 * 24))
+      }
+      if (diffDays < 0) {
+        badgeText = 'Vorüber'
+      } else if (diffDays === 0) {
+        badgeText = 'Heute!'
+        isUrgent = true
+      } else if (diffDays === 1) {
+        badgeText = 'Morgen!'
+        isUrgent = true
+      } else if (diffDays > 1 && diffDays <= 7) {
+        badgeText = `In ${diffDays} Tagen`
+      } else if (diffDays > 7) {
+        badgeText = `In ${diffDays} Tagen`
+      }
+    }
+
+    // 3. Wochentage: Montag, Dienstag, ...
+    const weekdayMap: Record<string, number> = {
+      sonntag: 0, so: 0,
+      montag: 1, mo: 1,
+      dienstag: 2, di: 2,
+      mittwoch: 3, mi: 3,
+      donnerstag: 4, do: 4,
+      freitag: 5, fr: 5,
+      samstag: 6, sa: 6,
+    }
+    const cleanWeekday = lowerDate.replace(/[^a-zäöü]/g, '')
+    if (cleanWeekday in weekdayMap) {
+      const targetDay = weekdayMap[cleanWeekday]!
+      const currentDay = now.getDay()
+      const diffDays = (targetDay - currentDay + 7) % 7
+      if (diffDays === 0) {
+        badgeText = 'Heute!'
+        isUrgent = true
+      } else if (diffDays === 1) {
+        badgeText = 'Morgen!'
+        isUrgent = true
+      } else {
+        badgeText = `In ${diffDays} Tagen`
       }
     }
 

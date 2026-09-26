@@ -250,6 +250,24 @@ test('waste widget parses items and renders bin cards with urgency badges', () =
   assert.match(widgetHtml, /Papiermüll/)
 })
 
+test('parseWasteItems renders realistic wheelie bin SVGs and handles Date: WasteType order', () => {
+  const fakeNow = new Date(2026, 8, 26) // Saturday, 2026-09-26
+  const items = parseWasteItems('Morgen: Gelber Sack\nMontag: Restmüll', fakeNow)
+
+  assert.equal(items[0].name, 'Gelber Sack')
+  assert.equal(items[0].date, 'Morgen')
+  assert.equal(items[0].badgeText, 'Morgen!')
+  assert.equal(items[0].isUrgent, true)
+  assert.match(items[0].icon, /waste-wheelie-bin/)
+  assert.match(items[0].icon, /#eab308/) // Yellow wheelie bin
+
+  assert.equal(items[1].name, 'Restmüll')
+  assert.equal(items[1].date, 'Montag')
+  assert.equal(items[1].badgeText, 'In 2 Tagen')
+  assert.match(items[1].icon, /waste-wheelie-bin/)
+  assert.match(items[1].icon, /#374151/) // Black/anthracite wheelie bin
+})
+
 test('energy widget renders solar, house, grid, and battery values with data attributes', () => {
   const widgetHtml = renderWidgetContent({
     id: 'energy-1',
