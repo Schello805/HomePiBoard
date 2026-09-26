@@ -17,10 +17,14 @@ npm install
 echo "==> 3/6: Baue Frontend..."
 npm run build
 
-echo "==> 4/6: Sichere Dauerbetrieb ab (Display- & Standby-Schutz)..."
+echo "==> 4/6: Sichere Dauerbetrieb & HDMI-Audio ab..."
 if [ -f "./scripts/disable-sleep.sh" ]; then
   chmod +x ./scripts/disable-sleep.sh
   ./scripts/disable-sleep.sh || true
+fi
+if [ -f "./scripts/setup-hdmi-audio.sh" ]; then
+  chmod +x ./scripts/setup-hdmi-audio.sh
+  ./scripts/setup-hdmi-audio.sh || true
 fi
 
 echo "==> 5/6: Starte Backend-Dienst neu..."

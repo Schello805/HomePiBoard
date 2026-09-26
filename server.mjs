@@ -303,6 +303,11 @@ export async function performSystemUpdate({ cwd = rootDirectory, restartProcess 
     // ignore
   }
   try {
+    await exec('bash', ['./scripts/setup-hdmi-audio.sh'], { cwd, timeout: 20000 })
+  } catch {
+    // ignore
+  }
+  try {
     await exec('pkill', ['-f', 'chromium|chrome'], { timeout: 3000 })
     log.push('✓ Kiosk-Browser auf HDMI neu geladen.')
   } catch {

@@ -63,6 +63,12 @@ fi
 sed -i 's/"exited_cleanly":false/"exited_cleanly":true/' ~/.config/chromium/Default/Preferences 2>/dev/null || true
 sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/' ~/.config/chromium/Default/Preferences 2>/dev/null || true
 
+# HDMI Audio entmuten und Ausgang konfigurieren
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/setup-hdmi-audio.sh" ]; then
+  bash "$SCRIPT_DIR/setup-hdmi-audio.sh" 2>/dev/null || true
+fi
+
 # Kiosk-Schleife: Startet Browser automatisch neu, falls er unerwartet schließt
 while true; do
   "$CHROMIUM_BIN" \
@@ -79,7 +85,7 @@ while true; do
     --check-for-update-interval=31536000 \
     --autoplay-policy=no-user-gesture-required \
     --disable-gesture-requirement-for-media-playback \
-    --enable-features=AudioServiceOutOfProcess \
+    --alsa-output-device=default \
     --allow-running-insecure-content \
     "$URL" || true
   sleep 2
