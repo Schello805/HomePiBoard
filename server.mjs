@@ -3,6 +3,7 @@ import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } fr
 import { lookup as dnsLookup } from 'node:dns/promises'
 import { mkdir, open, readFile, realpath, rename, unlink } from 'node:fs/promises'
 import { isIP } from 'node:net'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
@@ -164,6 +165,55 @@ async function verifyPinCredential(pin, credential, scryptFunction = scrypt) {
   return expected.length === actual.length && timingSafeEqual(expected, actual)
 }
 
+export function getSystemNetwork(networkInterfaces = os.networkInterfaces()) {
+  const addresses = []
+  for (const [name, list] of Object.entries(networkInterfaces || {})) {
+    if (!list) continue
+    for (const iface of list) {
+      if (!iface.internal && iface.family === 'IPv4') {
+        addresses.push({ name, address: iface.address, netmask: iface.netmask })
+      }
+    }
+  }
+  return {
+    primaryIp: addresses[0]?.address || '127.0.0.1',
+    addresses,
+  }
+}
+
+export async function getSystemInfo({ thermalPath = '/sys/class/thermal/thermal_zone0/temp', networkInterfaces } = {}) {
+  const total = os.totalmem()
+  const free = os.freemem()
+  const used = Math.max(0, total - free)
+  let cpuTemp = null
+  try {
+    const raw = await readFile(thermalPath, 'utf8')
+    const milli = Number(raw.trim())
+    if (Number.isFinite(milli) && milli > 0) {
+      cpuTemp = Math.round(milli / 100) / 10
+    }
+  } catch {
+    // Thermal zone file not present or unreadable
+  }
+
+  return {
+    hostname: os.hostname(),
+    platform: process.platform,
+    arch: process.arch,
+    nodeVersion: process.version,
+    uptimeSeconds: Math.round(os.uptime()),
+    loadAvg: os.loadavg().map((val) => Math.round(val * 100) / 100),
+    cpuTemp,
+    memory: {
+      totalMb: Math.round(total / (1024 * 1024)),
+      freeMb: Math.round(free / (1024 * 1024)),
+      usedMb: Math.round(used / (1024 * 1024)),
+      percent: total > 0 ? Math.round((used / total) * 100) : 0,
+    },
+    network: getSystemNetwork(networkInterfaces),
+  }
+}
+
 export function parentDirectoriesToSync(existingAncestor, targetDirectory) {
   const relative = path.relative(existingAncestor, targetDirectory)
   if (!relative) return []
@@ -277,6 +327,7 @@ export function createHomePiBoardServer({
   scryptFunction = scrypt,
   calendarFetch = fetch,
   lookupFunction = dnsLookup,
+  thermalPath = '/sys/class/thermal/thermal_zone0/temp',
 } = {}) {
   if (typeof adminPin !== 'string' || adminPin.length === 0) {
     throw new Error('HOMEPIBOARD_PIN muss explizit gesetzt sein.')
@@ -383,6 +434,12 @@ export function createHomePiBoardServer({
     try {
       if (url.pathname === '/api/settings' && request.method === 'GET') {
         json(response, 200, await loadSettings(settingsFile))
+        return
+      }
+
+      if (url.pathname === '/api/system' && request.method === 'GET') {
+        const info = await getSystemInfo({ thermalPath })
+        json(response, 200, info)
         return
       }
 

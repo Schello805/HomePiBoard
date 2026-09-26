@@ -25,6 +25,19 @@ export function clearPinError(errorElement: { textContent: string }) {
   errorElement.textContent = ''
 }
 
+export function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const mins = Math.floor((seconds % 3600) / 60)
+  if (days > 0) return `${days}d ${hours}h ${mins}m`
+  if (hours > 0) return `${hours}h ${mins}m`
+  return `${mins}m`
+}
+
+export function formatCpuTemp(temp: number | null): string {
+  return temp !== null ? `${temp.toFixed(1)} °C` : 'N/A'
+}
+
 export function resizeWidgetDimensions(type: WidgetType, columns: number, rows: number, deltaColumns: number, deltaRows: number, currentColumns = columns, currentRows = rows) {
   const constraints = widgetConstraints[type]
   const resizedColumns = Math.max(constraints.minColumns, Math.min(MAX_WIDGET_COLUMNS, Math.round(columns + deltaColumns)))
@@ -123,6 +136,7 @@ export async function renderAdminPage(app: HTMLElement) {
         <div class="admin-global-fields">
           <label class="topbar-field" for="admin-location"><span>Name</span><input id="admin-location" maxlength="24" value="${escapeHtml(settings.location)}" placeholder="Zuhause" /></label>
           <label class="topbar-field" for="admin-weather-city"><span>Wetter</span><input id="admin-weather-city" maxlength="40" value="${escapeHtml(settings.weatherCity)}" placeholder="Berlin" /></label>
+          <button class="topbar-btn" id="display-settings-button" type="button" title="Display-, HDMI- & Systemeinstellungen">⚙ System & HDMI</button>
           <button class="topbar-btn" id="change-pin-button" type="button" title="Admin-PIN ändern">🔑 PIN</button>
         </div>
         <div class="admin-header-actions">
@@ -137,6 +151,7 @@ export async function renderAdminPage(app: HTMLElement) {
         <div class="admin-subbar-info">
           <span class="widget-count" id="widget-count"></span>
           <span class="grid-hint">${GRID_COLUMNS} × ${GRID_ROWS} Raster • Ecke ↘ ziehen • ⚙ Einstellungen</span>
+          <button class="system-status-pill" id="system-status-pill" type="button" title="Raspberry Pi Telemetrie anzeigen">Pi Telemetrie …</button>
         </div>
         <div class="add-widget-menu" aria-label="Widget hinzufügen">
           <span class="add-label">+ Widget:</span>
@@ -159,7 +174,89 @@ export async function renderAdminPage(app: HTMLElement) {
     </form>
   </main>
   <dialog class="pin-dialog" id="pin-dialog"><form method="dialog" id="pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Admin-Bereich</span><h2>PIN eingeben</h2></div><button class="close-button" id="pin-close" type="button" aria-label="Schließen">×</button></div><label for="admin-pin">Admin-PIN<input id="admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><p class="pin-error" id="pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="pin-cancel" type="button">Abbrechen</button><button class="save-button" id="pin-submit" value="default">Entsperren</button></div></form></dialog>
-  <dialog class="pin-dialog" id="change-pin-dialog"><form id="change-pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Sicherheit</span><h2>Admin-PIN ändern</h2></div><button class="close-button" id="change-pin-close" type="button" aria-label="Schließen">×</button></div><label for="current-admin-pin">Aktuelle PIN<input id="current-admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><label for="new-admin-pin">Neue PIN<span>4 bis 64 Ziffern</span><input id="new-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required /></label><label for="confirm-admin-pin">Neue PIN wiederholen<input id="confirm-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required /></label><p class="pin-error" id="change-pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="change-pin-cancel" type="button">Abbrechen</button><button class="save-button" id="change-pin-submit" type="submit">PIN speichern</button></div></form></dialog>`
+  <dialog class="pin-dialog" id="change-pin-dialog"><form id="change-pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Sicherheit</span><h2>Admin-PIN ändern</h2></div><button class="close-button" id="change-pin-close" type="button" aria-label="Schließen">×</button></div><label for="current-admin-pin">Aktuelle PIN<input id="current-admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><label for="new-admin-pin">Neue PIN<span>4 bis 64 Ziffern</span><input id="new-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required /></label><label for="confirm-admin-pin">Neue PIN wiederholen<input id="confirm-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required /></label><p class="pin-error" id="change-pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="change-pin-cancel" type="button">Abbrechen</button><button class="save-button" id="change-pin-submit" type="submit">PIN speichern</button></div></form></dialog>
+  <dialog class="pin-dialog system-settings-dialog" id="system-settings-dialog">
+    <div class="system-dialog-content">
+      <div class="dialog-heading">
+        <div>
+          <span class="widget-kicker">Raspberry Pi & HDMI</span>
+          <h2>System- & Display-Einstellungen</h2>
+        </div>
+        <button class="close-button" id="system-settings-close" type="button" aria-label="Schließen">×</button>
+      </div>
+
+      <section class="system-dialog-section">
+        <h3 class="system-section-title">📺 HDMI & Bildschirm</h3>
+        <div class="system-field-row">
+          <label for="admin-display-scale">
+            <span>Display-Zoom / Skalierung</span>
+            <select id="admin-display-scale">
+              <option value="80" ${(settings.displayScale || 100) === 80 ? 'selected' : ''}>80% (Sehr kompakt)</option>
+              <option value="90" ${(settings.displayScale || 100) === 90 ? 'selected' : ''}>90% (Kompakt)</option>
+              <option value="100" ${(settings.displayScale || 100) === 100 ? 'selected' : ''}>100% (Standard)</option>
+              <option value="110" ${(settings.displayScale || 100) === 110 ? 'selected' : ''}>110% (Leicht vergrößert)</option>
+              <option value="125" ${(settings.displayScale || 100) === 125 ? 'selected' : ''}>125% (TV-Empfehlung ab 2m)</option>
+              <option value="150" ${(settings.displayScale || 100) === 150 ? 'selected' : ''}>150% (Groß)</option>
+            </select>
+          </label>
+          <div class="system-field-info">
+            <span>Erkannte HDMI-Auflösung:</span>
+            <strong id="admin-detected-resolution">-- × --</strong>
+          </div>
+        </div>
+        <label class="system-checkbox-label" for="admin-hide-cursor">
+          <input type="checkbox" id="admin-hide-cursor" ${settings.hideCursor !== false ? 'checked' : ''} />
+          <span>Mauszeiger auf der HDMI-Anzeige automatisch ausblenden (nach 2 Sek. Inaktivität)</span>
+        </label>
+      </section>
+
+      <section class="system-dialog-section">
+        <h3 class="system-section-title">🕒 Uhrzeit, Sprache & Datum</h3>
+        <div class="system-field-row">
+          <label for="admin-locale">
+            <span>Sprache / Datumsformat</span>
+            <select id="admin-locale">
+              <option value="de-DE" ${(settings.locale || 'de-DE') === 'de-DE' ? 'selected' : ''}>Deutsch (Deutschland)</option>
+              <option value="de-AT" ${(settings.locale || 'de-DE') === 'de-AT' ? 'selected' : ''}>Deutsch (Österreich)</option>
+              <option value="de-CH" ${(settings.locale || 'de-DE') === 'de-CH' ? 'selected' : ''}>Deutsch (Schweiz)</option>
+              <option value="en-US" ${(settings.locale || 'de-DE') === 'en-US' ? 'selected' : ''}>English (US)</option>
+              <option value="en-GB" ${(settings.locale || 'de-DE') === 'en-GB' ? 'selected' : ''}>English (UK)</option>
+              <option value="fr-FR" ${(settings.locale || 'de-DE') === 'fr-FR' ? 'selected' : ''}>Français</option>
+            </select>
+          </label>
+          <label for="admin-timezone">
+            <span>Zeitzone</span>
+            <select id="admin-timezone">
+              <option value="auto" ${(settings.timezone || 'auto') === 'auto' ? 'selected' : ''}>Automatisch (Systemzeit)</option>
+              <option value="Europe/Berlin" ${(settings.timezone || 'auto') === 'Europe/Berlin' ? 'selected' : ''}>Europe/Berlin (Deutschland)</option>
+              <option value="Europe/Vienna" ${(settings.timezone || 'auto') === 'Europe/Vienna' ? 'selected' : ''}>Europe/Vienna (Österreich)</option>
+              <option value="Europe/Zurich" ${(settings.timezone || 'auto') === 'Europe/Zurich' ? 'selected' : ''}>Europe/Zurich (Schweiz)</option>
+              <option value="UTC" ${(settings.timezone || 'auto') === 'UTC' ? 'selected' : ''}>UTC</option>
+            </select>
+          </label>
+        </div>
+        <label class="system-checkbox-label" for="admin-show-seconds">
+          <input type="checkbox" id="admin-show-seconds" ${settings.showSeconds ? 'checked' : ''} />
+          <span>Sekunden in der Digitaluhr anzeigen (z. B. 12:45:30)</span>
+        </label>
+      </section>
+
+      <section class="system-dialog-section">
+        <div class="system-section-header">
+          <h3 class="system-section-title">📊 Live Raspberry Pi Telemetrie</h3>
+          <button class="topbar-btn" id="telemetry-refresh-btn" type="button" title="Telemetrie aktualisieren">↻ Aktualisieren</button>
+        </div>
+        <div id="system-telemetry-container" class="system-telemetry-container">
+          <span>Lade Telemetrie …</span>
+        </div>
+      </section>
+
+      <div class="dialog-actions">
+        <button class="secondary-button" id="system-settings-cancel" type="button">Abbrechen</button>
+        <button class="save-button" id="system-settings-apply" type="button">Übernehmen</button>
+      </div>
+    </div>
+  </dialog>`
 
   const editorList = app.querySelector<HTMLElement>('#widget-editors')!
   const message = app.querySelector<HTMLElement>('#save-message')!
@@ -186,6 +283,20 @@ export async function renderAdminPage(app: HTMLElement) {
   const newPinInput = app.querySelector<HTMLInputElement>('#new-admin-pin')!
   const confirmPinInput = app.querySelector<HTMLInputElement>('#confirm-admin-pin')!
   const changePinError = app.querySelector<HTMLElement>('#change-pin-error')!
+  const displaySettingsButton = app.querySelector<HTMLButtonElement>('#display-settings-button')!
+  const systemSettingsDialog = app.querySelector<HTMLDialogElement>('#system-settings-dialog')!
+  const systemSettingsClose = app.querySelector<HTMLButtonElement>('#system-settings-close')!
+  const systemSettingsCancel = app.querySelector<HTMLButtonElement>('#system-settings-cancel')!
+  const systemSettingsApply = app.querySelector<HTMLButtonElement>('#system-settings-apply')!
+  const displayScaleSelect = app.querySelector<HTMLSelectElement>('#admin-display-scale')!
+  const detectedResolutionEl = app.querySelector<HTMLElement>('#admin-detected-resolution')!
+  const hideCursorCheckbox = app.querySelector<HTMLInputElement>('#admin-hide-cursor')!
+  const localeSelect = app.querySelector<HTMLSelectElement>('#admin-locale')!
+  const timezoneSelect = app.querySelector<HTMLSelectElement>('#admin-timezone')!
+  const showSecondsCheckbox = app.querySelector<HTMLInputElement>('#admin-show-seconds')!
+  const telemetryRefreshBtn = app.querySelector<HTMLButtonElement>('#telemetry-refresh-btn')!
+  const systemTelemetryContainer = app.querySelector<HTMLElement>('#system-telemetry-container')!
+  const systemStatusPill = app.querySelector<HTMLButtonElement>('#system-status-pill')!
   let dirty = false
   let pinRequest: Promise<string | null> | null = null
 
@@ -1048,6 +1159,97 @@ export async function renderAdminPage(app: HTMLElement) {
     }
   })
 
+  const updateResolutionDisplay = () => {
+    const currentRes = typeof window !== 'undefined' && window.screen
+      ? `${window.screen.width} × ${window.screen.height} (${Math.round((window.devicePixelRatio || 1) * 100)}% DPI)`
+      : '1920 × 1080'
+    const storedRes = typeof localStorage !== 'undefined' ? localStorage.getItem('homepiboard-display-resolution') : null
+    detectedResolutionEl.textContent = storedRes ? `${storedRes} (dieses Gerät: ${currentRes})` : currentRes
+  }
+
+  async function refreshTelemetry() {
+    try {
+      const res = await fetch('/api/system', { method: 'GET', cache: 'no-store' })
+      if (!res.ok) throw new Error('system-telemetry-failed')
+      const data = await res.json() as {
+        hostname: string
+        platform: string
+        arch: string
+        nodeVersion: string
+        uptimeSeconds: number
+        loadAvg: number[]
+        cpuTemp: number | null
+        memory: { totalMb: number; freeMb: number; usedMb: number; percent: number }
+        network: { primaryIp: string; addresses: Array<{ name: string; address: string }> }
+      }
+
+      const tempStr = data.cpuTemp !== null ? formatCpuTemp(data.cpuTemp) : ''
+      const ramStr = `${data.memory.percent}% RAM`
+      const ipStr = data.network.primaryIp
+      systemStatusPill.textContent = [ipStr, tempStr, ramStr].filter(Boolean).join(' • ')
+      systemStatusPill.title = `IP: ${ipStr} | CPU: ${tempStr || 'N/A'} | RAM: ${data.memory.usedMb}/${data.memory.totalMb} MB (${ramStr})`
+
+      const uptimeStr = formatUptime(data.uptimeSeconds)
+      const loadStr = data.loadAvg.join(', ')
+
+      systemTelemetryContainer.innerHTML = `
+        <div class="system-telemetry-grid">
+          <div class="telemetry-card">
+            <span class="telemetry-label">🌐 Lokale IP (HDMI / LAN)</span>
+            <div class="telemetry-val-group">
+              <strong class="telemetry-val">${escapeHtml(ipStr)}</strong>
+              <a class="telemetry-link" href="http://${escapeHtml(ipStr)}:4173/admin" target="_blank" rel="noreferrer" title="Im Browser öffnen">Öffnen ↗</a>
+            </div>
+          </div>
+          <div class="telemetry-card">
+            <span class="telemetry-label">🌡️ CPU-Temperatur</span>
+            <strong class="telemetry-val ${data.cpuTemp !== null && data.cpuTemp > 70 ? 'is-warning' : ''}">${escapeHtml(tempStr || 'N/A (nicht Linux)')}</strong>
+          </div>
+          <div class="telemetry-card">
+            <span class="telemetry-label">💾 Arbeitsspeicher (RAM)</span>
+            <strong class="telemetry-val">${data.memory.usedMb} / ${data.memory.totalMb} MB <small>(${data.memory.percent}%)</small></strong>
+          </div>
+          <div class="telemetry-card">
+            <span class="telemetry-label">⚡ CPU-Auslastung (Load)</span>
+            <strong class="telemetry-val">${escapeHtml(loadStr)}</strong>
+          </div>
+          <div class="telemetry-card">
+            <span class="telemetry-label">⏱️ Systemlaufzeit (Uptime)</span>
+            <strong class="telemetry-val">${escapeHtml(uptimeStr)}</strong>
+          </div>
+          <div class="telemetry-card">
+            <span class="telemetry-label">🖥️ Betriebssystem / Host</span>
+            <strong class="telemetry-val"><small>${escapeHtml(data.hostname)} (${escapeHtml(data.platform)} ${escapeHtml(data.arch)})</small></strong>
+          </div>
+        </div>
+      `
+    } catch {
+      systemStatusPill.textContent = 'Pi: Offline'
+      systemTelemetryContainer.innerHTML = '<p class="telemetry-offline-hint">Telemetriedaten konnten nicht geladen werden.</p>'
+    }
+  }
+
+  const openSystemSettings = () => {
+    updateResolutionDisplay()
+    refreshTelemetry()
+    systemSettingsDialog.showModal()
+  }
+  const closeSystemSettings = () => {
+    if (systemSettingsDialog.open) systemSettingsDialog.close()
+  }
+  displaySettingsButton.addEventListener('click', openSystemSettings)
+  systemStatusPill.addEventListener('click', openSystemSettings)
+  systemSettingsClose.addEventListener('click', closeSystemSettings)
+  systemSettingsCancel.addEventListener('click', closeSystemSettings)
+  systemSettingsApply.addEventListener('click', () => {
+    markDirty()
+    closeSystemSettings()
+    showMessage('Display-Einstellungen übernommen. Klicke auf "Speichern", um sie dauerhaft zu sichern.')
+  })
+  telemetryRefreshBtn.addEventListener('click', () => refreshTelemetry())
+  refreshTelemetry()
+  window.setInterval(refreshTelemetry, 30000)
+
   app.querySelector<HTMLFormElement>('#admin-form')!.addEventListener('submit', async (event) => {
     event.preventDefault()
     if (!validateLayout()) {
@@ -1058,6 +1260,11 @@ export async function renderAdminPage(app: HTMLElement) {
       version: SETTINGS_VERSION,
       location: app.querySelector<HTMLInputElement>('#admin-location')!.value.trim() || defaultSettings.location,
       weatherCity: app.querySelector<HTMLInputElement>('#admin-weather-city')!.value.trim(),
+      timezone: timezoneSelect.value,
+      locale: localeSelect.value,
+      showSeconds: showSecondsCheckbox.checked,
+      displayScale: Number(displayScaleSelect.value),
+      hideCursor: hideCursorCheckbox.checked,
       widgets: readWidgets(),
     })
     saveButton.disabled = true
@@ -1081,6 +1288,11 @@ export async function renderAdminPage(app: HTMLElement) {
     try {
       const saved = await saveWithPin(defaultSettings)
       if (!saved) return
+      displayScaleSelect.value = String(defaultSettings.displayScale || 100)
+      hideCursorCheckbox.checked = defaultSettings.hideCursor !== false
+      localeSelect.value = defaultSettings.locale || 'de-DE'
+      timezoneSelect.value = defaultSettings.timezone || 'auto'
+      showSecondsCheckbox.checked = Boolean(defaultSettings.showSeconds)
       markSaved()
       window.location.reload()
     } catch (error) {

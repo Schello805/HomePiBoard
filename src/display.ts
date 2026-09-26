@@ -82,14 +82,61 @@ export async function renderDisplayPage(app: HTMLElement) {
       <section class="widget-grid" aria-label="Anzeigen-Widgets">${widgets}</section>
     </main>`
 
+  const shell = app.querySelector<HTMLElement>('.signage-shell')!
   const clock = app.querySelector<HTMLElement>('#clock')!
   const date = app.querySelector<HTMLElement>('#date')!
   const weather = app.querySelector<HTMLElement>('#weather')!
   const networkStatus = app.querySelector<HTMLElement>('#network-status')!
+
+  if (settings.displayScale && settings.displayScale !== 100) {
+    shell.style.setProperty('--kiosk-scale', String(settings.displayScale / 100))
+    shell.style.zoom = String(settings.displayScale / 100)
+  }
+
+  if (typeof window !== 'undefined' && window.screen) {
+    try {
+      localStorage.setItem('homepiboard-display-resolution', `${window.screen.width} × ${window.screen.height} (${Math.round((window.devicePixelRatio || 1) * 100)}% DPI)`)
+    } catch {
+      // storage unavailable
+    }
+  }
+
+  if (settings.hideCursor !== false) {
+    shell.classList.add('kiosk-hide-cursor')
+    let cursorTimer: number | undefined
+    const handleMouseMove = () => {
+      shell.classList.remove('kiosk-hide-cursor')
+      if (cursorTimer) window.clearTimeout(cursorTimer)
+      cursorTimer = window.setTimeout(() => {
+        shell.classList.add('kiosk-hide-cursor')
+      }, 2000)
+    }
+    window.addEventListener('mousemove', handleMouseMove, { passive: true })
+  }
+
+  const locale = settings.locale || 'de-DE'
+  const timeOptions: Intl.DateTimeFormatOptions = {
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(settings.showSeconds ? { second: '2-digit' } : {}),
+    ...(settings.timezone && settings.timezone !== 'auto' ? { timeZone: settings.timezone } : {}),
+  }
+  const dateOptions: Intl.DateTimeFormatOptions = {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    ...(settings.timezone && settings.timezone !== 'auto' ? { timeZone: settings.timezone } : {}),
+  }
+
   const updateTime = () => {
     const now = new Date()
-    clock.textContent = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
-    date.textContent = now.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    try {
+      clock.textContent = now.toLocaleTimeString(locale, timeOptions)
+      date.textContent = now.toLocaleDateString(locale, dateOptions)
+    } catch {
+      clock.textContent = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+      date.textContent = now.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    }
   }
 
   updateTime()

@@ -6,7 +6,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
 
-import { createHomePiBoardServer, parentDirectoriesToSync } from '../server.mjs'
+import { createHomePiBoardServer, getSystemInfo, getSystemNetwork, parentDirectoriesToSync } from '../server.mjs'
 
 const scrypt = promisify(scryptCallback)
 
@@ -394,3 +394,61 @@ test('upload API rejects unauthenticated requests or files exceeding 5MB', async
   })
   assert.equal(tooBigRes.status, 413)
 })
+
+test('getSystemNetwork identifies external IPv4 addresses', () => {
+  const fakeInterfaces = {
+    lo: [{ address: '127.0.0.1', family: 'IPv4', internal: true }],
+    eth0: [
+      { address: 'fe80::1', family: 'IPv6', internal: false },
+      { address: '192.168.1.50', family: 'IPv4', internal: false, netmask: '255.255.255.0' },
+    ],
+    wlan0: [
+      { address: '10.0.0.22', family: 'IPv4', internal: false, netmask: '255.255.0.0' },
+    ],
+  }
+
+  const result = getSystemNetwork(fakeInterfaces)
+  assert.equal(result.primaryIp, '192.168.1.50')
+  assert.equal(result.addresses.length, 2)
+  assert.equal(result.addresses[0]?.name, 'eth0')
+  assert.equal(result.addresses[1]?.name, 'wlan0')
+})
+
+test('getSystemInfo reads hardware metrics and thermal file when present', async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), 'thermal-test-'))
+  const fakeThermal = path.join(tempDir, 'temp')
+  await writeFile(fakeThermal, '48250\n', 'utf8')
+
+  const info = await getSystemInfo({ thermalPath: fakeThermal })
+  assert.equal(info.cpuTemp, 48.3)
+  assert.ok(info.memory.totalMb > 0)
+  assert.ok(typeof info.hostname === 'string')
+  assert.ok(Array.isArray(info.loadAvg))
+  assert.ok(typeof info.uptimeSeconds === 'number')
+
+  // When thermal file is absent, cpuTemp gracefully falls back to null
+  const missingThermal = await getSystemInfo({ thermalPath: path.join(tempDir, 'nonexistent') })
+  assert.equal(missingThermal.cpuTemp, null)
+
+  await unlink(fakeThermal)
+})
+
+test('system API returns hardware, network and system telemetry', async (context) => {
+  const running = await startServer()
+  context.after(() => running.server.close())
+
+  const res = await fetch(`${running.url}/api/system`)
+  assert.equal(res.status, 200)
+  const data = await res.json()
+
+  assert.ok(typeof data.hostname === 'string')
+  assert.ok(typeof data.platform === 'string')
+  assert.ok(typeof data.arch === 'string')
+  assert.ok(typeof data.nodeVersion === 'string')
+  assert.ok(typeof data.uptimeSeconds === 'number')
+  assert.ok(Array.isArray(data.loadAvg))
+  assert.ok(data.memory && typeof data.memory.totalMb === 'number')
+  assert.ok(data.memory.percent >= 0 && data.memory.percent <= 100)
+  assert.ok(data.network && typeof data.network.primaryIp === 'string')
+})
+

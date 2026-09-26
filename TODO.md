@@ -35,10 +35,19 @@
 - [x] Papierkorb-Löschfunktion im Widget-Header und im Einstellungsdialog
 - [x] Direkter Bilder-Upload (PNG, JPG, WebP, GIF, SVG bis 5 MB) mit Serverablage
 - [x] Checkbox zur optionalen Anzeige des Widget-Titels in der Kiosk-Ansicht
+- [x] Raspberry Pi Live-Telemetrie-API (`/api/system`) für CPU-Temperatur, RAM, CPU-Load, IP und Uptime
+- [x] System- & Display-Einstellungsdialog im Admin-Bereich (`⚙ System & HDMI`)
+- [x] Einstellbare Display-Skalierung (80%–150%) für Fernseher und Wand-Displays
+- [x] Erkennung und Anzeige der HDMI-Bildschirmauflösung
+- [x] Automatisches Ausblenden des Mauszeigers im HDMI-Kioskmodus nach 2 Sekunden
+- [x] Einstellbare Zeitzone, Sprache/Datumsformat und Sekundenanzeige
+- [x] Kiosk-Autostart-Skript (`scripts/kiosk.sh`) und systemd-Service (`scripts/homepiboard.service`)
+- [x] Ausführliche Dokumentation für Raspberry Pi HDMI-Setup (`docs/raspberry-pi-hdmi.md`)
 
 ## Als Nächstes
 
 - [ ] Kiosk-Autostart auf einem echten Raspberry Pi testen
 - [ ] Netzwerk- und Offline-Verhalten prüfen
 - [ ] Produktionsbuild auf dem Raspberry Pi testen
+
 

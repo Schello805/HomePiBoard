@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { adminErrorMessage, clearPinError, compactFieldCharacters, lostPointerCaptureAction, resizeChangedFromStart, resizeKeyboardDelta, resizePointerDelta, resizeWidgetDimensions, syncCompactField, validatePinChange, widgetPreviewAspectRatio } from '../src/admin.ts'
+import { adminErrorMessage, clearPinError, compactFieldCharacters, formatCpuTemp, formatUptime, lostPointerCaptureAction, resizeChangedFromStart, resizeKeyboardDelta, resizePointerDelta, resizeWidgetDimensions, syncCompactField, validatePinChange, widgetPreviewAspectRatio } from '../src/admin.ts'
 import { MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS } from '../src/settings.ts'
 import { RateLimitError } from '../src/settings-store.ts'
 
@@ -110,3 +110,17 @@ test('adjacent widgets on a 24-column grid wrap to the next row when width excee
   assert.equal(canFitSideBySide(14, 12), false) // second widget drops down
   assert.equal(canFitSideBySide(10, 12), true) // second widget fits back up
 })
+
+test('formatUptime converts seconds to human-readable strings', () => {
+  assert.equal(formatUptime(45), '0m')
+  assert.equal(formatUptime(120), '2m')
+  assert.equal(formatUptime(3660), '1h 1m')
+  assert.equal(formatUptime(90000), '1d 1h 0m')
+})
+
+test('formatCpuTemp formats celsius temperatures and handles null', () => {
+  assert.equal(formatCpuTemp(48.24), '48.2 °C')
+  assert.equal(formatCpuTemp(50), '50.0 °C')
+  assert.equal(formatCpuTemp(null), 'N/A')
+})
+

@@ -4,9 +4,14 @@ Eine schlanke Digital-Signage-Anzeige für zu Hause. HomePiBoard ist für einen 
 
 ## Funktionen
 
-- 24×8-Widget-Raster für Webseite, Kalender, Text und Bild
-- Drag-and-drop und Größenänderung im Edit-Modus
+- 24×14-Widget-Raster für Webseite, Kalender, Text, Bild und Diashow
+- Freies Resizing und 4-Wege-Positionierung im Platzspar-Editmodus
+- HDMI-Kiosk-Modus mit automatischer Mauszeiger-Ausblendung
+- Display-Zoom (80%–150%) für Fernseher und Wand-Displays
+- Raspberry Pi Live-Telemetrie (CPU-Temperatur, RAM, CPU-Load, lokale IP, Uptime)
+- Einstellbare Zeitzone, Sprache/Datumsformat und Sekundenanzeige
 - Wetterdaten über Open-Meteo
+- Direkter Bilder-Upload (PNG, JPG, WebP, GIF, SVG bis 5 MB)
 - zentrale Konfiguration in `data/settings.json`
 - lokaler Browser-Cache als Offline-Rückfall
 - PIN-Schutz für Änderungen
@@ -108,12 +113,17 @@ chromium --kiosk --noerrdialogs --disable-infobars http://localhost:4173/
 
 Je nach Raspberry-Pi-OS-Version kann der Programmname auch `chromium-browser` lauten. Der Befehl kann über die Autostart-Konfiguration der verwendeten Desktop-Sitzung gestartet werden.
 
+Ausführliche Hinweise zur Einrichtung, HDMI-Kiosk-Autostart und CEC-Bildschirmabschaltung findest du in [docs/raspberry-pi-hdmi.md](docs/raspberry-pi-hdmi.md). Ein fertiges Kiosk-Skript liegt unter [scripts/kiosk.sh](scripts/kiosk.sh).
+
 ## API
 
 - `GET /api/settings` – aktuelle Konfiguration lesen
+- `GET /api/system` – Hardware-, Netzwerk- und System-Telemetrie lesen (CPU-Temp, RAM, IP, Uptime)
 - `POST /api/auth` – Admin-PIN prüfen
 - `PUT /api/settings` – Konfiguration mit Header `x-admin-pin` speichern
 - `PUT /api/admin-pin` – Admin-PIN mit aktueller PIN im Header `x-admin-pin` ändern
+- `POST /api/upload` – Bilddatei hochladen (PNG, JPG, WebP, GIF, SVG bis 5 MB, erfordert `x-admin-pin`)
+- `GET /uploads/:file` – hochgeladene Mediendateien abrufen
 
 Die PIN schützt Änderungen im lokalen Netzwerk, ersetzt aber keine HTTPS- oder Benutzerverwaltung für eine öffentliche Installation. HomePiBoard sollte nicht direkt aus dem Internet erreichbar sein.
 

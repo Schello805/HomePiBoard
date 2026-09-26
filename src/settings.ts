@@ -17,6 +17,11 @@ export type DisplaySettings = {
   version: 3
   location: string
   weatherCity: string
+  timezone?: string
+  locale?: string
+  showSeconds?: boolean
+  displayScale?: number
+  hideCursor?: boolean
   widgets: DashboardWidget[]
 }
 
@@ -34,6 +39,11 @@ export const defaultSettings: DisplaySettings = {
   version: SETTINGS_VERSION,
   location: 'Zuhause',
   weatherCity: '',
+  timezone: 'auto',
+  locale: 'de-DE',
+  showSeconds: false,
+  displayScale: 100,
+  hideCursor: true,
   widgets: [],
 }
 
@@ -213,10 +223,22 @@ export function normalizeSettings(value: unknown): DisplaySettings {
     })
   }
 
+  const timezone = typeof parsed.timezone === 'string' && parsed.timezone.trim() ? parsed.timezone.trim().slice(0, 50) : defaultSettings.timezone
+  const locale = typeof parsed.locale === 'string' && parsed.locale.trim() ? parsed.locale.trim().slice(0, 20) : defaultSettings.locale
+  const showSeconds = typeof parsed.showSeconds === 'boolean' ? parsed.showSeconds : defaultSettings.showSeconds
+  const rawScale = Number(parsed.displayScale)
+  const displayScale = Number.isFinite(rawScale) && rawScale >= 50 && rawScale <= 200 ? Math.round(rawScale) : defaultSettings.displayScale
+  const hideCursor = typeof parsed.hideCursor === 'boolean' ? parsed.hideCursor : defaultSettings.hideCursor
+
   return {
     version: SETTINGS_VERSION,
     location: text(parsed.location) || defaultSettings.location,
     weatherCity: text(parsed.weatherCity),
+    timezone,
+    locale,
+    showSeconds,
+    displayScale,
+    hideCursor,
     widgets,
   }
 }

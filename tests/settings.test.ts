@@ -239,3 +239,30 @@ test('normalizeSettings preserves showTitle option', () => {
   assert.equal(normalized.widgets[1]?.showTitle, undefined)
 })
 
+test('normalizeSettings preserves and validates system and display options', () => {
+  const normalized = normalizeSettings({
+    version: 3,
+    timezone: 'Europe/Berlin',
+    locale: 'de-DE',
+    showSeconds: true,
+    displayScale: 125,
+    hideCursor: false,
+    widgets: [],
+  })
+
+  assert.equal(normalized.timezone, 'Europe/Berlin')
+  assert.equal(normalized.locale, 'de-DE')
+  assert.equal(normalized.showSeconds, true)
+  assert.equal(normalized.displayScale, 125)
+  assert.equal(normalized.hideCursor, false)
+
+  const invalid = normalizeSettings({
+    version: 3,
+    displayScale: 500,
+    widgets: [],
+  })
+  assert.equal(invalid.displayScale, 100)
+  assert.equal(invalid.hideCursor, true)
+  assert.equal(invalid.timezone, 'auto')
+})
+
