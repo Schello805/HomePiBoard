@@ -38,15 +38,13 @@ if command -v unclutter >/dev/null 2>&1; then
   unclutter -idle 0.5 -root &
 fi
 
-# Warten bis der HomePiBoard Server bereit ist
-echo "[HomePiBoard] Warte auf Server ($URL)..."
-until curl -s -f -o /dev/null "$URL" || [ $WAIT_COUNT -ge $MAX_WAIT ]; do
-  sleep 1
-  WAIT_COUNT=$((WAIT_COUNT + 1))
-done
+# Pfad zur statischen Splash-/Lade-Seite
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SPLASH_FILE="$SCRIPT_DIR/../public/splash.html"
 
-if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
-  echo "[HomePiBoard] Warnung: Server antwortet nicht rechtzeitig, starte Browser dennoch."
+# HDMI Audio entmuten und Ausgang konfigurieren
+if [ -f "$SCRIPT_DIR/setup-hdmi-audio.sh" ]; then
+  bash "$SCRIPT_DIR/setup-hdmi-audio.sh" 2>/dev/null || true
 fi
 
 # Passenden Chromium-Befehl wählen
@@ -63,14 +61,16 @@ fi
 sed -i 's/"exited_cleanly":false/"exited_cleanly":true/' ~/.config/chromium/Default/Preferences 2>/dev/null || true
 sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/' ~/.config/chromium/Default/Preferences 2>/dev/null || true
 
-# HDMI Audio entmuten und Ausgang konfigurieren
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/setup-hdmi-audio.sh" ]; then
-  bash "$SCRIPT_DIR/setup-hdmi-audio.sh" 2>/dev/null || true
-fi
-
-# Kiosk-Schleife: Startet Browser automatisch neu, falls er unerwartet schließt
+# Kiosk-Schleife: Startet Browser mit Splash-Screen oder Direkt-URL
 while true; do
+  LAUNCH_URL="$URL"
+  if ! curl -s -f -o /dev/null --max-time 1 "$URL" 2>/dev/null; then
+    if [ -f "$SPLASH_FILE" ]; then
+      echo "[HomePiBoard] Server startet noch – öffne Ladebildschirm ($SPLASH_FILE)..."
+      LAUNCH_URL="file://$SPLASH_FILE"
+    fi
+  fi
+
   "$CHROMIUM_BIN" \
     --kiosk \
     --noerrdialogs \
@@ -87,6 +87,6 @@ while true; do
     --disable-gesture-requirement-for-media-playback \
     --alsa-output-device=default \
     --allow-running-insecure-content \
-    "$URL" || true
+    "$LAUNCH_URL" || true
   sleep 2
 done
