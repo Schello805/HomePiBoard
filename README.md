@@ -157,7 +157,8 @@ cd ~/HomePiBoard
 - Lädt die neuesten Änderungen via `git pull` herunter
 - Installiert eventuell neue Paket-Abhängigkeiten (`npm install`)
 - Kompiliert das Frontend neu (`npm run build`)
-- Startet den Hintergrunddienst `homepiboard.service` unterbrechungsfrei neu
+- Startet den Hintergrunddienst `homepiboard.service` neu
+- **Aktualisiert die HDMI-Anzeige / den Kiosk-Browser automatisch** (kein Neustart des Pi nötig!)
 
 ### Option B: Manuell Schritt für Schritt
 
@@ -169,7 +170,12 @@ git pull
 npm install
 npm run build
 sudo systemctl restart homepiboard
+# Frontend auf HDMI neu laden (ohne Pi-Neustart):
+pkill -f chromium
 ```
+
+> **Tipp:** Ein Neustart des Raspberry Pi (`sudo reboot`) ist nach einem Update **nicht** erforderlich. Um nur das Frontend neu zu laden, reicht `pkill -f chromium` (das Kiosk-Skript startet den Browser nach 2 Sekunden automatisch neu) oder das Drücken von `F5` / `Strg + R` auf einer angeschlossenen Tastatur.
+
 
 ### Option C: Raspberry Pi OS & Chromium-Updates
 Um zusätzlich das Linux-Betriebssystem und den Chromium-Browser aktuell zu halten:
