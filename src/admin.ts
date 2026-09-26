@@ -119,6 +119,90 @@ export function syncCompactField(control: CompactFieldControl) {
   control.style.width = `min(100%, calc(${compactFieldCharacters(content)}ch + ${chromeWidth}px))`
 }
 
+export type ConfirmModalOptions = {
+  kicker?: string
+  title: string
+  message: string
+  confirmText?: string
+  cancelText?: string
+  isDanger?: boolean
+}
+
+export function createConfirmModal(root: ParentNode) {
+  const dialog = root.querySelector<HTMLDialogElement>('#confirm-dialog')
+  const kickerEl = root.querySelector<HTMLElement>('#confirm-kicker')
+  const titleEl = root.querySelector<HTMLElement>('#confirm-title')
+  const messageEl = root.querySelector<HTMLElement>('#confirm-message')
+  const closeBtn = root.querySelector<HTMLButtonElement>('#confirm-close')
+  const cancelBtn = root.querySelector<HTMLButtonElement>('#confirm-cancel')
+  const okBtn = root.querySelector<HTMLButtonElement>('#confirm-ok')
+
+  return (options: ConfirmModalOptions): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (!dialog) {
+        resolve(typeof window !== 'undefined' && typeof window.confirm === 'function' ? window.confirm(options.message) : true)
+        return
+      }
+
+      if (kickerEl) kickerEl.textContent = options.kicker || 'Bestätigung'
+      if (titleEl) titleEl.textContent = options.title
+      if (messageEl) messageEl.textContent = options.message
+      if (okBtn) {
+        okBtn.textContent = options.confirmText || 'Bestätigen'
+        okBtn.className = options.isDanger !== false ? 'danger-confirm-button' : 'save-button'
+      }
+      if (cancelBtn) cancelBtn.textContent = options.cancelText || 'Abbrechen'
+
+      let settled = false
+      const finish = (result: boolean) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        if (typeof dialog.close === 'function') {
+          dialog.close()
+        } else {
+          dialog.removeAttribute('open')
+        }
+        resolve(result)
+      }
+
+      const onOk = (e: Event) => {
+        e.preventDefault()
+        finish(true)
+      }
+      const onCancel = (e: Event) => {
+        e.preventDefault()
+        finish(false)
+      }
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          finish(false)
+        }
+      }
+
+      const cleanup = () => {
+        okBtn?.removeEventListener('click', onOk)
+        cancelBtn?.removeEventListener('click', onCancel)
+        closeBtn?.removeEventListener('click', onCancel)
+        dialog.removeEventListener('keydown', onKeyDown)
+      }
+
+      okBtn?.addEventListener('click', onOk)
+      cancelBtn?.addEventListener('click', onCancel)
+      closeBtn?.addEventListener('click', onCancel)
+      dialog.addEventListener('keydown', onKeyDown)
+
+      if (typeof dialog.showModal === 'function') {
+        dialog.showModal()
+      } else {
+        dialog.setAttribute('open', '')
+      }
+      okBtn?.focus()
+    })
+  }
+}
+
 function renderWidgetEditor(widget: DashboardWidget, index: number) {
   return renderWidget(widget, true, index)
 }
@@ -308,8 +392,25 @@ export async function renderAdminPage(app: HTMLElement) {
         <button class="save-button" id="system-settings-apply" type="button">Übernehmen</button>
       </div>
     </div>
+  </dialog>
+  <dialog class="pin-dialog confirm-dialog" id="confirm-dialog">
+    <form method="dialog" id="confirm-form">
+      <div class="dialog-heading">
+        <div>
+          <span class="widget-kicker" id="confirm-kicker">Bestätigung</span>
+          <h2 id="confirm-title">Wirklich löschen?</h2>
+        </div>
+        <button class="close-button" id="confirm-close" type="button" aria-label="Schließen">×</button>
+      </div>
+      <p class="confirm-message" id="confirm-message">Möchtest du dieses Widget wirklich unwiderruflich löschen?</p>
+      <div class="dialog-actions">
+        <button class="secondary-button" id="confirm-cancel" type="button">Abbrechen</button>
+        <button class="danger-confirm-button" id="confirm-ok" type="button">Löschen</button>
+      </div>
+    </form>
   </dialog>`
 
+  const showConfirm = createConfirmModal(app)
   const editorList = app.querySelector<HTMLElement>('#widget-editors')!
   const message = app.querySelector<HTMLElement>('#save-message')!
   const saveButton = app.querySelector<HTMLButtonElement>('#save-button')!
@@ -703,9 +804,16 @@ export async function renderAdminPage(app: HTMLElement) {
     editor.querySelector<HTMLButtonElement>('[data-action="move-right"]')?.addEventListener('click', () => moveEditor2D(editor, 'right'))
     editor.querySelector<HTMLButtonElement>('[data-action="move-up"]')?.addEventListener('click', () => moveEditor2D(editor, 'up'))
     editor.querySelector<HTMLButtonElement>('[data-action="move-down"]')?.addEventListener('click', () => moveEditor2D(editor, 'down'))
-    const removeHandler = () => {
+    const removeHandler = async () => {
       const title = readWidget(editor).title
-      if (!window.confirm(`„${title}“ wirklich löschen?`)) return
+      const confirmed = await showConfirm({
+        kicker: 'Widget entfernen',
+        title: `„${title}“ löschen?`,
+        message: `Möchtest du das Widget „${title}“ wirklich von deiner Anzeige entfernen?`,
+        confirmText: 'Löschen',
+        isDanger: true,
+      })
+      if (!confirmed) return
       closeDialog()
       editor.remove()
       updateEditorIndexes()
@@ -714,7 +822,7 @@ export async function renderAdminPage(app: HTMLElement) {
     editor.querySelectorAll<HTMLButtonElement>('[data-action="remove"], [data-action="remove-dialog"]').forEach((btn) => {
       btn.addEventListener('click', (event) => {
         event.stopPropagation()
-        removeHandler()
+        void removeHandler()
       })
     })
 
@@ -1432,7 +1540,14 @@ export async function renderAdminPage(app: HTMLElement) {
   })
 
   app.querySelector<HTMLButtonElement>('#reset-button')!.addEventListener('click', async () => {
-    if (!window.confirm('Achtung: Möchtest du wirklich alle Widgets löschen und das Board auf die Werkseinstellungen (Standard) zurücksetzen?')) return
+    const confirmed = await showConfirm({
+      kicker: 'Werkseinstellungen',
+      title: 'Board zurücksetzen?',
+      message: 'Achtung: Möchtest du wirklich alle Widgets löschen und das Board auf die Werkseinstellungen (Standard) zurücksetzen?',
+      confirmText: 'Zurücksetzen',
+      isDanger: true,
+    })
+    if (!confirmed) return
     try {
       const saved = await saveWithPin(defaultSettings)
       if (!saved) return

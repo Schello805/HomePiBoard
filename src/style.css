@@ -233,6 +233,31 @@ button:disabled { cursor: not-allowed; opacity: 0.42; }
 .save-button:hover:not(:disabled) { filter: brightness(1.05); }
 .secondary-button { border: 1px solid var(--line); color: var(--ink); background: transparent; }
 .secondary-button:hover:not(:disabled) { border-color: var(--muted); background: rgba(242, 238, 230, 0.05); }
+.danger-confirm-button {
+  min-height: 44px;
+  border-radius: 5px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid var(--danger);
+  color: #1a0f0d;
+  background: var(--danger);
+  box-shadow: 0 4px 14px rgba(242, 155, 136, 0.25);
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+.danger-confirm-button:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+.danger-confirm-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+.confirm-dialog { width: min(440px, calc(100vw - 28px)); }
+.confirm-dialog form { display: flex; flex-direction: column; gap: 18px; padding: 24px; }
+.confirm-message { color: var(--muted); font-size: 0.92rem; line-height: 1.5; margin: 0; }
 
 /* Admin */
 .admin-shell { min-height: 100vh; padding: 0; display: flex; flex-direction: column; background: #0e100e; color: var(--ink); overflow-x: hidden; }

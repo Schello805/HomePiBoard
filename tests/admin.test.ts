@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { adminErrorMessage, clearPinError, compactFieldCharacters, formatCpuTemp, formatUptime, lostPointerCaptureAction, resizeChangedFromStart, resizeKeyboardDelta, resizePointerDelta, resizeWidgetDimensions, syncCompactField, validatePinChange, widgetPreviewAspectRatio } from '../src/admin.ts'
+import { adminErrorMessage, clearPinError, compactFieldCharacters, createConfirmModal, formatCpuTemp, formatUptime, lostPointerCaptureAction, resizeChangedFromStart, resizeKeyboardDelta, resizePointerDelta, resizeWidgetDimensions, syncCompactField, validatePinChange, widgetPreviewAspectRatio } from '../src/admin.ts'
 import { MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS } from '../src/settings.ts'
 import { RateLimitError } from '../src/settings-store.ts'
 
@@ -122,5 +122,86 @@ test('formatCpuTemp formats celsius temperatures and handles null', () => {
   assert.equal(formatCpuTemp(48.24), '48.2 °C')
   assert.equal(formatCpuTemp(50), '50.0 °C')
   assert.equal(formatCpuTemp(null), 'N/A')
+})
+
+test('createConfirmModal fallback resolves when dialog is absent', async () => {
+  const showConfirm = createConfirmModal({ querySelector: () => null } as unknown as ParentNode)
+  const res = await showConfirm({ title: 'Test Title', message: 'Test message' })
+  assert.equal(typeof res, 'boolean')
+})
+
+test('createConfirmModal sets content and resolves true on confirm and false on cancel', async () => {
+  const listeners = new Map<string, (e: any) => void>()
+  const mockButton = (name: string) => ({
+    name,
+    textContent: '',
+    className: '',
+    focus() {},
+    addEventListener(event: string, fn: any) { listeners.set(`${name}:${event}`, fn) },
+    removeEventListener(event: string, _fn: any) { listeners.delete(`${name}:${event}`) },
+  })
+
+  const okBtn = mockButton('ok')
+  const cancelBtn = mockButton('cancel')
+  const closeBtn = mockButton('close')
+  const titleEl = { textContent: '' }
+  const kickerEl = { textContent: '' }
+  const messageEl = { textContent: '' }
+  let dialogClosed = false
+
+  const dialog = {
+    showModal() {},
+    close() { dialogClosed = true },
+    addEventListener(event: string, fn: any) { listeners.set(`dialog:${event}`, fn) },
+    removeEventListener(event: string, _fn: any) { listeners.delete(`dialog:${event}`) },
+  }
+
+  const root = {
+    querySelector(selector: string) {
+      if (selector === '#confirm-dialog') return dialog
+      if (selector === '#confirm-kicker') return kickerEl
+      if (selector === '#confirm-title') return titleEl
+      if (selector === '#confirm-message') return messageEl
+      if (selector === '#confirm-ok') return okBtn
+      if (selector === '#confirm-cancel') return cancelBtn
+      if (selector === '#confirm-close') return closeBtn
+      return null
+    },
+  } as unknown as ParentNode
+
+  const showConfirm = createConfirmModal(root)
+
+  // Test confirm path
+  const confirmPromise = showConfirm({
+    kicker: 'Löschen',
+    title: 'Widget löschen?',
+    message: 'Wirklich löschen?',
+    confirmText: 'Ja, weg damit',
+    isDanger: true,
+  })
+
+  assert.equal(kickerEl.textContent, 'Löschen')
+  assert.equal(titleEl.textContent, 'Widget löschen?')
+  assert.equal(messageEl.textContent, 'Wirklich löschen?')
+  assert.equal(okBtn.textContent, 'Ja, weg damit')
+  assert.equal(okBtn.className, 'danger-confirm-button')
+
+  listeners.get('ok:click')!({ preventDefault() {} })
+  const result = await confirmPromise
+  assert.equal(result, true)
+  assert.equal(dialogClosed, true)
+
+  // Test cancel path
+  dialogClosed = false
+  const cancelPromise = showConfirm({
+    title: 'Abbrechen Test',
+    message: 'Test',
+    isDanger: false,
+  })
+  assert.equal(okBtn.className, 'save-button')
+  listeners.get('cancel:click')!({ preventDefault() {} })
+  const cancelResult = await cancelPromise
+  assert.equal(cancelResult, false)
+  assert.equal(dialogClosed, true)
 })
 
