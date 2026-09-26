@@ -228,8 +228,6 @@ export async function renderAdminPage(app: HTMLElement) {
           <a class="topbar-btn" id="display-settings-button" href="/settings" title="Display-, HDMI- &amp; Systemeinstellungen">⚙ Einstellungen</a>
         </div>
         <div class="admin-header-actions">
-          <span class="connection-status ${loaded.source === 'server' ? 'is-online' : ''}">${loaded.source === 'server' ? 'SERVER' : 'LOKAL'}</span>
-          <span class="save-state" id="save-state">GESPEICHERT</span>
           <button class="topbar-btn secondary" id="reset-button" type="button" title="Werkseinstellungen: Löscht alle Widgets und setzt Einstellungen auf Standard zurück">↺ Zurücksetzen</button>
           <button class="save-button" id="save-button" type="submit">Speichern</button>
           <a class="back-link" href="/" title="Zurück zur Anzeige">Anzeige ↗</a>
@@ -321,8 +319,8 @@ export async function renderAdminPage(app: HTMLElement) {
   const editorList = app.querySelector<HTMLElement>('#widget-editors')!
   const message = app.querySelector<HTMLElement>('#save-message')!
   const saveButton = app.querySelector<HTMLButtonElement>('#save-button')!
-  const saveState = app.querySelector<HTMLElement>('#save-state')!
-  const connectionStatus = app.querySelector<HTMLElement>('.connection-status')!
+  const saveState = app.querySelector<HTMLElement>('#save-state')
+  const connectionStatus = app.querySelector<HTMLElement>('.connection-status')
   const widgetCount = app.querySelector<HTMLElement>('#widget-count')!
   const emptyState = app.querySelector<HTMLElement>('#empty-editor-state')!
   const layoutWarning = app.querySelector<HTMLElement>('#layout-warning')!
@@ -356,23 +354,29 @@ export async function renderAdminPage(app: HTMLElement) {
 
   function markDirty() {
     dirty = true
-    saveState.textContent = 'UNGESPEICHERT'
-    saveState.classList.add('is-dirty')
+    if (saveState) {
+      saveState.textContent = 'UNGESPEICHERT'
+      saveState.classList.add('is-dirty')
+    }
     saveButton.innerHTML = '<span class="unsaved-badge-dot">●</span> <span>Änderungen speichern</span>'
     saveButton.classList.add('is-dirty')
   }
 
   function markSaved() {
     dirty = false
-    saveState.textContent = 'GESPEICHERT'
-    saveState.classList.remove('is-dirty')
+    if (saveState) {
+      saveState.textContent = 'GESPEICHERT'
+      saveState.classList.remove('is-dirty')
+    }
     saveButton.textContent = 'Speichern'
     saveButton.classList.remove('is-dirty')
   }
 
   function updateConnectionStatus(source: 'server' | 'local') {
-    connectionStatus.textContent = source === 'server' ? 'SERVER' : 'LOKAL'
-    connectionStatus.classList.toggle('is-online', source === 'server')
+    if (connectionStatus) {
+      connectionStatus.textContent = source === 'server' ? 'SERVER' : 'LOKAL'
+      connectionStatus.classList.toggle('is-online', source === 'server')
+    }
   }
 
   function readWidget(editor: HTMLElement): DashboardWidget {
