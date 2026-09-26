@@ -248,6 +248,7 @@ test('normalizeSettings preserves and validates system and display options', () 
     showWeekday: true,
     displayScale: 125,
     hideCursor: false,
+    audioOutput: 'jack',
     widgets: [],
   })
 
@@ -257,6 +258,7 @@ test('normalizeSettings preserves and validates system and display options', () 
   assert.equal(normalized.showWeekday, true)
   assert.equal(normalized.displayScale, 125)
   assert.equal(normalized.hideCursor, false)
+  assert.equal(normalized.audioOutput, 'jack')
 
   const invalid = normalizeSettings({
     version: 3,
@@ -266,6 +268,7 @@ test('normalizeSettings preserves and validates system and display options', () 
   assert.equal(invalid.displayScale, 100)
   assert.equal(invalid.hideCursor, true)
   assert.equal(invalid.timezone, 'auto')
+  assert.equal(invalid.audioOutput, 'hdmi')
 })
 
 test('createWidget and normalizeSettings support waste and media widgets', () => {

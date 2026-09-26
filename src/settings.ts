@@ -36,6 +36,7 @@ export type DisplaySettings = {
   pixelShiftEnabled?: boolean
   notificationSoundEnabled?: boolean
   notificationSoundVolume?: number
+  audioOutput?: 'hdmi' | 'jack'
   widgets: DashboardWidget[]
 }
 
@@ -66,6 +67,7 @@ export const defaultSettings: DisplaySettings = {
   pixelShiftEnabled: true,
   notificationSoundEnabled: true,
   notificationSoundVolume: 80,
+  audioOutput: 'hdmi',
   widgets: [],
 }
 
@@ -280,6 +282,7 @@ export function normalizeSettings(value: unknown): DisplaySettings {
   const notificationSoundEnabled = typeof parsed.notificationSoundEnabled === 'boolean' ? parsed.notificationSoundEnabled : defaultSettings.notificationSoundEnabled
   const rawVolume = Number(parsed.notificationSoundVolume)
   const notificationSoundVolume = Number.isFinite(rawVolume) ? Math.max(0, Math.min(100, Math.round(rawVolume))) : defaultSettings.notificationSoundVolume
+  const audioOutput = parsed.audioOutput === 'jack' ? 'jack' : 'hdmi'
 
   return {
     version: SETTINGS_VERSION,
@@ -298,6 +301,7 @@ export function normalizeSettings(value: unknown): DisplaySettings {
     pixelShiftEnabled,
     notificationSoundEnabled,
     notificationSoundVolume,
+    audioOutput,
     widgets,
   }
 }

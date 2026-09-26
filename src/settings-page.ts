@@ -146,16 +146,24 @@ export async function renderSettingsPage(app: HTMLElement) {
             </div>
           </section>
 
-          <!-- 4. Webhook & Klingel-Gong -->
+          <!-- 4. Audio-Ausgabe & Türklingel-Gong -->
           <section class="settings-card">
             <div class="settings-card-header">
-              <span class="settings-card-icon">🔔</span>
+              <span class="settings-card-icon">🔊</span>
               <div>
-                <h2 class="settings-card-title">Benachrichtigungen &amp; Türklingel</h2>
-                <p class="settings-card-desc">Akustischer Gong für Smart-Home-Events und Webhooks</p>
+                <h2 class="settings-card-title">Audio &amp; Benachrichtigungen</h2>
+                <p class="settings-card-desc">Tonausgang (HDMI vs. 3,5mm Klinke) und Signalton für Smart-Home-Events</p>
               </div>
             </div>
             <div class="settings-card-body">
+              <label for="settings-audio-output">
+                <span>Audio-Ausgang des Raspberry Pi</span>
+                <select id="settings-audio-output">
+                  <option value="hdmi" ${(settings.audioOutput || 'hdmi') === 'hdmi' ? 'selected' : ''}>📺 HDMI (Fernseher / HDMI-Monitor — Standard)</option>
+                  <option value="jack" ${(settings.audioOutput || 'hdmi') === 'jack' ? 'selected' : ''}>🎧 3,5mm Klinkenbuchse (Kopfhörer / analoge Boxen)</option>
+                </select>
+              </label>
+
               <label class="system-checkbox-label" for="settings-notification-sound-enabled">
                 <input type="checkbox" id="settings-notification-sound-enabled" ${settings.notificationSoundEnabled !== false ? 'checked' : ''} />
                 <span>Akustischen Signalton bei Benachrichtigungen abspielen</span>
@@ -296,6 +304,7 @@ export async function renderSettingsPage(app: HTMLElement) {
   const pixelShiftCheckbox = app.querySelector<HTMLInputElement>('#settings-pixel-shift-enabled')!
   const notificationSoundEnabledCheckbox = app.querySelector<HTMLInputElement>('#settings-notification-sound-enabled')!
   const notificationSoundVolumeInput = app.querySelector<HTMLInputElement>('#settings-notification-sound-volume')!
+  const audioOutputSelect = app.querySelector<HTMLSelectElement>('#settings-audio-output')!
   const testSoundBtn = app.querySelector<HTMLButtonElement>('#settings-test-sound-btn')!
   const telemetryRefreshBtn = app.querySelector<HTMLButtonElement>('#settings-telemetry-refresh-btn')!
   const systemTelemetryContainer = app.querySelector<HTMLElement>('#settings-telemetry-container')!
@@ -638,6 +647,7 @@ export async function renderSettingsPage(app: HTMLElement) {
       pixelShiftEnabled: pixelShiftCheckbox.checked,
       notificationSoundEnabled: notificationSoundEnabledCheckbox.checked,
       notificationSoundVolume: Number(notificationSoundVolumeInput.value) || 0.8,
+      audioOutput: (audioOutputSelect?.value as 'hdmi' | 'jack') || 'hdmi',
     })
 
     saveBtn.disabled = true

@@ -336,6 +336,17 @@ export async function performSystemUpdate({ cwd = rootDirectory, restartProcess 
   }
 }
 
+export async function applySystemAudioOutput(audioOutput = 'hdmi', { cwd = rootDirectory, exec = execFile } = {}) {
+  const scriptPath = path.join(cwd, 'scripts', 'set-audio-output.sh')
+  const target = audioOutput === 'jack' ? 'jack' : 'hdmi'
+  try {
+    const { stdout, stderr } = await exec('bash', [scriptPath, target], { cwd, timeout: 15000 })
+    return { success: true, target, output: (stdout || stderr || '').trim() }
+  } catch (error) {
+    return { success: false, target, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 export function parentDirectoriesToSync(existingAncestor, targetDirectory) {
   const relative = path.relative(existingAncestor, targetDirectory)
   if (!relative) return []
@@ -452,6 +463,7 @@ export function createHomePiBoardServer({
   thermalPath = '/sys/class/thermal/thermal_zone0/temp',
   updateStatusHandler,
   updateExecuteHandler,
+  audioOutputExecuteHandler = (output) => applySystemAudioOutput(output, { exec: execFile }),
 } = {}) {
   if (typeof adminPin !== 'string' || adminPin.length === 0) {
     throw new Error('HOMEPIBOARD_PIN muss explizit gesetzt sein.')
@@ -489,6 +501,9 @@ export function createHomePiBoardServer({
   function persistSettings(settings) {
     const operation = settingsWriteQueue.then(async () => {
       await durableAtomicWrite(settingsFile, `${JSON.stringify(settings, null, 2)}\n`)
+      if (settings.audioOutput && typeof audioOutputExecuteHandler === 'function') {
+        audioOutputExecuteHandler(settings.audioOutput).catch(() => {})
+      }
     })
     settingsWriteQueue = operation.catch(() => {})
     return operation
