@@ -9,7 +9,6 @@ const typeLabels: Record<WidgetType, string> = {
   image: 'BILD',
   slideshow: 'DIASHOW',
   waste: 'MÜLL',
-  energy: 'ENERGIE',
   media: 'MEDIA',
 }
 
@@ -262,45 +261,6 @@ export function wasteContent(widget: DashboardWidget) {
   return `<div class="waste-widget-container" data-waste-widget>${renderWasteItemsHtml(items)}</div>`
 }
 
-export function energyContent(widget: DashboardWidget) {
-  const solar = Number(widget.energySolar ?? 750)
-  const house = Number(widget.energyHouse ?? 450)
-  const grid = Number(widget.energyGrid ?? -300)
-  const battery = Math.min(100, Math.max(0, Number(widget.energyBatteryPercent ?? 85)))
-  const isExport = grid < 0
-
-  return `<div class="energy-widget-container" data-energy-widget>
-    <div class="energy-grid">
-      <div class="energy-card energy-solar">
-        <span class="energy-card-icon" aria-hidden="true">☀️</span>
-        <span class="energy-card-label">Erzeugung</span>
-        <strong class="energy-card-val" data-energy-field="solar">${solar} W</strong>
-        <span class="energy-card-sub">PV / Balkonkraftwerk</span>
-      </div>
-      <div class="energy-card energy-house">
-        <span class="energy-card-icon" aria-hidden="true">🏠</span>
-        <span class="energy-card-label">Hausverbrauch</span>
-        <strong class="energy-card-val" data-energy-field="house">${house} W</strong>
-        <span class="energy-card-sub">Aktueller Bedarf</span>
-      </div>
-      <div class="energy-card energy-grid-flow ${isExport ? 'is-export' : 'is-import'}">
-        <span class="energy-card-icon" aria-hidden="true">${isExport ? '🔄' : '⚡'}</span>
-        <span class="energy-card-label">${isExport ? 'Einspeisung' : 'Netzbezug'}</span>
-        <strong class="energy-card-val" data-energy-field="grid">${Math.abs(grid)} W</strong>
-        <span class="energy-card-sub">${isExport ? 'ins Netz eingespeist' : 'vom Netz bezogen'}</span>
-      </div>
-      <div class="energy-card energy-battery">
-        <span class="energy-card-icon" aria-hidden="true">🔋</span>
-        <span class="energy-card-label">Batteriespeicher</span>
-        <strong class="energy-card-val" data-energy-field="battery">${battery}%</strong>
-        <div class="energy-battery-track" aria-hidden="true">
-          <div class="energy-battery-fill" data-energy-field="battery-fill" style="width: ${battery}%"></div>
-        </div>
-      </div>
-    </div>
-  </div>`
-}
-
 export function mediaContent(widget: DashboardWidget) {
   const title = (widget.mediaTitle ?? 'Keine Wiedergabe').trim() || 'Keine Wiedergabe'
   const artist = (widget.mediaArtist ?? '').trim()
@@ -415,7 +375,6 @@ export function renderWidgetContent(widget: DashboardWidget) {
   }
   if (widget.type === 'slideshow') return slideshowContent(widget)
   if (widget.type === 'waste') return wasteContent(widget)
-  if (widget.type === 'energy') return energyContent(widget)
   if (widget.type === 'media') return mediaContent(widget)
   return frameContent(widget)
 }
@@ -505,7 +464,6 @@ function editorMarkup(widget: DashboardWidget, index: number) {
             <option value="image" ${widget.type === 'image' ? 'selected' : ''}>Bild</option>
             <option value="slideshow" ${widget.type === 'slideshow' ? 'selected' : ''}>Diashow</option>
             <option value="waste" ${widget.type === 'waste' ? 'selected' : ''}>Müllkalender</option>
-            <option value="energy" ${widget.type === 'energy' ? 'selected' : ''}>Energie / PV</option>
             <option value="media" ${widget.type === 'media' ? 'selected' : ''}>Media-Player</option>
           </select></label>
           <label for="${controlId}-title">Titel<input id="${controlId}-title" data-field="title" value="${escapeHtml(widget.title)}" maxlength="30" /></label>
@@ -524,15 +482,6 @@ function editorMarkup(widget: DashboardWidget, index: number) {
           </div>
           <label class="content-field" for="${controlId}-waste"><span data-content-label>Abholtermine (aus .ics oder manuell)</span><textarea id="${controlId}-waste" data-field="wasteItems" rows="5" placeholder="Restmüll: In 2 Tagen&#10;Biomüll: Donnerstag&#10;Gelber Sack: 2026-10-02&#10;Papiermüll: In 10 Tagen">${escapeHtml(widget.wasteItems || '')}</textarea></label>
           <p class="editor-field-hint">💡 Entweder Webcal-URL deines Landratsamtes eintragen (synchronisiert live) oder heruntergeladene .ics-Datei direkt hochladen.</p>
-          ` : widget.type === 'energy' ? `
-          <div class="energy-form-group">
-            <label for="${controlId}-solar">Solarerzeugung (W)<input id="${controlId}-solar" data-field="energySolar" type="number" min="0" value="${widget.energySolar ?? 750}" /></label>
-            <label for="${controlId}-house">Hausverbrauch (W)<input id="${controlId}-house" data-field="energyHouse" type="number" min="0" value="${widget.energyHouse ?? 450}" /></label>
-            <label for="${controlId}-grid">Netz (W, neg. = Einspeisung)<input id="${controlId}-grid" data-field="energyGrid" type="number" value="${widget.energyGrid ?? -300}" /></label>
-            <label for="${controlId}-battery">Akkustand (%)<input id="${controlId}-battery" data-field="energyBatteryPercent" type="number" min="0" max="100" value="${widget.energyBatteryPercent ?? 85}" /></label>
-          </div>
-          <p class="editor-field-hint">💡 Live-Werte können per HTTP <code>POST /api/energy</code> aktualisiert werden.</p>
-          <input type="hidden" id="${controlId}-url" data-field="url" value="${escapeHtml(widget.url)}" />
           ` : widget.type === 'media' ? `
           <div class="media-form-group">
             <label for="${controlId}-media-title">Titel<input id="${controlId}-media-title" data-field="mediaTitle" value="${escapeHtml(widget.mediaTitle || '')}" placeholder="Songtitel" /></label>

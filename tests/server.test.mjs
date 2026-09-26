@@ -539,30 +539,4 @@ test('media API stores and returns playback state', async (context) => {
   assert.equal(data.playing, true)
 })
 
-test('energy API stores and returns power metrics', async (context) => {
-  const running = await startServer()
-  context.after(() => running.server.close())
-
-  const postRes = await fetch(`${running.url}/api/energy`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      solarWatts: 820,
-      houseWatts: 390,
-      gridWatts: -430,
-      batteryWatts: 0,
-      batteryPercent: 92,
-    }),
-  })
-  assert.equal(postRes.status, 200)
-
-  const getRes = await fetch(`${running.url}/api/energy`)
-  assert.equal(getRes.status, 200)
-  const data = await getRes.json()
-  assert.equal(data.solarWatts, 820)
-  assert.equal(data.houseWatts, 390)
-  assert.equal(data.gridWatts, -430)
-  assert.equal(data.batteryPercent, 92)
-})
-
 

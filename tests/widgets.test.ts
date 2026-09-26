@@ -268,29 +268,6 @@ test('parseWasteItems renders realistic wheelie bin SVGs and handles Date: Waste
   assert.match(items[1].icon, /#374151/) // Black/anthracite wheelie bin
 })
 
-test('energy widget renders solar, house, grid, and battery values with data attributes', () => {
-  const widgetHtml = renderWidgetContent({
-    id: 'energy-1',
-    type: 'energy',
-    title: 'Photovoltaik',
-    url: '',
-    columns: 8,
-    rows: 4,
-    energySolar: 920,
-    energyHouse: 410,
-    energyGrid: -510,
-    energyBatteryPercent: 95,
-  })
-
-  assert.match(widgetHtml, /data-energy-widget/)
-  assert.match(widgetHtml, /data-energy-field="solar">920 W</)
-  assert.match(widgetHtml, /data-energy-field="house">410 W</)
-  assert.match(widgetHtml, /data-energy-field="grid">510 W</)
-  assert.match(widgetHtml, /is-export/)
-  assert.match(widgetHtml, /data-energy-field="battery">95%</)
-  assert.match(widgetHtml, /style="width: 95%"/)
-})
-
 test('media widget renders cover, title, artist, and animated equalizer bars', () => {
   const widgetHtml = renderWidgetContent({
     id: 'media-1',
@@ -313,15 +290,10 @@ test('media widget renders cover, title, artist, and animated equalizer bars', (
   assert.match(widgetHtml, /media-equalizer-bars is-animated/)
 })
 
-test('editorMarkup exposes custom input fields for waste, energy, and media widgets', () => {
+test('editorMarkup exposes custom input fields for waste and media widgets', () => {
   const wasteEditor = renderWidget({ id: 'w1', type: 'waste', title: 'Müll', url: '', columns: 6, rows: 4, wasteItems: 'Biomüll: Morgen' }, true)
   assert.match(wasteEditor, /data-field="wasteItems"/)
   assert.match(wasteEditor, /Biomüll: Morgen/)
-
-  const energyEditor = renderWidget({ id: 'e1', type: 'energy', title: 'Strom', url: '', columns: 8, rows: 4, energySolar: 800 }, true)
-  assert.match(energyEditor, /data-field="energySolar"/)
-  assert.match(energyEditor, /value="800"/)
-  assert.match(energyEditor, /data-field="energyBatteryPercent"/)
 
   const mediaEditor = renderWidget({ id: 'm1', type: 'media', title: 'Song', url: '', columns: 6, rows: 3, mediaTitle: 'Yesterday', mediaPlaying: true }, true)
   assert.match(mediaEditor, /data-field="mediaTitle"/)

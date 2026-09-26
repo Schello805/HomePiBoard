@@ -392,35 +392,8 @@ export async function renderDisplayPage(app: HTMLElement) {
     }
   }
 
-  // Live Updates für Media & Energie-Widgets
+  // Live Updates für Media-Widgets
   const updateLiveWidgets = async () => {
-    try {
-      const energyRes = await fetch('/api/energy', { cache: 'no-store' })
-      if (energyRes.ok) {
-        const energyData = await energyRes.json() as { solar: number; house: number; grid: number; batteryPercent: number }
-        app.querySelectorAll('[data-energy-widget]').forEach((widget) => {
-          const solarEl = widget.querySelector('[data-energy-field="solar"]')
-          const houseEl = widget.querySelector('[data-energy-field="house"]')
-          const gridEl = widget.querySelector('[data-energy-field="grid"]')
-          const batteryEl = widget.querySelector('[data-energy-field="battery"]')
-          const batteryFill = widget.querySelector<HTMLElement>('[data-energy-field="battery-fill"]')
-          const gridCard = widget.querySelector('.energy-grid-flow')
-
-          if (solarEl) solarEl.textContent = `${energyData.solar} W`
-          if (houseEl) houseEl.textContent = `${energyData.house} W`
-          if (gridEl) gridEl.textContent = `${Math.abs(energyData.grid)} W`
-          if (batteryEl) batteryEl.textContent = `${energyData.batteryPercent}%`
-          if (batteryFill) batteryFill.style.width = `${Math.min(100, Math.max(0, energyData.batteryPercent))}%`
-          if (gridCard) {
-            gridCard.classList.toggle('is-export', energyData.grid < 0)
-            gridCard.classList.toggle('is-import', energyData.grid >= 0)
-          }
-        })
-      }
-    } catch {
-      // live energy offline
-    }
-
     try {
       const mediaRes = await fetch('/api/media', { cache: 'no-store' })
       if (mediaRes.ok) {

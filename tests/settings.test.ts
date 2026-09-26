@@ -266,19 +266,13 @@ test('normalizeSettings preserves and validates system and display options', () 
   assert.equal(invalid.timezone, 'auto')
 })
 
-test('createWidget and normalizeSettings support waste, energy and media widgets', () => {
+test('createWidget and normalizeSettings support waste and media widgets', () => {
   const waste = createWidget('waste', 1)
   assert.equal(waste.type, 'waste')
   assert.equal(waste.title, 'Müllkalender')
   assert.ok(typeof waste.wasteItems === 'string')
 
-  const energy = createWidget('energy', 2)
-  assert.equal(energy.type, 'energy')
-  assert.equal(energy.energySolar, 650)
-  assert.equal(energy.energyHouse, 420)
-  assert.equal(energy.energyGrid, -230)
-
-  const media = createWidget('media', 3)
+  const media = createWidget('media', 2)
   assert.equal(media.type, 'media')
   assert.equal(media.mediaTitle, 'Keine Wiedergabe')
   assert.equal(media.mediaPlaying, false)
@@ -294,8 +288,7 @@ test('createWidget and normalizeSettings support waste, energy and media widgets
     notificationSoundVolume: 90,
     widgets: [
       { id: 'w1', type: 'waste', wasteItems: 'Morgen: Gelber Sack' },
-      { id: 'w2', type: 'energy', energySolar: 1200, energyHouse: 500, energyGrid: 700, energyBatteryPercent: 95 },
-      { id: 'w3', type: 'media', mediaTitle: 'Bohemian Rhapsody', mediaArtist: 'Queen', mediaPlaying: true },
+      { id: 'w2', type: 'media', mediaTitle: 'Bohemian Rhapsody', mediaArtist: 'Queen', mediaPlaying: true },
     ],
   })
 
@@ -304,10 +297,8 @@ test('createWidget and normalizeSettings support waste, energy and media widgets
   assert.equal(normalized.nightModeEnd, '07:00')
   assert.equal(normalized.nightModeStyle, 'clock')
   assert.equal(normalized.widgets[0]?.wasteItems, 'Morgen: Gelber Sack')
-  assert.equal(normalized.widgets[1]?.energySolar, 1200)
-  assert.equal(normalized.widgets[1]?.energyBatteryPercent, 95)
-  assert.equal(normalized.widgets[2]?.mediaTitle, 'Bohemian Rhapsody')
-  assert.equal(normalized.widgets[2]?.mediaPlaying, true)
+  assert.equal(normalized.widgets[1]?.mediaTitle, 'Bohemian Rhapsody')
+  assert.equal(normalized.widgets[1]?.mediaPlaying, true)
 })
 
 

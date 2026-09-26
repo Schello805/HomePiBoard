@@ -1,4 +1,4 @@
-export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow' | 'waste' | 'energy' | 'media'
+export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow' | 'waste' | 'media'
 
 export type DashboardWidget = {
   id: string
@@ -12,10 +12,6 @@ export type DashboardWidget = {
   breakBefore?: boolean
   showTitle?: boolean
   wasteItems?: string
-  energySolar?: number
-  energyHouse?: number
-  energyGrid?: number
-  energyBatteryPercent?: number
   mediaTitle?: string
   mediaArtist?: string
   mediaAlbum?: string
@@ -71,7 +67,7 @@ export const defaultSettings: DisplaySettings = {
   widgets: [],
 }
 
-const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image', 'slideshow', 'waste', 'energy', 'media'])
+const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image', 'slideshow', 'waste', 'media'])
 
 export const widgetConstraints: Record<WidgetType, { minColumns: number; minRows: number; defaultColumns: number; defaultRows: number }> = {
   web: { minColumns: 4, minRows: 2, defaultColumns: 12, defaultRows: 3 },
@@ -80,7 +76,6 @@ export const widgetConstraints: Record<WidgetType, { minColumns: number; minRows
   image: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
   slideshow: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
   waste: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
-  energy: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
   media: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
 }
 
@@ -91,7 +86,6 @@ const widgetTitles: Record<WidgetType, string> = {
   image: 'Bild',
   slideshow: 'Diashow',
   waste: 'Müllkalender',
-  energy: 'Energie & Solar',
   media: 'Now Playing',
 }
 
@@ -121,11 +115,6 @@ export function createWidget(type: WidgetType, index: number, id = `widget-${ind
     widget.intervalSeconds = 8
   } else if (type === 'waste') {
     widget.wasteItems = 'Morgen: Gelber Sack\nMontag: Restmüll\n15.10.: Papiertonne\n22.10.: Biomüll'
-  } else if (type === 'energy') {
-    widget.energySolar = 650
-    widget.energyHouse = 420
-    widget.energyGrid = -230
-    widget.energyBatteryPercent = 85
   } else if (type === 'media') {
     widget.mediaTitle = 'Keine Wiedergabe'
     widget.mediaArtist = 'Bereit'
@@ -251,12 +240,6 @@ export function normalizeSettings(value: unknown): DisplaySettings {
       ...(breakBefore ? { breakBefore: true } : {}),
       ...(showTitle ? { showTitle: true } : {}),
       ...(type === 'waste' && typeof widget.wasteItems === 'string' ? { wasteItems: widget.wasteItems } : {}),
-      ...(type === 'energy' ? {
-        energySolar: typeof widget.energySolar === 'number' ? widget.energySolar : 0,
-        energyHouse: typeof widget.energyHouse === 'number' ? widget.energyHouse : 0,
-        energyGrid: typeof widget.energyGrid === 'number' ? widget.energyGrid : 0,
-        ...(typeof widget.energyBatteryPercent === 'number' ? { energyBatteryPercent: Math.max(0, Math.min(100, Math.round(widget.energyBatteryPercent))) } : {}),
-      } : {}),
       ...(type === 'media' ? {
         mediaTitle: text(widget.mediaTitle, 'Keine Wiedergabe'),
         mediaArtist: text(widget.mediaArtist, 'Bereit'),

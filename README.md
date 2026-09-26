@@ -4,9 +4,8 @@ Eine schlanke Digital-Signage-Anzeige für zu Hause. HomePiBoard ist für einen 
 
 ## Funktionen
 
-- 24×14-Widget-Raster für Webseite, Kalender, Text, Bild, Diashow, Müllkalender, Energie & Media
+- 24×14-Widget-Raster für Webseite, Kalender, Text, Bild, Diashow, Müllkalender & Media
 - 🗑️ **Müllkalender-Widget:** Farbige Abfalltonnen (Restmüll, Bio, Papier, Gelber Sack, Glas) mit Dringlichkeits-Highlight
-- ☀️ **Energie- & PV-Widget:** Solarerzeugung, Hausverbrauch, Netzbezug/-einspeisung und Batteriestand
 - 🎵 **Media-Player ("Now Playing"):** Spotify/Sonos/HomeAssistant Musikstatus mit Cover und animiertem Equalizer
 - 🌙 **Automatischer Nachtmodus & Display-Dimmen:** Zeitgesteuertes Dimmen, Nacht-Uhr, Wake-on-Tap & Pixel-Shift (Burn-In-Schutz für 24/7-Betrieb)
 - 🔔 **Smarte Webhook-Benachrichtigungen:** `POST /api/notify` mit Popup-Banner und integriertem Zweiklang-Türgong (synthetisiert via Web Audio API)
@@ -143,7 +142,6 @@ Nach einem Neustrat (`sudo reboot`) startet die HDMI-Anzeige automatisch im Voll
 - `POST /api/notify` – Live-Push-Benachrichtigung mit akustischem Gong senden (`{"title": "...", "message": "...", "sound": "doorbell"|"chime"|"alert", "duration": 10, "image": "..."}`)
 - `GET /api/notify/stream` – Server-Sent Events (SSE) Stream für Push-Benachrichtigungen
 - `POST /api/notify/clear` – Aktive Benachrichtigung sofort schließen
-- `POST /api/energy` & `GET /api/energy` – PV-, Hausverbrauch-, Netz- und Akkumesswerte live einspeisen (`{"solar": 850, "house": 420, "grid": -430, "batteryPercent": 90}`)
 - `POST /api/media` & `GET /api/media` – Aktuelle Musikwiedergabe übertragen (`{"title": "...", "artist": "...", "album": "...", "isPlaying": true}`)
 
 Die PIN schützt Änderungen im lokalen Netzwerk, ersetzt aber keine HTTPS- oder Benutzerverwaltung für eine öffentliche Installation. HomePiBoard sollte nicht direkt aus dem Internet erreichbar sein.

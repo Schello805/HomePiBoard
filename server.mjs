@@ -351,14 +351,6 @@ export function createHomePiBoardServer({
     playing: false,
     updatedAt: Date.now(),
   }
-  let latestEnergy = {
-    solarWatts: 650,
-    houseWatts: 420,
-    gridWatts: -230,
-    batteryWatts: 0,
-    batteryPercent: 85,
-    updatedAt: Date.now(),
-  }
 
   function broadcastNotification(notification) {
     const payload = `data: ${JSON.stringify(notification)}\n\n`
@@ -544,31 +536,6 @@ export function createHomePiBoardServer({
         return
       }
 
-      if (url.pathname === '/api/energy' && request.method === 'POST') {
-        const body = await readJsonBody(request)
-        const solar = Number(body.solarWatts ?? body.solar) || 0
-        const house = Number(body.houseWatts ?? body.house) || 0
-        const grid = Number(body.gridWatts ?? body.grid) || 0
-        const batteryPct = typeof body.batteryPercent === 'number' ? Math.max(0, Math.min(100, Math.round(body.batteryPercent))) : 0
-        latestEnergy = {
-          solarWatts: solar,
-          solar,
-          houseWatts: house,
-          house,
-          gridWatts: grid,
-          grid,
-          batteryWatts: typeof body.batteryWatts === 'number' ? body.batteryWatts : 0,
-          batteryPercent: batteryPct,
-          updatedAt: Date.now(),
-        }
-        json(response, 200, latestEnergy)
-        return
-      }
-
-      if (url.pathname === '/api/energy' && request.method === 'GET') {
-        json(response, 200, latestEnergy)
-        return
-      }
 
       if (url.pathname.startsWith('/api/calendar/') && request.method === 'GET') {
         const widgetId = decodeURIComponent(url.pathname.slice('/api/calendar/'.length))

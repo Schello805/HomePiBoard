@@ -163,7 +163,6 @@ export async function renderAdminPage(app: HTMLElement) {
           <button type="button" data-add-type="image">▧ Bild</button>
           <button type="button" data-add-type="slideshow">▨ Diashow</button>
           <button type="button" data-add-type="waste">🗑️ Müll</button>
-          <button type="button" data-add-type="energy">☀️ Energie</button>
           <button type="button" data-add-type="media">🎵 Media</button>
         </div>
       </div>
@@ -421,14 +420,6 @@ export async function renderAdminPage(app: HTMLElement) {
     const wasteInput = editor.querySelector<HTMLTextAreaElement>('[data-field="wasteItems"]')
     const wasteItems = type === 'waste' && wasteInput ? wasteInput.value.trim() : undefined
 
-    const solarInput = editor.querySelector<HTMLInputElement>('[data-field="energySolar"]')
-    const houseInput = editor.querySelector<HTMLInputElement>('[data-field="energyHouse"]')
-    const gridInput = editor.querySelector<HTMLInputElement>('[data-field="energyGrid"]')
-    const batteryInput = editor.querySelector<HTMLInputElement>('[data-field="energyBatteryPercent"]')
-    const energySolar = type === 'energy' && solarInput ? Number(solarInput.value) || 0 : undefined
-    const energyHouse = type === 'energy' && houseInput ? Number(houseInput.value) || 0 : undefined
-    const energyGrid = type === 'energy' && gridInput ? Number(gridInput.value) || 0 : undefined
-    const energyBatteryPercent = type === 'energy' && batteryInput ? Math.min(100, Math.max(0, Number(batteryInput.value) || 0)) : undefined
 
     const mediaTitleInput = editor.querySelector<HTMLInputElement>('[data-field="mediaTitle"]')
     const mediaArtistInput = editor.querySelector<HTMLInputElement>('[data-field="mediaArtist"]')
@@ -453,10 +444,6 @@ export async function renderAdminPage(app: HTMLElement) {
       ...(breakBefore ? { breakBefore: true } : {}),
       ...(showTitle ? { showTitle: true } : {}),
       ...(wasteItems !== undefined ? { wasteItems } : {}),
-      ...(energySolar !== undefined ? { energySolar } : {}),
-      ...(energyHouse !== undefined ? { energyHouse } : {}),
-      ...(energyGrid !== undefined ? { energyGrid } : {}),
-      ...(energyBatteryPercent !== undefined ? { energyBatteryPercent } : {}),
       ...(mediaTitle !== undefined ? { mediaTitle } : {}),
       ...(mediaArtist !== undefined ? { mediaArtist } : {}),
       ...(mediaAlbum !== undefined ? { mediaAlbum } : {}),
