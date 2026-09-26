@@ -515,6 +515,48 @@ export function bindRadioWidgets(root: ParentNode, options: { allowAutoplay?: bo
       return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`
     }
 
+    const artistEl = widget.querySelector<HTMLElement>('[data-media-field="artist"]')
+    const originalArtist = artistEl ? artistEl.textContent || '' : ''
+    let metadataPollInterval: number | undefined
+
+    const updateNowPlayingMetadata = async () => {
+      if (!streamUrl || (typeof window !== 'undefined' && !window.fetch)) return
+      try {
+        const res = await fetch(`/api/media/now-playing?url=${encodeURIComponent(streamUrl)}`)
+        if (!res.ok) return
+        const meta = await res.json() as { success?: boolean; streamTitle?: string; artist?: string; title?: string }
+        if (meta.success && meta.streamTitle && artistEl) {
+          artistEl.innerHTML = `<span class="live-track-badge" title="${escapeHtml(meta.streamTitle)}">🎵 ${escapeHtml(meta.streamTitle)}</span>`
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const startMetadataPolling = () => {
+      void updateNowPlayingMetadata()
+      if (metadataPollInterval) clearInterval(metadataPollInterval)
+      const timer = setInterval(() => {
+        if (!audio.paused) {
+          void updateNowPlayingMetadata()
+        }
+      }, 15000)
+      if (typeof timer === 'object' && timer && typeof (timer as { unref?: () => void }).unref === 'function') {
+        (timer as { unref: () => void }).unref()
+      }
+      metadataPollInterval = timer as unknown as number
+    }
+
+    const stopMetadataPolling = () => {
+      if (metadataPollInterval) {
+        clearInterval(metadataPollInterval)
+        metadataPollInterval = undefined
+      }
+      if (artistEl && originalArtist && artistEl.querySelector('.live-track-badge')) {
+        artistEl.textContent = originalArtist
+      }
+    }
+
     const startTimer = () => {
       if (timerInterval) clearInterval(timerInterval)
       const timer = setInterval(() => {
@@ -604,8 +646,10 @@ export function bindRadioWidgets(root: ParentNode, options: { allowAutoplay?: bo
 
       if (isPlaying) {
         startTimer()
+        startMetadataPolling()
       } else {
         stopTimer()
+        stopMetadataPolling()
       }
     }
 

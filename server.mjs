@@ -1,5 +1,6 @@
 import { execFile as execFileCallback } from 'node:child_process'
-import { createServer } from 'node:http'
+import http, { createServer } from 'node:http'
+import https from 'node:https'
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import { lookup as dnsLookup } from 'node:dns/promises'
 import { mkdir, open, readFile, realpath, rename, unlink } from 'node:fs/promises'
@@ -85,6 +86,177 @@ async function validateCalendarFeedUrl(value, lookupFunction) {
     throw new CalendarFeedError(422, 'Private Netzwerkadressen sind für Kalender-Feeds nicht erlaubt.')
   }
   return url
+}
+
+const icyMetadataCache = new Map()
+
+export async function fetchIcyMetadata(streamUrl, { lookupFunction = dnsLookup, timeoutMs = 5000 } = {}) {
+  const normalized = String(streamUrl || '').trim()
+  if (!normalized) return { success: false, error: 'Keine Stream-URL angegeben' }
+
+  const cached = icyMetadataCache.get(normalized)
+  if (cached && Date.now() - cached.timestamp < 12000) {
+    return cached.data
+  }
+
+  let currentUrl
+  try {
+    currentUrl = new URL(normalized)
+    if (currentUrl.protocol !== 'http:' && currentUrl.protocol !== 'https:') {
+      return { success: false, error: 'Nur HTTP und HTTPS Streams werden unterstützt' }
+    }
+  } catch {
+    return { success: false, error: 'Ungültige Stream-URL' }
+  }
+
+  for (let redirects = 0; redirects <= 3; redirects += 1) {
+    let addresses
+    try {
+      addresses = isIP(currentUrl.hostname)
+        ? [{ address: currentUrl.hostname }]
+        : await lookupFunction(currentUrl.hostname, { all: true, verbatim: true })
+    } catch {
+      return { success: false, error: 'Host konnte nicht aufgelöst werden' }
+    }
+    if (!addresses.length || addresses.some(({ address }) => isPrivateNetworkAddress(address))) {
+      return { success: false, error: 'Private Adressen sind nicht erlaubt' }
+    }
+
+    const client = currentUrl.protocol === 'https:' ? https : http
+    const result = await new Promise((resolve) => {
+      let resolved = false
+      const done = (val) => {
+        if (!resolved) {
+          resolved = true
+          resolve(val)
+        }
+      }
+
+      const req = client.get(currentUrl, {
+        headers: {
+          'Icy-MetaData': '1',
+          'User-Agent': 'HomePiBoard/1.0 (LiveRadio)',
+        },
+        timeout: timeoutMs,
+      }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          req.destroy()
+          try {
+            const nextUrl = new URL(res.headers.location, currentUrl)
+            done({ redirect: nextUrl })
+          } catch {
+            done({ success: false, error: 'Ungültige Weiterleitung' })
+          }
+          return
+        }
+
+        const metaint = parseInt(res.headers['icy-metaint'], 10)
+        const station = res.headers['icy-name'] || ''
+        const description = res.headers['icy-description'] || ''
+
+        if (!metaint || isNaN(metaint)) {
+          req.destroy()
+          done({
+            success: true,
+            streamTitle: '',
+            artist: '',
+            title: '',
+            station,
+            description,
+          })
+          return
+        }
+
+        let bytesRead = 0
+        let metaLength = 0
+        let metaBuffer = Buffer.alloc(0)
+        let state = 'audio'
+
+        res.on('data', (chunk) => {
+          let offset = 0
+          while (offset < chunk.length && !resolved) {
+            if (state === 'audio') {
+              const need = metaint - bytesRead
+              const available = chunk.length - offset
+              if (available < need) {
+                bytesRead += available
+                offset = chunk.length
+              } else {
+                offset += need
+                bytesRead = 0
+                state = 'length'
+              }
+            } else if (state === 'length') {
+              metaLength = chunk[offset] * 16
+              offset += 1
+              if (metaLength === 0) {
+                state = 'audio'
+              } else {
+                metaBuffer = Buffer.alloc(0)
+                state = 'meta'
+              }
+            } else if (state === 'meta') {
+              const need = metaLength - metaBuffer.length
+              const available = chunk.length - offset
+              const toRead = Math.min(need, available)
+              metaBuffer = Buffer.concat([metaBuffer, chunk.slice(offset, offset + toRead)])
+              offset += toRead
+
+              if (metaBuffer.length >= metaLength) {
+                req.destroy()
+                const metaString = metaBuffer.toString('utf8')
+                const match = metaString.match(/StreamTitle='(.*?)';/i)
+                const streamTitle = match ? match[1].trim() : ''
+
+                let artist = ''
+                let title = streamTitle
+                if (streamTitle.includes(' - ')) {
+                  const parts = streamTitle.split(' - ')
+                  artist = parts[0].trim()
+                  title = parts.slice(1).join(' - ').trim()
+                }
+
+                done({
+                  success: true,
+                  streamTitle,
+                  artist,
+                  title,
+                  station,
+                  description,
+                })
+                return
+              }
+            }
+          }
+        })
+
+        res.on('error', (err) => {
+          req.destroy()
+          done({ success: false, error: err.message })
+        })
+      })
+
+      req.on('timeout', () => {
+        req.destroy()
+        done({ success: false, error: 'Timeout' })
+      })
+      req.on('error', (err) => {
+        done({ success: false, error: err.message })
+      })
+    })
+
+    if (result.redirect) {
+      currentUrl = result.redirect
+      continue
+    }
+
+    if (result.success) {
+      icyMetadataCache.set(normalized, { timestamp: Date.now(), data: result })
+    }
+    return result
+  }
+
+  return { success: false, error: 'Zu viele Weiterleitungen' }
 }
 
 async function downloadCalendarFeed(value, calendarFetch, lookupFunction) {
@@ -752,6 +924,21 @@ export function createHomePiBoardServer({
 
       if (url.pathname === '/api/media' && request.method === 'GET') {
         json(response, 200, latestMedia)
+        return
+      }
+
+      if (url.pathname === '/api/media/now-playing' && request.method === 'GET') {
+        const streamUrl = url.searchParams.get('url') || ''
+        if (!streamUrl) {
+          json(response, 400, { success: false, error: 'Keine Stream-URL angegeben' })
+          return
+        }
+        try {
+          const meta = await fetchIcyMetadata(streamUrl, { lookupFunction })
+          json(response, 200, meta)
+        } catch (error) {
+          json(response, 500, { success: false, error: error instanceof Error ? error.message : String(error) })
+        }
         return
       }
 

@@ -549,6 +549,21 @@ test('media API stores and returns playback state', async (context) => {
   assert.equal(data.playing, true)
 })
 
+test('media now-playing endpoint validates stream url and returns metadata structure', async (context) => {
+  const running = await startServer({
+    lookupFunction: async () => [{ address: '93.184.216.34', family: 4 }],
+  })
+  context.after(() => running.server.close())
+
+  const emptyRes = await fetch(`${running.url}/api/media/now-playing`)
+  assert.equal(emptyRes.status, 400)
+
+  const privateRes = await fetch(`${running.url}/api/media/now-playing?url=http://192.168.1.1/stream`)
+  assert.equal(privateRes.status, 200)
+  const privateData = await privateRes.json()
+  assert.equal(privateData.success, false)
+})
+
 test('system update-status returns branch and commit info', async (context) => {
   const running = await startServer({
     updateStatusHandler: async (fetchRemote) => ({
