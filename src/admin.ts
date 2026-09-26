@@ -327,6 +327,10 @@ export async function renderAdminPage(app: HTMLElement) {
             </select>
           </label>
         </div>
+        <label class="system-checkbox-label" for="admin-show-weekday">
+          <input type="checkbox" id="admin-show-weekday" ${settings.showWeekday !== false ? 'checked' : ''} />
+          <span>Wochentag im Header anzeigen (z. B. Sa., 26.09.2026)</span>
+        </label>
         <label class="system-checkbox-label" for="admin-show-seconds">
           <input type="checkbox" id="admin-show-seconds" ${settings.showSeconds ? 'checked' : ''} />
           <span>Sekunden in der Digitaluhr anzeigen (z. B. 12:45:30)</span>
@@ -474,6 +478,7 @@ export async function renderAdminPage(app: HTMLElement) {
   const localeSelect = app.querySelector<HTMLSelectElement>('#admin-locale')!
   const timezoneSelect = app.querySelector<HTMLSelectElement>('#admin-timezone')!
   const showSecondsCheckbox = app.querySelector<HTMLInputElement>('#admin-show-seconds')!
+  const showWeekdayCheckbox = app.querySelector<HTMLInputElement>('#admin-show-weekday')!
   const nightModeEnabledCheckbox = app.querySelector<HTMLInputElement>('#admin-night-mode-enabled')!
   const nightModeStartInput = app.querySelector<HTMLInputElement>('#admin-night-mode-start')!
   const nightModeEndInput = app.querySelector<HTMLInputElement>('#admin-night-mode-end')!
@@ -1791,6 +1796,7 @@ export async function renderAdminPage(app: HTMLElement) {
       timezone: timezoneSelect.value,
       locale: localeSelect.value,
       showSeconds: showSecondsCheckbox.checked,
+      showWeekday: showWeekdayCheckbox.checked,
       displayScale: Number(displayScaleSelect.value),
       hideCursor: hideCursorCheckbox.checked,
       nightModeEnabled: nightModeEnabledCheckbox.checked,
@@ -1835,6 +1841,7 @@ export async function renderAdminPage(app: HTMLElement) {
       localeSelect.value = defaultSettings.locale || 'de-DE'
       timezoneSelect.value = defaultSettings.timezone || 'auto'
       showSecondsCheckbox.checked = Boolean(defaultSettings.showSeconds)
+      showWeekdayCheckbox.checked = defaultSettings.showWeekday !== false
       nightModeEnabledCheckbox.checked = Boolean(defaultSettings.nightModeEnabled)
       nightModeStartInput.value = defaultSettings.nightModeStart || '22:00'
       nightModeEndInput.value = defaultSettings.nightModeEnd || '06:00'

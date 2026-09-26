@@ -26,6 +26,7 @@ export type DisplaySettings = {
   timezone?: string
   locale?: string
   showSeconds?: boolean
+  showWeekday?: boolean
   displayScale?: number
   hideCursor?: boolean
   nightModeEnabled?: boolean
@@ -55,6 +56,7 @@ export const defaultSettings: DisplaySettings = {
   timezone: 'auto',
   locale: 'de-DE',
   showSeconds: false,
+  showWeekday: true,
   displayScale: 100,
   hideCursor: true,
   nightModeEnabled: false,
@@ -266,6 +268,7 @@ export function normalizeSettings(value: unknown): DisplaySettings {
   const timezone = typeof parsed.timezone === 'string' && parsed.timezone.trim() ? parsed.timezone.trim().slice(0, 50) : defaultSettings.timezone
   const locale = typeof parsed.locale === 'string' && parsed.locale.trim() ? parsed.locale.trim().slice(0, 20) : defaultSettings.locale
   const showSeconds = typeof parsed.showSeconds === 'boolean' ? parsed.showSeconds : defaultSettings.showSeconds
+  const showWeekday = typeof parsed.showWeekday === 'boolean' ? parsed.showWeekday : defaultSettings.showWeekday
   const rawScale = Number(parsed.displayScale)
   const displayScale = Number.isFinite(rawScale) && rawScale >= 50 && rawScale <= 200 ? Math.round(rawScale) : defaultSettings.displayScale
   const hideCursor = typeof parsed.hideCursor === 'boolean' ? parsed.hideCursor : defaultSettings.hideCursor
@@ -285,6 +288,7 @@ export function normalizeSettings(value: unknown): DisplaySettings {
     timezone,
     locale,
     showSeconds,
+    showWeekday,
     displayScale,
     hideCursor,
     nightModeEnabled,

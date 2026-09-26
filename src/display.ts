@@ -276,6 +276,7 @@ export async function renderDisplayPage(app: HTMLElement) {
     window.addEventListener('mousemove', handleMouseMove, { passive: true })
   }
 
+  const showWeekday = settings.showWeekday !== false
   const locale = settings.locale || 'de-DE'
   const timeOptions: Intl.DateTimeFormatOptions = {
     hour: '2-digit',
@@ -284,6 +285,7 @@ export async function renderDisplayPage(app: HTMLElement) {
     ...(settings.timezone && settings.timezone !== 'auto' ? { timeZone: settings.timezone } : {}),
   }
   const dateOptions: Intl.DateTimeFormatOptions = {
+    ...(showWeekday ? { weekday: 'short' } : {}),
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -296,12 +298,23 @@ export async function renderDisplayPage(app: HTMLElement) {
       const formattedTime = now.toLocaleTimeString(locale, timeOptions)
       const formattedDate = now.toLocaleDateString(locale, dateOptions)
       clock.textContent = formattedTime
-      date.textContent = formattedDate
+      if (showWeekday) {
+        const parts = formattedDate.split(/(^[^\d]+)/).filter(Boolean)
+        if (parts.length >= 2) {
+          const weekdayStr = parts[0]!.trim()
+          const dateStr = parts.slice(1).join('').trim().replace(/^,?\s*/, '')
+          date.innerHTML = `<span class="header-weekday">${escapeHtml(weekdayStr)}</span> ${escapeHtml(dateStr)}`
+        } else {
+          date.textContent = formattedDate
+        }
+      } else {
+        date.textContent = formattedDate
+      }
       if (nightClockTime) nightClockTime.textContent = formattedTime
       if (nightClockDate) nightClockDate.textContent = formattedDate
     } catch {
       const fbTime = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
-      const fbDate = now.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      const fbDate = now.toLocaleDateString('de-DE', { weekday: showWeekday ? 'short' : undefined, day: '2-digit', month: '2-digit', year: 'numeric' })
       clock.textContent = fbTime
       date.textContent = fbDate
       if (nightClockTime) nightClockTime.textContent = fbTime

@@ -245,6 +245,7 @@ test('normalizeSettings preserves and validates system and display options', () 
     timezone: 'Europe/Berlin',
     locale: 'de-DE',
     showSeconds: true,
+    showWeekday: true,
     displayScale: 125,
     hideCursor: false,
     widgets: [],
@@ -253,6 +254,7 @@ test('normalizeSettings preserves and validates system and display options', () 
   assert.equal(normalized.timezone, 'Europe/Berlin')
   assert.equal(normalized.locale, 'de-DE')
   assert.equal(normalized.showSeconds, true)
+  assert.equal(normalized.showWeekday, true)
   assert.equal(normalized.displayScale, 125)
   assert.equal(normalized.hideCursor, false)
 

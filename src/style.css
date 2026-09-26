@@ -103,8 +103,9 @@ button:disabled { cursor: not-allowed; opacity: 0.42; }
 .connection-status.is-online { border-color: rgba(201, 242, 105, 0.38); color: var(--acid); }
 .connection-status.is-offline { border-color: rgba(242, 155, 136, 0.45); color: var(--danger); background: rgba(242, 155, 136, 0.12); }
 .save-state { border-color: var(--line); color: var(--muted); }
-.save-state.is-dirty { border-color: rgba(228, 183, 138, 0.55); color: var(--warm); }
 .header-status strong { color: var(--ink); font-size: clamp(1.05rem, 1.8vw, 1.35rem); font-weight: 500; letter-spacing: -0.03em; }
+.header-status time { color: var(--ink); font-size: clamp(0.85rem, 1.25vw, 1.05rem); font-weight: 500; letter-spacing: 0.02em; display: inline-flex; align-items: baseline; }
+.header-status .header-weekday { color: var(--acid); font-weight: 600; margin-right: 3px; }
 .status-divider { width: 1px; height: 18px; background: var(--line); }
 .settings-button {
   display: grid;
