@@ -55,11 +55,22 @@ export async function renderSettingsPage(app: HTMLElement) {
             <div class="settings-card-header">
               <div class="settings-icon-badge icon-hdmi">📺</div>
               <div>
-                <h2 class="settings-card-title">HDMI &amp; Bildschirm</h2>
-                <p class="settings-card-desc">Skalierung und Mauszeiger für deinen Monitor</p>
+                <h2 class="settings-card-title">Standort, HDMI &amp; Bildschirm</h2>
+                <p class="settings-card-desc">Display-Name, Wetterstadt und Bildschirm-Skalierung</p>
               </div>
             </div>
             <div class="settings-card-body">
+              <div class="settings-row-2col">
+                <label class="setting-field-label" for="settings-location">
+                  <span class="label-title">Display-Name (Standort)</span>
+                  <input class="settings-input" id="settings-location" maxlength="24" value="${escapeHtml(settings.location)}" placeholder="Zuhause" />
+                </label>
+                <label class="setting-field-label" for="settings-weather-city">
+                  <span class="label-title">Wetter-Standort (Stadt)</span>
+                  <input class="settings-input" id="settings-weather-city" maxlength="40" value="${escapeHtml(settings.weatherCity)}" placeholder="Berlin" />
+                </label>
+              </div>
+
               <div class="setting-group-box">
                 <label class="setting-field-label" for="settings-display-scale">
                   <span class="label-title">Display-Zoom / Skalierung</span>
@@ -381,6 +392,8 @@ export async function renderSettingsPage(app: HTMLElement) {
   `
 
   // Element Queries
+  const locationInput = app.querySelector<HTMLInputElement>('#settings-location')
+  const weatherCityInput = app.querySelector<HTMLInputElement>('#settings-weather-city')
   const displayScaleSelect = app.querySelector<HTMLSelectElement>('#settings-display-scale')!
   const detectedResolutionEl = app.querySelector<HTMLElement>('#settings-detected-resolution')!
   const hideCursorCheckbox = app.querySelector<HTMLInputElement>('#settings-hide-cursor')!
@@ -725,6 +738,8 @@ export async function renderSettingsPage(app: HTMLElement) {
     const nextSettings = normalizeSettings({
       ...currentSettings,
       version: SETTINGS_VERSION,
+      location: locationInput ? locationInput.value.trim() || 'Zuhause' : currentSettings.location,
+      weatherCity: weatherCityInput ? weatherCityInput.value.trim() : currentSettings.weatherCity,
       timezone: timezoneSelect.value,
       locale: localeSelect.value,
       showWeekday: showWeekdayCheckbox.checked,

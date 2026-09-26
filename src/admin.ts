@@ -224,11 +224,8 @@ export async function renderAdminPage(app: HTMLElement) {
           <span class="admin-brand-title">HomePiBoard <em>EDIT</em></span>
         </div>
         <div class="admin-global-fields">
-          <label class="topbar-field" for="admin-location"><span>Name</span><input id="admin-location" maxlength="24" value="${escapeHtml(settings.location)}" placeholder="Zuhause" /></label>
-          <label class="topbar-field" for="admin-weather-city"><span>Wetter</span><input id="admin-weather-city" maxlength="40" value="${escapeHtml(settings.weatherCity)}" placeholder="Berlin" /></label>
-          <button class="topbar-btn" id="admin-presets-btn" type="button" title="Gespeicherte Display-Layouts & Profile">📋 Displays &amp; Vorlagen</button>
-          <a class="topbar-btn" id="display-settings-button" href="/settings" title="Display-, HDMI- & Systemeinstellungen">⚙ Einstellungen</a>
-          <button class="topbar-btn" id="change-pin-button" type="button" title="Admin-PIN ändern">🔑 PIN</button>
+          <button class="topbar-btn" id="admin-presets-btn" type="button" title="Gespeicherte Display-Layouts &amp; Vorlagen">📋 Displays &amp; Vorlagen</button>
+          <a class="topbar-btn" id="display-settings-button" href="/settings" title="Display-, HDMI- &amp; Systemeinstellungen">⚙ Einstellungen</a>
         </div>
         <div class="admin-header-actions">
           <span class="connection-status ${loaded.source === 'server' ? 'is-online' : ''}">${loaded.source === 'server' ? 'SERVER' : 'LOKAL'}</span>
@@ -241,8 +238,7 @@ export async function renderAdminPage(app: HTMLElement) {
       <div class="admin-subbar">
         <div class="admin-subbar-info">
           <span class="widget-count" id="widget-count"></span>
-          <span class="grid-hint">${GRID_COLUMNS} × ${GRID_ROWS} Raster • Ecke ↘ ziehen • ⚙ Einstellungen</span>
-          <a class="system-status-pill" id="system-status-pill" href="/settings" title="Raspberry Pi Telemetrie anzeigen">Pi Telemetrie …</a>
+          <span class="grid-hint">${GRID_COLUMNS} × ${GRID_ROWS} Raster • Ecke ↘ ziehen</span>
         </div>
         <div class="add-widget-menu" aria-label="Widget hinzufügen">
           <span class="add-label">+ Widget:</span>
@@ -267,7 +263,6 @@ export async function renderAdminPage(app: HTMLElement) {
     </form>
   </main>
   <dialog class="pin-dialog" id="pin-dialog"><form method="dialog" id="pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Admin-Bereich</span><h2>PIN eingeben</h2></div><button class="close-button" id="pin-close" type="button" aria-label="Schließen">×</button></div><label for="admin-pin">Admin-PIN<input id="admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><p class="pin-error" id="pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="pin-cancel" type="button">Abbrechen</button><button class="save-button" id="pin-submit" value="default">Entsperren</button></div></form></dialog>
-  <dialog class="pin-dialog" id="change-pin-dialog"><form id="change-pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Sicherheit</span><h2>Admin-PIN ändern</h2></div><button class="close-button" id="change-pin-close" type="button" aria-label="Schließen">×</button></div><label for="current-admin-pin">Aktuelle PIN<input id="current-admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><label for="new-admin-pin">Neue PIN<span>4 bis 64 Ziffern</span><input id="new-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required /></label><label for="confirm-admin-pin">Neue PIN wiederholen<input id="confirm-admin-pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required /></label><p class="pin-error" id="change-pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="change-pin-cancel" type="button">Abbrechen</button><button class="save-button" id="change-pin-submit" type="submit">PIN speichern</button></div></form></dialog>
   <dialog class="pin-dialog confirm-dialog" id="confirm-dialog">
     <form method="dialog" id="confirm-form">
       <div class="dialog-heading">
@@ -338,18 +333,7 @@ export async function renderAdminPage(app: HTMLElement) {
   const pinSubmit = app.querySelector<HTMLButtonElement>('#pin-submit')!
   const pinInput = app.querySelector<HTMLInputElement>('#admin-pin')!
   const pinError = app.querySelector<HTMLElement>('#pin-error')!
-  const changePinButton = app.querySelector<HTMLButtonElement>('#change-pin-button')!
-  const changePinDialog = app.querySelector<HTMLDialogElement>('#change-pin-dialog')!
-  const changePinForm = app.querySelector<HTMLFormElement>('#change-pin-form')!
-  const changePinClose = app.querySelector<HTMLButtonElement>('#change-pin-close')!
-  const changePinCancel = app.querySelector<HTMLButtonElement>('#change-pin-cancel')!
-  const changePinSubmit = app.querySelector<HTMLButtonElement>('#change-pin-submit')!
-  const currentPinInput = app.querySelector<HTMLInputElement>('#current-admin-pin')!
-  const newPinInput = app.querySelector<HTMLInputElement>('#new-admin-pin')!
-  const confirmPinInput = app.querySelector<HTMLInputElement>('#confirm-admin-pin')!
-  const changePinError = app.querySelector<HTMLElement>('#change-pin-error')!
-  const displaySettingsButton = app.querySelector<HTMLElement>('#display-settings-button')!
-  const systemStatusPill = app.querySelector<HTMLElement>('#system-status-pill')!
+  const displaySettingsButton = app.querySelector<HTMLElement>('#display-settings-button')
   let dirty = false
   let pinRequest: Promise<string | null> | null = null
 
@@ -1333,79 +1317,6 @@ export async function renderAdminPage(app: HTMLElement) {
   updateEditorIndexes()
 
   app.querySelectorAll<HTMLButtonElement>('[data-add-type]').forEach((button) => button.addEventListener('click', () => addWidget(button.dataset.addType as WidgetType)))
-  app.querySelectorAll<HTMLInputElement>('.admin-global-fields input').forEach((input) => input.addEventListener('input', markDirty))
-
-  const closeChangePinDialog = () => {
-    if (changePinDialog.open) changePinDialog.close()
-  }
-  changePinButton.addEventListener('click', () => {
-    changePinForm.reset()
-    bindCompactFields(changePinForm)
-    changePinError.textContent = ''
-    changePinSubmit.disabled = false
-    changePinSubmit.textContent = 'PIN speichern'
-    changePinDialog.showModal()
-    currentPinInput.focus()
-  })
-  changePinClose.addEventListener('click', closeChangePinDialog)
-  changePinCancel.addEventListener('click', closeChangePinDialog)
-  changePinForm.addEventListener('submit', async (event) => {
-    event.preventDefault()
-    const currentPin = currentPinInput.value.trim()
-    const newPin = newPinInput.value.trim()
-    const validationError = validatePinChange(newPin, confirmPinInput.value.trim())
-    if (validationError) {
-      changePinError.textContent = validationError
-      newPinInput.focus()
-      return
-    }
-
-    changePinError.textContent = ''
-    changePinSubmit.disabled = true
-    changePinSubmit.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Speichert …</span>'
-    try {
-      await store.changePin(currentPin, newPin)
-      sessionStorage.setItem(pinKey, newPin)
-      closeChangePinDialog()
-      showMessage('Die Admin-PIN wurde geändert.')
-    } catch (error) {
-      if (error instanceof UnauthorizedError) {
-        changePinError.textContent = 'Die aktuelle PIN ist nicht korrekt.'
-        currentPinInput.select()
-      } else if (error instanceof SettingsServerError && error.status === 422) {
-        changePinError.textContent = 'Die neue PIN muss aus 4 bis 64 Ziffern bestehen.'
-      } else {
-        changePinError.textContent = adminErrorMessage(error, 'Die PIN konnte nicht geändert werden. Prüfe die Serververbindung.')
-      }
-    } finally {
-      changePinSubmit.disabled = false
-      changePinSubmit.textContent = 'PIN speichern'
-    }
-  })
-
-  async function refreshTelemetry() {
-    try {
-      const res = await fetch('/api/system', { method: 'GET', cache: 'no-store' })
-      if (!res.ok) throw new Error('system-telemetry-failed')
-      const data = await res.json() as {
-        cpuTemp: number | null
-        memory: { percent: number; usedMb: number; totalMb: number }
-        network: { primaryIp: string }
-      }
-
-      const tempStr = data.cpuTemp !== null ? formatCpuTemp(data.cpuTemp) : ''
-      const ramStr = `${data.memory.percent}% RAM`
-      const ipStr = data.network.primaryIp
-      systemStatusPill.textContent = [ipStr, tempStr, ramStr].filter(Boolean).join(' • ')
-      systemStatusPill.title = `IP: ${ipStr} | CPU: ${tempStr || 'N/A'} | RAM: ${data.memory.usedMb}/${data.memory.totalMb} MB (${ramStr})`
-    } catch {
-      systemStatusPill.textContent = 'Pi: Telemetrie'
-    }
-  }
-
-  refreshTelemetry()
-  window.setInterval(refreshTelemetry, 30000)
-
   async function checkUpdateStatus(fetchRemote = false) {
     try {
       const res = await fetch(`/api/system/update-status${fetchRemote ? '?check=1' : ''}`, { method: 'GET', cache: 'no-store' })
@@ -1437,10 +1348,6 @@ export async function renderAdminPage(app: HTMLElement) {
   // Display Presets & JSON Export/Import Logic
   // ==========================================
   function applySettingsToEditor(newSettings: DisplaySettings) {
-    const locInput = app.querySelector<HTMLInputElement>('#admin-location')
-    if (locInput) locInput.value = newSettings.location || ''
-    const weatherInput = app.querySelector<HTMLInputElement>('#admin-weather-city')
-    if (weatherInput) weatherInput.value = newSettings.weatherCity || ''
     editorList.innerHTML = newSettings.widgets.map(renderWidgetEditor).join('')
     editorList.querySelectorAll<HTMLElement>('.widget-editor').forEach(bindEditor)
     bindWidgetFrames(editorList)
@@ -1463,13 +1370,9 @@ export async function renderAdminPage(app: HTMLElement) {
   }
 
   function getCurrentEditorSettings(): DisplaySettings {
-    const locInput = app.querySelector<HTMLInputElement>('#admin-location')
-    const weatherInput = app.querySelector<HTMLInputElement>('#admin-weather-city')
     return normalizeSettings({
       ...settings,
       version: SETTINGS_VERSION,
-      location: locInput ? locInput.value.trim() : settings.location,
-      weatherCity: weatherInput ? weatherInput.value.trim() : settings.weatherCity,
       widgets: readWidgets(),
     })
   }
@@ -1691,8 +1594,6 @@ export async function renderAdminPage(app: HTMLElement) {
     const nextSettings = normalizeSettings({
       ...settings,
       version: SETTINGS_VERSION,
-      location: app.querySelector<HTMLInputElement>('#admin-location')!.value.trim() || defaultSettings.location,
-      weatherCity: app.querySelector<HTMLInputElement>('#admin-weather-city')!.value.trim(),
       widgets: readWidgets(),
     })
     saveButton.disabled = true
