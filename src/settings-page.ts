@@ -11,72 +11,101 @@ export async function renderSettingsPage(app: HTMLElement) {
 
   app.innerHTML = `
     <div class="settings-page-shell">
+      <!-- Premium Glass Topbar -->
       <header class="settings-topbar">
         <div class="settings-brand">
-          <img class="brand-logo" src="/homepiboard-logo.svg" alt="HomePiBoard" />
+          <div class="brand-logo-wrap">
+            <img class="brand-logo" src="/homepiboard-logo.svg" alt="HomePiBoard" />
+          </div>
           <div>
-            <span class="widget-kicker">System- &amp; Display-Einstellungen</span>
+            <div class="settings-kicker-badge">
+              <span class="pulse-dot"></span>
+              <span>Raspberry Pi &amp; HDMI System</span>
+            </div>
             <h1 class="settings-title">Einstellungen</h1>
           </div>
         </div>
         <div class="settings-nav-actions">
-          <a class="topbar-btn secondary" href="/admin" title="Zurück zum Widget-Editor">← Widget-Editor</a>
-          <a class="topbar-btn secondary" href="/" target="_blank" rel="noreferrer" title="HDMI-Live-Anzeige im neuen Tab öffnen">📺 Anzeige ↗</a>
-          <button class="system-status-pill" id="settings-status-pill" type="button" title="Telemetrie anzeigen">Lade Telemetrie …</button>
-          <button class="save-button" id="save-settings-btn" type="button">💾 Einstellungen speichern</button>
+          <a class="settings-action-btn secondary" href="/admin" title="Zurück zum Widget-Editor">
+            <span class="btn-icon">←</span>
+            <span>Widget-Editor</span>
+          </a>
+          <a class="settings-action-btn secondary" href="/" target="_blank" rel="noreferrer" title="HDMI-Live-Anzeige im neuen Tab öffnen">
+            <span class="btn-icon">📺</span>
+            <span>Live-Anzeige</span>
+            <span class="external-arrow">↗</span>
+          </a>
+          <button class="settings-status-chip" id="settings-status-pill" type="button" title="Telemetrie anzeigen">
+            <span class="status-live-dot"></span>
+            <span class="status-chip-text">Lade Telemetrie …</span>
+          </button>
+          <button class="settings-save-btn" id="save-settings-btn" type="button">
+            <span class="save-btn-icon">💾</span>
+            <span class="save-btn-label">Einstellungen speichern</span>
+          </button>
         </div>
       </header>
 
       <main class="settings-main-content">
+        <!-- 3-Column / Balanced Responsive Grid Layout -->
         <div class="settings-grid-layout">
-          <!-- 1. HDMI & Bildschirm -->
-          <section class="settings-card">
+          
+          <!-- CARD 1: HDMI & Bildschirm -->
+          <section class="settings-card card-display">
             <div class="settings-card-header">
-              <span class="settings-card-icon">📺</span>
+              <div class="settings-icon-badge icon-hdmi">📺</div>
               <div>
                 <h2 class="settings-card-title">HDMI &amp; Bildschirm</h2>
-                <p class="settings-card-desc">Skalierung und Mauszeiger für deinen angeschlossenen Monitor</p>
+                <p class="settings-card-desc">Skalierung und Mauszeiger für deinen Monitor</p>
               </div>
             </div>
             <div class="settings-card-body">
-              <div class="system-field-row">
-                <label for="settings-display-scale">
-                  <span>Display-Zoom / Skalierung</span>
-                  <select id="settings-display-scale">
-                    <option value="80" ${(settings.displayScale || 100) === 80 ? 'selected' : ''}>80% (Sehr kompakt)</option>
-                    <option value="90" ${(settings.displayScale || 100) === 90 ? 'selected' : ''}>90% (Kompakt)</option>
-                    <option value="100" ${(settings.displayScale || 100) === 100 ? 'selected' : ''}>100% (Standard)</option>
-                    <option value="110" ${(settings.displayScale || 100) === 110 ? 'selected' : ''}>110% (Leicht vergrößert)</option>
-                    <option value="125" ${(settings.displayScale || 100) === 125 ? 'selected' : ''}>125% (TV-Empfehlung ab 2m)</option>
-                    <option value="150" ${(settings.displayScale || 100) === 150 ? 'selected' : ''}>150% (Groß)</option>
+              <div class="setting-group-box">
+                <label class="setting-field-label" for="settings-display-scale">
+                  <span class="label-title">Display-Zoom / Skalierung</span>
+                  <select class="settings-select" id="settings-display-scale">
+                    <option value="80" ${(settings.displayScale || 100) === 80 ? 'selected' : ''}>80% — Sehr kompakt</option>
+                    <option value="90" ${(settings.displayScale || 100) === 90 ? 'selected' : ''}>90% — Kompakt</option>
+                    <option value="100" ${(settings.displayScale || 100) === 100 ? 'selected' : ''}>100% — Standard (1:1 Pixel)</option>
+                    <option value="110" ${(settings.displayScale || 100) === 110 ? 'selected' : ''}>110% — Leicht vergrößert</option>
+                    <option value="125" ${(settings.displayScale || 100) === 125 ? 'selected' : ''}>125% — TV-Empfehlung ab 2m</option>
+                    <option value="150" ${(settings.displayScale || 100) === 150 ? 'selected' : ''}>150% — Große Schrift</option>
                   </select>
                 </label>
-                <div class="system-field-info">
-                  <span>Erkannte HDMI-Auflösung:</span>
-                  <strong id="settings-detected-resolution">-- × --</strong>
+
+                <div class="resolution-badge-wrap">
+                  <span class="res-badge-label">Erkannte HDMI-Auflösung:</span>
+                  <div class="res-badge-value" id="settings-detected-resolution">1920 × 1080 (100% DPI)</div>
                 </div>
               </div>
-              <label class="system-checkbox-label" for="settings-hide-cursor">
-                <input type="checkbox" id="settings-hide-cursor" ${settings.hideCursor !== false ? 'checked' : ''} />
-                <span>Mauszeiger auf der HDMI-Anzeige automatisch ausblenden (nach 2 Sek. Inaktivität)</span>
-              </label>
+
+              <div class="setting-toggle-row">
+                <div class="toggle-text">
+                  <span class="toggle-title">Mauszeiger automatisch ausblenden</span>
+                  <span class="toggle-subtitle">Versteckt den Cursor nach 2 Sek. Inaktivität auf der Anzeige</span>
+                </div>
+                <label class="custom-switch" for="settings-hide-cursor">
+                  <input type="checkbox" id="settings-hide-cursor" ${settings.hideCursor !== false ? 'checked' : ''} />
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
             </div>
           </section>
 
-          <!-- 2. Uhrzeit, Datum & Sprache -->
-          <section class="settings-card">
+          <!-- CARD 2: Uhrzeit, Datum & Sprache -->
+          <section class="settings-card card-time">
             <div class="settings-card-header">
-              <span class="settings-card-icon">🕒</span>
+              <div class="settings-icon-badge icon-time">🕒</div>
               <div>
                 <h2 class="settings-card-title">Uhrzeit, Datum &amp; Sprache</h2>
-                <p class="settings-card-desc">Formatierung von Uhrzeit und Header-Datum</p>
+                <p class="settings-card-desc">Formatierung von Header-Uhr und Wochentag</p>
               </div>
             </div>
             <div class="settings-card-body">
-              <div class="system-field-row">
-                <label for="settings-locale">
-                  <span>Sprache / Datumsformat</span>
-                  <select id="settings-locale">
+              <div class="settings-row-2col">
+                <label class="setting-field-label" for="settings-locale">
+                  <span class="label-title">Sprache &amp; Region</span>
+                  <select class="settings-select" id="settings-locale">
                     <option value="de-DE" ${(settings.locale || 'de-DE') === 'de-DE' ? 'selected' : ''}>Deutsch (Deutschland)</option>
                     <option value="de-AT" ${(settings.locale || 'de-DE') === 'de-AT' ? 'selected' : ''}>Deutsch (Österreich)</option>
                     <option value="de-CH" ${(settings.locale || 'de-DE') === 'de-CH' ? 'selected' : ''}>Deutsch (Schweiz)</option>
@@ -85,9 +114,9 @@ export async function renderSettingsPage(app: HTMLElement) {
                     <option value="fr-FR" ${(settings.locale || 'de-DE') === 'fr-FR' ? 'selected' : ''}>Français</option>
                   </select>
                 </label>
-                <label for="settings-timezone">
-                  <span>Zeitzone</span>
-                  <select id="settings-timezone">
+                <label class="setting-field-label" for="settings-timezone">
+                  <span class="label-title">Zeitzone</span>
+                  <select class="settings-select" id="settings-timezone">
                     <option value="auto" ${(settings.timezone || 'auto') === 'auto' ? 'selected' : ''}>Automatisch (Systemzeit)</option>
                     <option value="Europe/Berlin" ${(settings.timezone || 'auto') === 'Europe/Berlin' ? 'selected' : ''}>Europe/Berlin (Deutschland)</option>
                     <option value="Europe/Vienna" ${(settings.timezone || 'auto') === 'Europe/Vienna' ? 'selected' : ''}>Europe/Vienna (Österreich)</option>
@@ -96,171 +125,233 @@ export async function renderSettingsPage(app: HTMLElement) {
                   </select>
                 </label>
               </div>
-              <label class="system-checkbox-label" for="settings-show-weekday">
-                <input type="checkbox" id="settings-show-weekday" ${settings.showWeekday !== false ? 'checked' : ''} />
-                <span>Wochentag im Header anzeigen (z. B. Sa., 26.09.2026)</span>
-              </label>
-              <label class="system-checkbox-label" for="settings-show-seconds">
-                <input type="checkbox" id="settings-show-seconds" ${settings.showSeconds ? 'checked' : ''} />
-                <span>Sekunden in der Digitaluhr anzeigen (z. B. 12:45:30)</span>
-              </label>
+
+              <div class="setting-toggle-row">
+                <div class="toggle-text">
+                  <span class="toggle-title">Wochentag im Header anzeigen</span>
+                  <span class="toggle-subtitle">z. B. „Sa., 26.09.2026“ prominent neben der Uhr</span>
+                </div>
+                <label class="custom-switch" for="settings-show-weekday">
+                  <input type="checkbox" id="settings-show-weekday" ${settings.showWeekday !== false ? 'checked' : ''} />
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+
+              <div class="setting-toggle-row">
+                <div class="toggle-text">
+                  <span class="toggle-title">Sekunden in der Digitaluhr</span>
+                  <span class="toggle-subtitle">Präzise Sekundenanzeige im Kiosk-Header (z. B. 12:45:30)</span>
+                </div>
+                <label class="custom-switch" for="settings-show-seconds">
+                  <input type="checkbox" id="settings-show-seconds" ${settings.showSeconds ? 'checked' : ''} />
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
             </div>
           </section>
 
-          <!-- 3. Nachtmodus & Bildschirmschutz -->
-          <section class="settings-card">
+          <!-- CARD 3: Nachtmodus & Bildschirmschutz -->
+          <section class="settings-card card-night">
             <div class="settings-card-header">
-              <span class="settings-card-icon">🌙</span>
+              <div class="settings-icon-badge icon-night">🌙</div>
               <div>
                 <h2 class="settings-card-title">Nachtmodus &amp; Bildschirmschutz</h2>
                 <p class="settings-card-desc">Automatische Dimmung nachts und Schutz vor Burn-In</p>
               </div>
             </div>
             <div class="settings-card-body">
-              <label class="system-checkbox-label" for="settings-night-mode-enabled">
-                <input type="checkbox" id="settings-night-mode-enabled" ${settings.nightModeEnabled ? 'checked' : ''} />
-                <span>Automatischer Nachtmodus aktivieren</span>
-              </label>
-              <div class="system-field-row">
-                <label for="settings-night-mode-start">
-                  <span>Beginn (Nachtruhe)</span>
-                  <input type="time" id="settings-night-mode-start" value="${settings.nightModeStart || '22:00'}" />
-                </label>
-                <label for="settings-night-mode-end">
-                  <span>Ende (Aufwachen)</span>
-                  <input type="time" id="settings-night-mode-end" value="${settings.nightModeEnd || '06:00'}" />
+              <div class="setting-toggle-row is-highlight">
+                <div class="toggle-text">
+                  <span class="toggle-title">Automatischer Nachtmodus</span>
+                  <span class="toggle-subtitle">Dimmt das Display nachts zur definierten Zeit ab</span>
+                </div>
+                <label class="custom-switch" for="settings-night-mode-enabled">
+                  <input type="checkbox" id="settings-night-mode-enabled" ${settings.nightModeEnabled ? 'checked' : ''} />
+                  <span class="switch-slider"></span>
                 </label>
               </div>
-              <label for="settings-night-mode-style">
-                <span>Nacht-Darstellung</span>
-                <select id="settings-night-mode-style">
-                  <option value="dim" ${(settings.nightModeStyle || 'dim') === 'dim' ? 'selected' : ''}>Gedimmt (15% Helligkeit)</option>
-                  <option value="clock" ${(settings.nightModeStyle || 'dim') === 'clock' ? 'selected' : ''}>Minimalistische Nacht-Uhr</option>
+
+              <div class="settings-row-2col">
+                <label class="setting-field-label" for="settings-night-mode-start">
+                  <span class="label-title">Beginn (Nachtruhe)</span>
+                  <input class="settings-input settings-time" type="time" id="settings-night-mode-start" value="${settings.nightModeStart || '22:00'}" />
+                </label>
+                <label class="setting-field-label" for="settings-night-mode-end">
+                  <span class="label-title">Ende (Aufwachen)</span>
+                  <input class="settings-input settings-time" type="time" id="settings-night-mode-end" value="${settings.nightModeEnd || '06:00'}" />
+                </label>
+              </div>
+
+              <label class="setting-field-label" for="settings-night-mode-style">
+                <span class="label-title">Nacht-Darstellung</span>
+                <select class="settings-select" id="settings-night-mode-style">
+                  <option value="dim" ${(settings.nightModeStyle || 'dim') === 'dim' ? 'selected' : ''}>Gedimmt (15% Helligkeit — Widgets bleiben sichtbar)</option>
+                  <option value="clock" ${(settings.nightModeStyle || 'dim') === 'clock' ? 'selected' : ''}>Minimalistische Nacht-Uhr (Schwarzer Bildschirm mit Uhr)</option>
                 </select>
               </label>
-              <label class="system-checkbox-label" for="settings-pixel-shift-enabled">
-                <input type="checkbox" id="settings-pixel-shift-enabled" ${settings.pixelShiftEnabled !== false ? 'checked' : ''} />
-                <span>Pixel-Shift aktivieren (Burn-In-Schutz alle 5 Min. für OLED &amp; LCD)</span>
-              </label>
-              <small class="system-field-hint">💡 Wake-on-Tap: Durch Berührung oder Mausklick schaltet das Display nachts sofort für 30 Sekunden auf normale Helligkeit zurück.</small>
+
+              <div class="setting-toggle-row">
+                <div class="toggle-text">
+                  <span class="toggle-title">Pixel-Shift aktivieren</span>
+                  <span class="toggle-subtitle">Verschiebt den Inhalt alle 5 Min. um 2 Pixel (Burn-In-Schutz für OLED &amp; LCD)</span>
+                </div>
+                <label class="custom-switch" for="settings-pixel-shift-enabled">
+                  <input type="checkbox" id="settings-pixel-shift-enabled" ${settings.pixelShiftEnabled !== false ? 'checked' : ''} />
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+
+              <div class="settings-callout-hint">
+                <span class="hint-icon">💡</span>
+                <span><strong>Wake-on-Tap:</strong> Bei Berührung oder Klick auf den Bildschirm schaltet das Display nachts sofort für 30 Sekunden auf 100% Helligkeit zurück.</span>
+              </div>
             </div>
           </section>
 
-          <!-- 4. Audio-Ausgabe & Türklingel-Gong -->
-          <section class="settings-card">
+          <!-- CARD 4: Audio & Benachrichtigungen -->
+          <section class="settings-card card-audio">
             <div class="settings-card-header">
-              <span class="settings-card-icon">🔊</span>
+              <div class="settings-icon-badge icon-audio">🔊</div>
               <div>
                 <h2 class="settings-card-title">Audio &amp; Benachrichtigungen</h2>
-                <p class="settings-card-desc">Tonausgang (HDMI vs. 3,5mm Klinke) und Signalton für Smart-Home-Events</p>
+                <p class="settings-card-desc">Tonausgang (HDMI vs. Klinke) und Smart-Home Gong</p>
               </div>
             </div>
             <div class="settings-card-body">
-              <label for="settings-audio-output">
-                <span>Audio-Ausgang des Raspberry Pi</span>
-                <select id="settings-audio-output">
+              <label class="setting-field-label" for="settings-audio-output">
+                <span class="label-title">Audio-Ausgang des Raspberry Pi</span>
+                <select class="settings-select" id="settings-audio-output">
                   <option value="hdmi" ${(settings.audioOutput || 'hdmi') === 'hdmi' ? 'selected' : ''}>📺 HDMI (Fernseher / HDMI-Monitor — Standard)</option>
-                  <option value="jack" ${(settings.audioOutput || 'hdmi') === 'jack' ? 'selected' : ''}>🎧 3,5mm Klinkenbuchse (Kopfhörer / analoge Boxen)</option>
+                  <option value="jack" ${(settings.audioOutput || 'hdmi') === 'jack' ? 'selected' : ''}>🎧 3,5mm Klinkenbuchse (Kopfhörer / analoge Lautsprecher)</option>
                 </select>
               </label>
 
-              <label class="system-checkbox-label" for="settings-notification-sound-enabled">
-                <input type="checkbox" id="settings-notification-sound-enabled" ${settings.notificationSoundEnabled !== false ? 'checked' : ''} />
-                <span>Akustischen Signalton bei Benachrichtigungen abspielen</span>
-              </label>
-              <div class="settings-slider-row">
-                <label for="settings-notification-sound-volume">
-                  <div class="settings-slider-label-header">
-                    <span>Lautstärke des Signaltons</span>
-                    <strong id="settings-notification-sound-volume-val" class="settings-slider-value">${Math.round((settings.notificationSoundVolume ?? 0.8) * 100)}%</strong>
-                  </div>
-                  <input type="range" id="settings-notification-sound-volume" min="0.1" max="1.0" step="0.05" value="${settings.notificationSoundVolume ?? 0.8}" />
+              <div class="setting-toggle-row">
+                <div class="toggle-text">
+                  <span class="toggle-title">Akustischer Benachrichtigungston</span>
+                  <span class="toggle-subtitle">Spielt einen angenehmen Gong bei Webhook-Events ab</span>
+                </div>
+                <label class="custom-switch" for="settings-notification-sound-enabled">
+                  <input type="checkbox" id="settings-notification-sound-enabled" ${settings.notificationSoundEnabled !== false ? 'checked' : ''} />
+                  <span class="switch-slider"></span>
                 </label>
-                <button class="topbar-btn" id="settings-test-sound-btn" type="button">🔔 Signalton testen</button>
               </div>
-              <small class="system-field-hint">💡 Sende <code>POST /api/notify</code> mit JSON: <code>{"title": "Türklingel", "message": "Jemand steht an der Tür", "sound": "doorbell"}</code></small>
+
+              <div class="volume-control-box">
+                <div class="volume-header">
+                  <span class="label-title">Lautstärke des Signaltons</span>
+                  <span class="volume-badge" id="settings-notification-sound-volume-val">${Math.round((settings.notificationSoundVolume ?? 0.8) * 100)}%</span>
+                </div>
+                <div class="volume-slider-row">
+                  <input class="settings-range-slider" type="range" id="settings-notification-sound-volume" min="0.1" max="1.0" step="0.05" value="${settings.notificationSoundVolume ?? 0.8}" />
+                  <button class="settings-action-btn secondary test-sound-btn" id="settings-test-sound-btn" type="button">
+                    <span>🔔</span>
+                    <span>Testen</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="settings-callout-code">
+                <div class="code-title">💡 Smart-Home Webhook (z.B. Türklingel)</div>
+                <code>POST /api/notify {"title": "Türklingel", "message": "Jemand steht an der Tür", "sound": "doorbell"}</code>
+              </div>
             </div>
           </section>
 
-          <!-- 5. Live Raspberry Pi Telemetrie -->
-          <section class="settings-card">
+          <!-- CARD 5: Live Raspberry Pi Telemetrie -->
+          <section class="settings-card card-telemetry">
             <div class="settings-card-header">
-              <span class="settings-card-icon">📊</span>
+              <div class="settings-icon-badge icon-telemetry">📊</div>
               <div>
                 <h2 class="settings-card-title">Live Raspberry Pi Telemetrie</h2>
                 <p class="settings-card-desc">Hardware-Auslastung, Temperatur und Netzwerkstatus</p>
               </div>
-              <button class="topbar-btn" id="settings-telemetry-refresh-btn" type="button" title="Telemetrie neu laden">↻ Aktualisieren</button>
+              <button class="settings-action-btn secondary small" id="settings-telemetry-refresh-btn" type="button" title="Telemetrie neu laden">
+                <span>↻ Aktualisieren</span>
+              </button>
             </div>
             <div class="settings-card-body">
               <div id="settings-telemetry-container" class="system-telemetry-container">
-                <span>Lade Telemetrie …</span>
+                <div class="telemetry-loading-state">
+                  <span class="loading-spinner"></span>
+                  <span>Lade Telemetrie …</span>
+                </div>
               </div>
             </div>
           </section>
 
-          <!-- 6. Software-Aktualisierung (1-Klick-Update) -->
-          <section class="settings-card">
+          <!-- CARD 6: Software-Aktualisierung (1-Klick-Update) -->
+          <section class="settings-card card-update">
             <div class="settings-card-header">
-              <span class="settings-card-icon">🚀</span>
+              <div class="settings-icon-badge icon-update">🚀</div>
               <div>
-                <h2 class="settings-card-title">Software-Aktualisierung (1-Klick-Update)</h2>
-                <p class="settings-card-desc">System direkt per Mausklick aktualisieren – ganz ohne SSH oder Pi-Neustart</p>
+                <h2 class="settings-card-title">Software-Aktualisierung</h2>
+                <p class="settings-card-desc">1-Klick System-Update direkt von GitHub</p>
               </div>
-              <button class="topbar-btn" id="settings-update-check-btn" type="button">🔍 Nach Updates suchen</button>
+              <button class="settings-action-btn secondary small" id="settings-update-check-btn" type="button">
+                <span>🔍 Auf Updates prüfen</span>
+              </button>
             </div>
             <div class="settings-card-body">
-              <div class="system-update-container">
-                <div class="update-status-row">
-                  <span class="telemetry-label">Aktuelle Version:</span>
-                  <strong id="settings-update-current-version">Lade …</strong>
-                </div>
-                <div class="update-status-row">
+              <div class="update-card-content">
+                <div class="update-meta-row">
+                  <div class="version-chip">
+                    <span class="chip-label">Aktuelle Version:</span>
+                    <strong class="chip-val" id="settings-update-current-version">Lade …</strong>
+                  </div>
                   <span class="update-badge is-uptodate" id="settings-update-badge">Lade Status …</span>
                 </div>
-                <p class="system-field-hint" id="settings-update-hint">Aktualisiert Code, Abhängigkeiten, Frontend und HDMI-Display vollautomatisch.</p>
-                <div class="update-actions">
-                  <button class="save-button" id="settings-trigger-update-btn" type="button">🚀 Jetzt aktualisieren</button>
+                <p class="update-hint-text" id="settings-update-hint">Aktualisiert Code, Abhängigkeiten, Frontend und HDMI-Display vollautomatisch.</p>
+                <div class="update-actions-bar">
+                  <button class="settings-save-btn update-btn" id="settings-trigger-update-btn" type="button">
+                    <span>🚀</span>
+                    <span>Jetzt aktualisieren</span>
+                  </button>
                 </div>
                 <div class="update-log-box" id="settings-update-log-box" style="display: none;">
+                  <div class="log-box-header">Update-Protokoll:</div>
                   <pre id="settings-update-log-text"></pre>
                 </div>
               </div>
             </div>
           </section>
 
-          <!-- 7. Sicherheit: Admin-PIN ändern -->
-          <section class="settings-card">
+          <!-- CARD 7: Sicherheit & Admin-PIN (Span Full width for balance) -->
+          <section class="settings-card card-security span-full">
             <div class="settings-card-header">
-              <span class="settings-card-icon">🔒</span>
+              <div class="settings-icon-badge icon-security">🔒</div>
               <div>
                 <h2 class="settings-card-title">Sicherheit &amp; Admin-PIN</h2>
-                <p class="settings-card-desc">PIN zum Schützen von Einstellungen und Bild-Uploads</p>
+                <p class="settings-card-desc">PIN zum Schützen von Einstellungen, Bild-Uploads und Display-Profilen</p>
               </div>
             </div>
             <div class="settings-card-body">
               <form id="settings-pin-change-form" class="settings-pin-form">
-                <div class="system-field-row">
-                  <label for="settings-curr-pin">
-                    <span>Aktuelle PIN</span>
-                    <input id="settings-curr-pin" type="password" inputmode="numeric" required />
+                <div class="pin-form-3col">
+                  <label class="setting-field-label" for="settings-curr-pin">
+                    <span class="label-title">Aktuelle Admin-PIN</span>
+                    <input class="settings-input" id="settings-curr-pin" type="password" inputmode="numeric" placeholder="Aktuelle PIN" required />
                   </label>
-                  <label for="settings-new-pin">
-                    <span>Neue PIN (4–64 Ziffern)</span>
-                    <input id="settings-new-pin" type="password" inputmode="numeric" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required />
+                  <label class="setting-field-label" for="settings-new-pin">
+                    <span class="label-title">Neue PIN (4–64 Ziffern)</span>
+                    <input class="settings-input" id="settings-new-pin" type="password" inputmode="numeric" pattern="[0-9]{4,64}" minlength="4" maxlength="64" placeholder="Neue PIN" required />
+                  </label>
+                  <label class="setting-field-label" for="settings-confirm-pin">
+                    <span class="label-title">Neue PIN wiederholen</span>
+                    <input class="settings-input" id="settings-confirm-pin" type="password" inputmode="numeric" pattern="[0-9]{4,64}" minlength="4" maxlength="64" placeholder="Wiederholen" required />
                   </label>
                 </div>
-                <label for="settings-confirm-pin">
-                  <span>Neue PIN wiederholen</span>
-                  <input id="settings-confirm-pin" type="password" inputmode="numeric" pattern="[0-9]{4,64}" minlength="4" maxlength="64" required />
-                </label>
                 <p class="pin-error" id="settings-pin-error" role="alert"></p>
-                <div class="settings-pin-actions">
-                  <button class="secondary-button" id="settings-pin-submit" type="submit">PIN jetzt ändern</button>
+                <div class="pin-submit-row">
+                  <button class="settings-action-btn secondary" id="settings-pin-submit" type="submit">
+                    <span>🔑</span>
+                    <span>Admin-PIN speichern</span>
+                  </button>
                 </div>
               </form>
             </div>
           </section>
+
         </div>
       </main>
 
