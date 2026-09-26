@@ -211,4 +211,17 @@ Die PIN schützt Änderungen im lokalen Netzwerk, ersetzt aber keine HTTPS- oder
 
 Viele Webseiten verbieten die Einbettung in fremde iframes. HomePiBoard zeigt während des Ladens einen Status und bietet bei langsamen Widgets eine Schaltfläche zum Neuladen. Sicherheitsrichtlinien der eingebetteten Webseite kann HomePiBoard nicht umgehen.
 
-Die offenen Aufgaben stehen in [TODO.md](TODO.md).
+## Screenshots
+
+**Frontend**
+<img width="1502" height="786" alt="Frontend" src="https://github.com/user-attachments/assets/b61cdfab-534f-4cef-b68d-07b04ac0e77c" />
+
+
+**Edit Mode**
+<img width="1506" height="799" alt="Edit" src="https://github.com/user-attachments/assets/5bce6f55-f73d-4aa6-9f69-47df8dac3b24" />
+
+**Settings**
+<img width="1323" height="724" alt="Settings" src="https://github.com/user-attachments/assets/fcf95f64-e2ee-4182-b19c-e8f36903c981" />
+
+<img width="1484" height="774" alt="save" src="https://github.com/user-attachments/assets/20bcb910-8c93-48ac-8468-5b95da20142f" />
+
