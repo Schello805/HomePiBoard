@@ -2404,6 +2404,27 @@ button:has(.loading-spinner) {
   border: 1px dashed var(--line);
 }
 
+.default-pin-tag {
+  color: var(--accent);
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+.pin-sub-badge {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  border: 1px solid var(--line);
+}
+
 @media (max-width: 600px) {
   .settings-page-shell {
     padding: 16px;

@@ -333,15 +333,15 @@ export async function renderSettingsPage(app: HTMLElement) {
               <div class="settings-icon-badge icon-security">🔒</div>
               <div>
                 <h2 class="settings-card-title">Sicherheit &amp; Admin-PIN</h2>
-                <p class="settings-card-desc">PIN zum Schützen von Einstellungen, Bild-Uploads und Display-Profilen</p>
+                <p class="settings-card-desc">PIN zum Schützen von Einstellungen, Bild-Uploads und Display-Profilen (Standard-PIN: <strong class="default-pin-tag">0000</strong>)</p>
               </div>
             </div>
             <div class="settings-card-body">
               <form id="settings-pin-change-form" class="settings-pin-form">
                 <div class="pin-form-3col">
                   <label class="setting-field-label" for="settings-curr-pin">
-                    <span class="label-title">Aktuelle Admin-PIN</span>
-                    <input class="settings-input" id="settings-curr-pin" type="password" inputmode="numeric" placeholder="Aktuelle PIN" required />
+                    <span class="label-title">Aktuelle Admin-PIN <span class="pin-sub-badge">Default: 0000</span></span>
+                    <input class="settings-input" id="settings-curr-pin" type="password" inputmode="numeric" placeholder="Aktuelle PIN (z. B. 0000)" required />
                   </label>
                   <label class="setting-field-label" for="settings-new-pin">
                     <span class="label-title">Neue PIN (4–64 Ziffern)</span>
@@ -378,8 +378,8 @@ export async function renderSettingsPage(app: HTMLElement) {
             <button class="close-button" id="settings-pin-close" type="button" aria-label="Schließen">×</button>
           </div>
           <label for="settings-dialog-pin">
-            Admin-PIN
-            <input id="settings-dialog-pin" type="password" inputmode="numeric" autocomplete="current-password" required />
+            Admin-PIN <span style="font-size: 0.8em; font-weight: normal; opacity: 0.75;">(Standard: 0000)</span>
+            <input id="settings-dialog-pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="0000" required />
           </label>
           <p class="pin-error" id="settings-dialog-pin-error" role="alert"></p>
           <div class="dialog-actions">
