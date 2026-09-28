@@ -61,6 +61,43 @@ Nach dem ersten Start kann die PIN auf der Einstellungsseite unter **Sicherheit 
 
 Die zentrale Konfiguration wird beim ersten Speichern in `data/settings.json` angelegt. Wenn der Server vorübergehend nicht erreichbar ist, verwendet die Anzeige die zuletzt im Browser gespeicherte Konfiguration.
 
+## Installation mit CapRover
+
+Das Repository enthält eine `captain-definition` und ein mehrstufiges Produktions-`Dockerfile`. CapRover kann die Anwendung damit direkt aus dem Git-Repository bauen.
+
+1. Lege in CapRover eine neue App an, zum Beispiel `homepiboard`.
+2. Aktiviere unter **HTTP Settings** bei Bedarf **Enable HTTPS** und **Force HTTPS**.
+3. Füge unter **App Configs → Environmental Variables** eine sichere Start-PIN hinzu:
+
+   ```text
+   HOMEPIBOARD_PIN=deine-pin
+   ```
+
+   Die PIN muss aus 4 bis 64 Ziffern bestehen. Sie dient nur zur erstmaligen Einrichtung; spätere Änderungen werden als Hash persistent gespeichert.
+
+4. Füge unter **App Configs → Persistent Directories** dieses Mapping hinzu:
+
+   ```text
+   Path in App: /app/data
+   Label: homepiboard-data
+   ```
+
+   In diesem Verzeichnis liegen `settings.json`, `auth.json`, `presets.json` und alle hochgeladenen Bilder. Ohne dieses Mapping gehen diese Daten beim nächsten Deployment verloren.
+5. Verbinde unter **Deployment** das GitHub-Repository oder lade den Quellcode als Tarball hoch und starte **Deploy**. Der Container lauscht intern auf Port `80`; eine zusätzliche Port-Konfiguration ist nicht nötig.
+
+Alternativ lässt sich das Image lokal testen:
+
+```bash
+docker build -t homepiboard .
+docker volume create homepiboard-data
+docker run --rm -p 4173:80 \
+  -e HOMEPIBOARD_PIN=1234 \
+  -v homepiboard-data:/app/data \
+  homepiboard
+```
+
+Danach sind die Anzeige unter `http://localhost:4173/` und die Konfiguration unter `http://localhost:4173/admin` erreichbar. Updates erfolgen bei CapRover durch ein neues Deployment; der 1-Klick-System-Updater ist für Raspberry-Pi-Installationen gedacht.
+
 ## 🚀 Schnellanleitung: Installation auf dem Raspberry Pi
 
 ### Schritt 1: Raspberry Pi OS Lite mit dem Raspberry Pi Imager flashen
@@ -193,6 +230,7 @@ sudo apt update && sudo apt upgrade -y
 ```
 
 
+- `GET /api/health` – Healthcheck für Container-Orchestrierung
 - `GET /api/settings` – aktuelle Konfiguration lesen
 - `GET /api/system` – Hardware-, Netzwerk- und System-Telemetrie lesen (CPU-Temp, RAM, IP, Uptime)
 - `POST /api/auth` – Admin-PIN prüfen

@@ -664,7 +664,7 @@ async function serveStatic(response, pathname, publicDirectory) {
 }
 
 export function createHomePiBoardServer({
-  dataDirectory = path.join(rootDirectory, 'data'),
+  dataDirectory = process.env.HOMEPIBOARD_DATA_DIR || path.join(rootDirectory, 'data'),
   publicDirectory = path.join(rootDirectory, 'dist'),
   adminPin = process.env.HOMEPIBOARD_PIN || '0000',
   scryptFunction = scrypt,
@@ -823,6 +823,11 @@ export function createHomePiBoardServer({
     const url = new URL(request.url || '/', 'http://localhost')
 
     try {
+      if (url.pathname === '/api/health' && request.method === 'GET') {
+        json(response, 200, { status: 'ok' })
+        return
+      }
+
       if (url.pathname === '/api/settings' && request.method === 'GET') {
         json(response, 200, await loadSettings(settingsFile))
         return
