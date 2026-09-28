@@ -65,6 +65,8 @@ Die zentrale Konfiguration wird beim ersten Speichern in `data/settings.json` an
 
 Das Repository enthält eine `captain-definition` und ein mehrstufiges Produktions-`Dockerfile`. CapRover kann die Anwendung damit direkt aus dem Git-Repository bauen.
 
+> **Hinweis zu den Ports:** Bei einer normalen lokalen oder Raspberry-Pi-Installation startet HomePiBoard weiterhin auf Port `4173`. Nur innerhalb des CapRover-Containers lauscht die Anwendung auf Port `80`, weil CapRover den Webverkehr dorthin weiterleitet. Von außen öffnest du HomePiBoard über die zugewiesene Domain, zum Beispiel `https://homepiboard.example.com`, ohne `:80` oder `:4173` anzugeben.
+
 1. Lege in CapRover eine neue App an, zum Beispiel `homepiboard`.
 2. Aktiviere unter **HTTP Settings** bei Bedarf **Enable HTTPS** und **Force HTTPS**.
 3. Füge unter **App Configs → Environmental Variables** eine sichere Start-PIN hinzu:
@@ -83,7 +85,7 @@ Das Repository enthält eine `captain-definition` und ein mehrstufiges Produktio
    ```
 
    In diesem Verzeichnis liegen `settings.json`, `auth.json`, `presets.json` und alle hochgeladenen Bilder. Ohne dieses Mapping gehen diese Daten beim nächsten Deployment verloren.
-5. Verbinde unter **Deployment** das GitHub-Repository oder lade den Quellcode als Tarball hoch und starte **Deploy**. Der Container lauscht intern auf Port `80`; eine zusätzliche Port-Konfiguration ist nicht nötig.
+5. Verbinde unter **Deployment** das GitHub-Repository oder lade den Quellcode als Tarball hoch und starte **Deploy**. Der Container lauscht intern auf Port `80`; in CapRover ist keine zusätzliche Port-Konfiguration nötig.
 
 Alternativ lässt sich das Image lokal testen:
 
@@ -262,4 +264,3 @@ Viele Webseiten verbieten die Einbettung in fremde iframes. HomePiBoard zeigt w�
 <img width="1323" height="724" alt="Settings" src="https://github.com/user-attachments/assets/fcf95f64-e2ee-4182-b19c-e8f36903c981" />
 
 <img width="1484" height="774" alt="save" src="https://github.com/user-attachments/assets/20bcb910-8c93-48ac-8468-5b95da20142f" />
-
