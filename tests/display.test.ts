@@ -249,22 +249,27 @@ test('renderHeaderItemHtml correctly outputs markup for all supported header ite
 
   const location = renderHeaderItemHtml('location', settings, true, 'server')
   assert.match(location, /id="header-location"/)
+  assert.match(location, /Ort:/)
   assert.match(location, /Wohnzimmer/)
 
   const cpu = renderHeaderItemHtml('cpu', settings, true, 'server')
   assert.match(cpu, /header-chip-cpu/)
+  assert.match(cpu, /CPU:/)
   assert.match(cpu, /id="header-cpu-val"/)
 
   const ram = renderHeaderItemHtml('ram', settings, true, 'server')
   assert.match(ram, /header-chip-ram/)
+  assert.match(ram, /RAM:/)
   assert.match(ram, /id="header-ram-val"/)
 
   const uptime = renderHeaderItemHtml('uptime', settings, true, 'server')
   assert.match(uptime, /header-chip-uptime/)
+  assert.match(uptime, /Uptime:/)
   assert.match(uptime, /id="header-uptime-val"/)
 
   const ip = renderHeaderItemHtml('ip', settings, true, 'server')
   assert.match(ip, /header-chip-ip/)
+  assert.match(ip, /IP:/)
   assert.match(ip, /id="header-ip-val"/)
 
   const networkOnline = renderHeaderItemHtml('network', settings, true, 'server')

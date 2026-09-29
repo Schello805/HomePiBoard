@@ -169,6 +169,24 @@ export async function renderSettingsPage(app: HTMLElement) {
                 </label>
               </div>
 
+              <div class="settings-row-2col">
+                <label class="setting-field-label" for="settings-date-format">
+                  <span class="label-title">Datumsformat</span>
+                  <select class="settings-select" id="settings-date-format">
+                    <option value="medium" ${(settings.dateFormat || 'medium') === 'medium' ? 'selected' : ''}>Standard (Mo., 28.09.2026)</option>
+                    <option value="short" ${(settings.dateFormat || 'medium') === 'short' ? 'selected' : ''}>Kurzform (28.09.)</option>
+                    <option value="long" ${(settings.dateFormat || 'medium') === 'long' ? 'selected' : ''}>Ausführlich (Montag, 28. September 2026)</option>
+                  </select>
+                </label>
+                <label class="setting-field-label" for="settings-time-format">
+                  <span class="label-title">Uhrzeit-Format</span>
+                  <select class="settings-select" id="settings-time-format">
+                    <option value="24h" ${(settings.timeFormat || '24h') === '24h' ? 'selected' : ''}>24-Stunden (14:35)</option>
+                    <option value="12h" ${(settings.timeFormat || '24h') === '12h' ? 'selected' : ''}>12-Stunden AM/PM (2:35 PM)</option>
+                  </select>
+                </label>
+              </div>
+
               <div class="setting-toggle-row">
                 <div class="toggle-text">
                   <span class="toggle-title">Wochentag im Header anzeigen</span>
@@ -431,6 +449,8 @@ export async function renderSettingsPage(app: HTMLElement) {
   const hideCursorCheckbox = app.querySelector<HTMLInputElement>('#settings-hide-cursor')!
   const localeSelect = app.querySelector<HTMLSelectElement>('#settings-locale')!
   const timezoneSelect = app.querySelector<HTMLSelectElement>('#settings-timezone')!
+  const dateFormatSelect = app.querySelector<HTMLSelectElement>('#settings-date-format')!
+  const timeFormatSelect = app.querySelector<HTMLSelectElement>('#settings-time-format')!
   const showWeekdayCheckbox = app.querySelector<HTMLInputElement>('#settings-show-weekday')!
   const showSecondsCheckbox = app.querySelector<HTMLInputElement>('#settings-show-seconds')!
   const nightModeEnabledCheckbox = app.querySelector<HTMLInputElement>('#settings-night-mode-enabled')!
@@ -482,16 +502,21 @@ export async function renderSettingsPage(app: HTMLElement) {
     // 1. Live Preview Bar
     headerPreviewBar.innerHTML = currentHeaderItems.map((id) => {
       const loc = locationInput ? locationInput.value.trim() || 'Zuhause' : (settings.location || 'Zuhause')
+      const df = dateFormatSelect ? dateFormatSelect.value : (settings.dateFormat || 'medium')
+      const tf = timeFormatSelect ? timeFormatSelect.value : (settings.timeFormat || '24h')
+      const dateSample = df === 'short' ? '28.09.' : (df === 'long' ? 'Montag, 28. Sept.' : 'Mo., 28.09.2026')
+      const timeSample = tf === '12h' ? '2:35 PM' : '14:35'
+
       switch (id) {
         case 'network': return '<span class="preview-chip is-online">ONLINE</span>'
-        case 'location': return `<span class="preview-chip">📍 ${escapeHtml(loc)}</span>`
-        case 'weather': return '<span class="preview-chip">🌤️ 21°C</span>'
-        case 'date': return '<span class="preview-chip">📅 Sa, 26.09.</span>'
-        case 'clock': return '<span class="preview-chip is-bold">⏰ 14:35</span>'
-        case 'cpu': return '<span class="preview-chip">🔥 48.2 °C</span>'
-        case 'ram': return '<span class="preview-chip">💾 42%</span>'
-        case 'uptime': return '<span class="preview-chip">⏱️ 3d 4h</span>'
-        case 'ip': return '<span class="preview-chip">🌐 192.168.1.50</span>'
+        case 'location': return `<span class="preview-chip">📍 Ort: ${escapeHtml(loc)}</span>`
+        case 'weather': return '<span class="preview-chip">🌤️ 21°C • 45%</span>'
+        case 'date': return `<span class="preview-chip">📅 ${dateSample}</span>`
+        case 'clock': return `<span class="preview-chip is-bold">⏰ ${timeSample}</span>`
+        case 'cpu': return '<span class="preview-chip">🔥 CPU: 48.2 °C</span>'
+        case 'ram': return '<span class="preview-chip">💾 RAM: 42%</span>'
+        case 'uptime': return '<span class="preview-chip">⏱️ Uptime: 3d 4h</span>'
+        case 'ip': return '<span class="preview-chip">🌐 IP: 192.168.1.50</span>'
         default: return `<span class="preview-chip">${escapeHtml(id)}</span>`
       }
     }).join('')
@@ -935,6 +960,8 @@ export async function renderSettingsPage(app: HTMLElement) {
       weatherCity: weatherCityInput ? weatherCityInput.value.trim() : currentSettings.weatherCity,
       timezone: timezoneSelect.value,
       locale: localeSelect.value,
+      dateFormat: (dateFormatSelect.value as 'short' | 'medium' | 'long') || 'medium',
+      timeFormat: (timeFormatSelect.value as '24h' | '12h') || '24h',
       showWeekday: showWeekdayCheckbox.checked,
       showSeconds: showSecondsCheckbox.checked,
       displayScale: Number(displayScaleSelect.value),
@@ -985,6 +1012,12 @@ export async function renderSettingsPage(app: HTMLElement) {
     renderHeaderBuilderUI()
   })
   weatherCityInput?.addEventListener('input', () => {
+    renderHeaderBuilderUI()
+  })
+  dateFormatSelect?.addEventListener('change', () => {
+    renderHeaderBuilderUI()
+  })
+  timeFormatSelect?.addEventListener('change', () => {
     renderHeaderBuilderUI()
   })
 

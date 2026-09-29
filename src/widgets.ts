@@ -10,6 +10,8 @@ const typeLabels: Record<WidgetType, string> = {
   slideshow: 'DIASHOW',
   waste: 'MÜLL',
   media: 'RADIO',
+  camera: 'KAMERA',
+  fitness: 'FITNESS',
 }
 
 export interface RadioStationPreset {
@@ -339,7 +341,7 @@ export function mediaContent(widget: DashboardWidget) {
 function safeResourceUrl(value: string, type: WidgetType) {
   const url = value.trim()
   if (!url) return ''
-  if ((type === 'image' || type === 'slideshow') && /^data:image\/(?:png|jpeg|gif|webp|svg\+xml);/i.test(url)) return url
+  if ((type === 'image' || type === 'slideshow' || type === 'camera') && /^data:image\/(?:png|jpeg|gif|webp|svg\+xml);/i.test(url)) return url
 
   try {
     const parsed = new URL(url, 'https://homepiboard.local')
@@ -415,6 +417,174 @@ export function isBuiltInCalendar(type: WidgetType, url: string) {
   return type === 'calendar' && !url.trim()
 }
 
+export function renderFitnessRingsSvg(movePct: number, exercisePct: number, standPct: number): string {
+  const rMove = 40
+  const rExercise = 30
+  const rStand = 20
+  const cMove = 2 * Math.PI * rMove
+  const cExercise = 2 * Math.PI * rExercise
+  const cStand = 2 * Math.PI * rStand
+
+  const offsetMove = cMove * (1 - Math.min(1, movePct / 100))
+  const offsetExercise = cExercise * (1 - Math.min(1, exercisePct / 100))
+  const offsetStand = cStand * (1 - Math.min(1, standPct / 100))
+
+  return `
+    <svg class="fitness-rings-svg" viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true">
+      <defs>
+        <linearGradient id="move-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#fa114f" />
+          <stop offset="100%" stop-color="#ff3366" />
+        </linearGradient>
+        <linearGradient id="exercise-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#a0ff00" />
+          <stop offset="100%" stop-color="#65e000" />
+        </linearGradient>
+        <linearGradient id="stand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#00f0ff" />
+          <stop offset="100%" stop-color="#00a0ff" />
+        </linearGradient>
+      </defs>
+
+      <!-- Background tracks -->
+      <circle cx="50" cy="50" r="${rMove}" fill="none" stroke="rgba(250, 17, 79, 0.2)" stroke-width="7.5" />
+      <circle cx="50" cy="50" r="${rExercise}" fill="none" stroke="rgba(160, 255, 0, 0.2)" stroke-width="7.5" />
+      <circle cx="50" cy="50" r="${rStand}" fill="none" stroke="rgba(0, 240, 255, 0.2)" stroke-width="7.5" />
+
+      <!-- Progress rings -->
+      <g transform="rotate(-90 50 50)">
+        <circle cx="50" cy="50" r="${rMove}" fill="none" stroke="url(#move-grad)" stroke-width="7.5" stroke-linecap="round" stroke-dasharray="${cMove}" stroke-dashoffset="${offsetMove}" />
+        <circle cx="50" cy="50" r="${rExercise}" fill="none" stroke="url(#exercise-grad)" stroke-width="7.5" stroke-linecap="round" stroke-dasharray="${cExercise}" stroke-dashoffset="${offsetExercise}" />
+        <circle cx="50" cy="50" r="${rStand}" fill="none" stroke="url(#stand-grad)" stroke-width="7.5" stroke-linecap="round" stroke-dasharray="${cStand}" stroke-dashoffset="${offsetStand}" />
+      </g>
+    </svg>
+  `
+}
+
+export function cameraContent(widget: DashboardWidget) {
+  const cameraUrl = widget.cameraUrl || widget.url || ''
+  const safeUrl = safeResourceUrl(cameraUrl, 'camera')
+  if (!safeUrl) {
+    return `<div class="camera-empty-placeholder">
+      <span class="placeholder-icon">📷</span>
+      <strong>Keine Kamera-URL hinterlegt</strong>
+      <span class="placeholder-sub">Klicke auf ⚙ um Snapshot- oder Stream-URL einzutragen.</span>
+    </div>`
+  }
+
+  const interval = widget.cameraRefreshSeconds || 5
+  const fit = widget.cameraFit === 'contain' ? 'contain' : 'cover'
+  const isMjpeg = widget.cameraType === 'mjpeg'
+  const isStream = widget.cameraType === 'stream'
+
+  if (isStream) {
+    return `<div class="camera-widget-container is-stream" data-camera-widget data-camera-type="stream">
+      <iframe class="camera-stream-frame" src="${escapeHtml(safeUrl)}" allow="autoplay; fullscreen" loading="lazy"></iframe>
+      <div class="camera-live-badge"><span class="pulse-dot"></span> LIVE</div>
+    </div>`
+  }
+
+  return `<div class="camera-widget-container" data-camera-widget data-camera-url="${escapeHtml(safeUrl)}" data-camera-interval="${interval}" data-camera-type="${isMjpeg ? 'mjpeg' : 'snapshot'}">
+    <img class="camera-snapshot-img" src="${escapeHtml(safeUrl)}" alt="${escapeHtml(widget.title || 'Kamerabild')}" style="object-fit: ${fit};" onerror="this.parentElement.classList.add('is-offline')" onload="this.parentElement.classList.remove('is-offline')" />
+    <div class="camera-overlay">
+      <div class="camera-live-badge"><span class="pulse-dot"></span> LIVE</div>
+      ${!isMjpeg ? `<div class="camera-reload-indicator" title="Wird alle ${interval}s aktualisiert"><span class="reload-dot"></span> ${interval}s</div>` : ''}
+    </div>
+    <div class="camera-offline-msg">
+      <span class="offline-icon">⚠️</span>
+      <strong>Kamera nicht erreichbar</strong>
+      <span>Verbindung wird alle ${interval}s neu versucht …</span>
+    </div>
+  </div>`
+}
+
+export function fitnessContent(widget: DashboardWidget) {
+  const moveCal = widget.moveCalories ?? 480
+  const moveGoal = widget.moveGoal ?? 500
+  const exerciseMin = widget.exerciseMinutes ?? 35
+  const exerciseGoal = widget.exerciseGoal ?? 30
+  const standHrs = widget.standHours ?? 9
+  const standGoal = widget.standGoal ?? 12
+  const steps = widget.steps ?? 7650
+  const distanceKm = widget.distanceKm ?? 5.4
+  const heartRate = widget.heartRate ?? 72
+  const name = widget.userName || widget.title || 'Sportler'
+  const avatar = widget.userAvatar || '🏃'
+  const token = widget.healthToken || widget.id
+
+  const movePct = Math.round((moveCal / Math.max(1, moveGoal)) * 100)
+  const exercisePct = Math.round((exerciseMin / Math.max(1, exerciseGoal)) * 100)
+  const standPct = Math.round((standHrs / Math.max(1, standGoal)) * 100)
+  const avgScore = Math.round((movePct + exercisePct + standPct) / 3)
+  const ringsClosed = (movePct >= 100 ? 1 : 0) + (exercisePct >= 100 ? 1 : 0) + (standPct >= 100 ? 1 : 0)
+
+  return `
+    <div class="fitness-widget-card" data-fitness-widget data-user-token="${escapeHtml(token)}">
+      <div class="fitness-card-header">
+        <div class="fitness-user-badge">
+          <span class="fitness-avatar">${escapeHtml(avatar)}</span>
+          <strong class="fitness-name">${escapeHtml(name)}</strong>
+        </div>
+        <div class="fitness-score-tag ${ringsClosed === 3 ? 'is-all-closed' : ''}">
+          <span class="score-icon">${ringsClosed === 3 ? '🏆' : '🔥'}</span>
+          <span>${avgScore}%</span>
+        </div>
+      </div>
+
+      <div class="fitness-main-row">
+        <div class="fitness-rings-wrap" title="Bewegen: ${movePct}% | Trainieren: ${exercisePct}% | Stehen: ${standPct}%">
+          ${renderFitnessRingsSvg(movePct, exercisePct, standPct)}
+          <span class="fitness-center-score">${ringsClosed}/3</span>
+        </div>
+
+        <div class="fitness-metrics-list">
+          <div class="fitness-metric-row metric-move">
+            <span class="metric-bullet">●</span>
+            <div class="metric-info">
+              <span class="metric-label">Bewegen</span>
+              <strong class="metric-val">${moveCal} <small>/ ${moveGoal} kcal</small></strong>
+            </div>
+            <span class="metric-pct">${movePct}%</span>
+          </div>
+
+          <div class="fitness-metric-row metric-exercise">
+            <span class="metric-bullet">●</span>
+            <div class="metric-info">
+              <span class="metric-label">Trainieren</span>
+              <strong class="metric-val">${exerciseMin} <small>/ ${exerciseGoal} min</small></strong>
+            </div>
+            <span class="metric-pct">${exercisePct}%</span>
+          </div>
+
+          <div class="fitness-metric-row metric-stand">
+            <span class="metric-bullet">●</span>
+            <div class="metric-info">
+              <span class="metric-label">Stehen</span>
+              <strong class="metric-val">${standHrs} <small>/ ${standGoal} Std.</small></strong>
+            </div>
+            <span class="metric-pct">${standPct}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="fitness-footer-row">
+        <div class="fitness-footer-item" title="Tages-Schritte">
+          <span class="footer-icon">👟</span>
+          <span>${steps.toLocaleString('de-DE')}</span>
+        </div>
+        <div class="fitness-footer-item" title="Zurückgelegte Distanz">
+          <span class="footer-icon">📍</span>
+          <span>${distanceKm} km</span>
+        </div>
+        <div class="fitness-footer-item" title="Aktueller Puls">
+          <span class="footer-icon">❤️</span>
+          <span>${heartRate > 0 ? `${heartRate} bpm` : '--'}</span>
+        </div>
+      </div>
+    </div>
+  `
+}
+
 export function renderWidgetContent(widget: DashboardWidget) {
   if (widget.type === 'calendar') return isBuiltInCalendar(widget.type, widget.url) ? calendarMarkup() : calendarFeedContent(widget)
   if (widget.type === 'text') return `<p class="text-widget-content">${escapeHtml(widget.url || 'Deinen Text hier eintragen')}</p>`
@@ -428,6 +598,8 @@ export function renderWidgetContent(widget: DashboardWidget) {
   if (widget.type === 'slideshow') return slideshowContent(widget)
   if (widget.type === 'waste') return wasteContent(widget)
   if (widget.type === 'media') return mediaContent(widget)
+  if (widget.type === 'camera') return cameraContent(widget)
+  if (widget.type === 'fitness') return fitnessContent(widget)
   return frameContent(widget)
 }
 
@@ -523,6 +695,8 @@ function editorMarkup(widget: DashboardWidget, index: number) {
             <option value="slideshow" ${widget.type === 'slideshow' ? 'selected' : ''}>Diashow</option>
             <option value="waste" ${widget.type === 'waste' ? 'selected' : ''}>Müllkalender</option>
             <option value="media" ${widget.type === 'media' ? 'selected' : ''}>Radio (Live-Stream)</option>
+            <option value="camera" ${widget.type === 'camera' ? 'selected' : ''}>Kamera (Live / Snapshot)</option>
+            <option value="fitness" ${widget.type === 'fitness' ? 'selected' : ''}>Fitness-Ringe (Apple Health)</option>
           </select></label>
           <label for="${controlId}-title">Titel<input id="${controlId}-title" data-field="title" value="${escapeHtml(widget.title)}" maxlength="30" /></label>
           <label class="content-field checkbox-label" for="${controlId}-show-title"><input type="checkbox" id="${controlId}-show-title" data-field="showTitle" ${widget.showTitle ? 'checked' : ''} /><span>Titel in der Anzeige anzeigen</span></label>
@@ -576,6 +750,88 @@ function editorMarkup(widget: DashboardWidget, index: number) {
             <input type="hidden" id="${controlId}-media-cover" data-field="mediaCoverUrl" value="${escapeHtml(widget.mediaCoverUrl || '')}" />
           </div>
           <p class="editor-field-hint">💡 Wähle einen der beliebtesten deutschen Sender aus. Stream-URL und Sender-Details werden automatisch ausgefüllt und die Tonausgabe erfolgt direkt über den Lautsprecher bzw. Monitor.</p>
+          ` : widget.type === 'camera' ? `
+          <div class="camera-form-group">
+            <label class="content-field" for="${controlId}-camera-url">
+              <span>Kamera-URL (Snapshot-Bild oder MJPEG/Web-Stream)</span>
+              <input type="url" id="${controlId}-camera-url" data-field="cameraUrl" value="${escapeHtml(widget.cameraUrl || widget.url || '')}" placeholder="http://192.168.1.100/snapshot.jpg oder https://..." />
+            </label>
+            <div class="grid-3-cols" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+              <label for="${controlId}-camera-refresh">Aktualisierung
+                <input type="number" id="${controlId}-camera-refresh" data-field="cameraRefreshSeconds" min="1" max="3600" value="${widget.cameraRefreshSeconds || 5}" />
+                <small style="font-size:0.7rem;color:var(--muted);">in Sekunden</small>
+              </label>
+              <label for="${controlId}-camera-type">Kameratyp
+                <select id="${controlId}-camera-type" data-field="cameraType">
+                  <option value="snapshot" ${widget.cameraType !== 'mjpeg' && widget.cameraType !== 'stream' ? 'selected' : ''}>Snapshot (Auto-Reload)</option>
+                  <option value="mjpeg" ${widget.cameraType === 'mjpeg' ? 'selected' : ''}>MJPEG Live-Stream</option>
+                  <option value="stream" ${widget.cameraType === 'stream' ? 'selected' : ''}>Webseite / Iframe Stream</option>
+                </select>
+              </label>
+              <label for="${controlId}-camera-fit">Bildanpassung
+                <select id="${controlId}-camera-fit" data-field="cameraFit">
+                  <option value="cover" ${widget.cameraFit !== 'contain' ? 'selected' : ''}>Ausfüllen (Cover)</option>
+                  <option value="contain" ${widget.cameraFit === 'contain' ? 'selected' : ''}>Ganzes Bild (Contain)</option>
+                </select>
+              </label>
+            </div>
+            <p class="editor-field-hint">💡 Funktioniert mit allen IP-Kameras, Webcams, RTSP-to-HTTP Gateways, Home Assistant Kameras und öffentlichen Webcams.</p>
+          </div>
+          ` : widget.type === 'fitness' ? `
+          <div class="fitness-form-group">
+            <div class="grid-2-cols" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <label for="${controlId}-fitness-user">Sportler / Name
+                <input id="${controlId}-fitness-user" data-field="userName" value="${escapeHtml(widget.userName || widget.title || 'Michael')}" placeholder="z. B. Michael" />
+              </label>
+              <label for="${controlId}-fitness-avatar">Avatar / Emoji
+                <input id="${controlId}-fitness-avatar" data-field="userAvatar" value="${escapeHtml(widget.userAvatar || '🏃')}" placeholder="🏃, 🚴, 🏋️, 🧘" />
+              </label>
+            </div>
+
+            <div class="fitness-goals-section" style="margin-top:10px;padding:10px;background:rgba(255,255,255,0.03);border:1px solid var(--line);border-radius:6px;">
+              <strong style="display:block;font-size:0.8rem;color:var(--acid);margin-bottom:8px;">🎯 Tagesziele &amp; Aktuelle Werte:</strong>
+              <div class="grid-3-cols" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+                <label for="${controlId}-fitness-move" style="color:#ff4d79;">🔴 Bewegen (kcal)
+                  <input type="number" id="${controlId}-fitness-move" data-field="moveCalories" min="0" value="${widget.moveCalories ?? 480}" placeholder="Aktuell" />
+                  <input type="number" id="${controlId}-fitness-move-goal" data-field="moveGoal" min="50" value="${widget.moveGoal ?? 500}" placeholder="Ziel" title="Tagesziel kcal" />
+                </label>
+                <label for="${controlId}-fitness-exercise" style="color:#a0ff00;">🟢 Trainieren (min)
+                  <input type="number" id="${controlId}-fitness-exercise" data-field="exerciseMinutes" min="0" value="${widget.exerciseMinutes ?? 35}" placeholder="Aktuell" />
+                  <input type="number" id="${controlId}-fitness-exercise-goal" data-field="exerciseGoal" min="5" value="${widget.exerciseGoal ?? 30}" placeholder="Ziel" title="Tagesziel Minuten" />
+                </label>
+                <label for="${controlId}-fitness-stand" style="color:#00f0ff;">🔵 Stehen (Std.)
+                  <input type="number" id="${controlId}-fitness-stand" data-field="standHours" min="0" max="24" value="${widget.standHours ?? 9}" placeholder="Aktuell" />
+                  <input type="number" id="${controlId}-fitness-stand-goal" data-field="standGoal" min="1" max="24" value="${widget.standGoal ?? 12}" placeholder="Ziel" title="Tagesziel Stunden" />
+                </label>
+              </div>
+              <div class="grid-3-cols" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:8px;">
+                <label for="${controlId}-fitness-steps">👟 Schritte
+                  <input type="number" id="${controlId}-fitness-steps" data-field="steps" min="0" value="${widget.steps ?? 7650}" />
+                </label>
+                <label for="${controlId}-fitness-distance">📍 Distanz (km)
+                  <input type="number" step="0.1" id="${controlId}-fitness-distance" data-field="distanceKm" min="0" value="${widget.distanceKm ?? 5.4}" />
+                </label>
+                <label for="${controlId}-fitness-hr">❤️ Puls (bpm)
+                  <input type="number" id="${controlId}-fitness-hr" data-field="heartRate" min="0" value="${widget.heartRate ?? 72}" />
+                </label>
+              </div>
+            </div>
+
+            <div class="fitness-sync-guide" style="margin-top:10px;">
+              <details class="raw-urls-details">
+                <summary style="font-size:0.8rem;color:var(--acid);cursor:pointer;">📲 Apple Health / Apple Watch Auto-Sync einrichten</summary>
+                <div style="padding:8px 0;font-size:0.75rem;color:var(--muted);line-height:1.4;">
+                  <p style="margin:4px 0;">Sende deine Fitnessdaten automatisch von iPhone/Apple Watch per <strong>Apple Kurzbefehl (iOS Shortcuts)</strong> oder <strong>Health Auto Export App</strong>:</p>
+                  <div style="background:#141613;padding:8px;border-radius:4px;border:1px solid var(--line);margin:6px 0;font-family:monospace;word-break:break-all;">
+                    <strong>POST Webhook-URL:</strong><br>
+                    <span style="color:var(--acid);">/api/health/sync</span>
+                  </div>
+                  <p style="margin:4px 0;">JSON-Payload: <code>{ "userName": "${escapeHtml(widget.userName || 'Michael')}", "moveCalories": 620, "moveGoal": 500, "exerciseMinutes": 45, "exerciseGoal": 30, "standHours": 10, "standGoal": 12, "steps": 9200, "distanceKm": 6.8, "heartRate": 74 }</code></p>
+                </div>
+              </details>
+              <input type="hidden" id="${controlId}-fitness-token" data-field="healthToken" value="${escapeHtml(widget.healthToken || widget.id)}" />
+            </div>
+          </div>
           ` : `
           ${(widget.type === 'image' || widget.type === 'slideshow') ? `<div class="content-field upload-field"><label class="upload-zone" for="${controlId}-upload"><input type="file" id="${controlId}-upload" data-action="upload" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" ${widget.type === 'slideshow' ? 'multiple' : ''} style="display: none;" /><span class="upload-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>${widget.type === 'slideshow' ? 'Bilder hochladen (max. 10 Bilder, je max. 5 MB)' : 'Bild hochladen (max. 5 MB)'}</span></span><span class="upload-status" data-upload-status aria-live="polite"></span></label></div>` : ''}
           ${widget.type === 'image' && widget.url ? `
@@ -730,5 +986,35 @@ export function bindWidgetFrames(root: ParentNode = document) {
     }
     loadWasteFeed()
     window.setInterval(loadWasteFeed, 30 * 60 * 1000)
+  })
+
+  bindCameraWidgets(root)
+}
+
+export function bindCameraWidgets(root: ParentNode = document) {
+  root.querySelectorAll<HTMLElement>('[data-camera-widget]').forEach((container) => {
+    if (container.dataset.cameraBound === 'true') return
+    container.dataset.cameraBound = 'true'
+    const type = container.dataset.cameraType
+    if (type !== 'snapshot') return
+
+    const baseUrl = container.dataset.cameraUrl
+    const intervalSec = Math.max(1, Number(container.dataset.cameraInterval) || 5)
+    const img = container.querySelector<HTMLImageElement>('.camera-snapshot-img')
+    if (!baseUrl || !img) return
+
+    window.setInterval(() => {
+      const sep = baseUrl.includes('?') ? '&' : '?'
+      const freshUrl = `${baseUrl}${sep}_t=${Date.now()}`
+      const preloader = new Image()
+      preloader.onload = () => {
+        img.src = freshUrl
+        container.classList.remove('is-offline')
+      }
+      preloader.onerror = () => {
+        container.classList.add('is-offline')
+      }
+      preloader.src = freshUrl
+    }, intervalSec * 1000)
   })
 }

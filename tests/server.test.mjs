@@ -702,3 +702,90 @@ test('presets API allows listing, creating, activating, updating, and deleting d
   const listFinal = await (await fetch(`${running.url}/api/presets`)).json()
   assert.deepEqual(listFinal, [])
 })
+
+test('health sync API updates matching fitness widget activity metrics and returns health data', async (context) => {
+  const running = await startServer()
+  context.after(() => running.server.close())
+
+  const initialSettings = {
+    version: 3,
+    widgets: [
+      {
+        id: 'fitness-michael',
+        type: 'fitness',
+        title: 'Michael Fitness',
+        userName: 'Michael',
+        userAvatar: '🏃‍♂️',
+        moveCalories: 200,
+        moveGoal: 600,
+        exerciseMinutes: 10,
+        exerciseGoal: 30,
+        standHours: 4,
+        standGoal: 12,
+        steps: 3000,
+        distanceKm: 2.1,
+        heartRate: 75,
+        healthToken: 'token-michael',
+      },
+      {
+        id: 'fitness-sarah',
+        type: 'fitness',
+        title: 'Sarah Fitness',
+        userName: 'Sarah',
+        userAvatar: '🚴‍♀️',
+        moveCalories: 150,
+        moveGoal: 500,
+        exerciseMinutes: 15,
+        exerciseGoal: 30,
+        standHours: 5,
+        standGoal: 12,
+        steps: 2500,
+        distanceKm: 1.8,
+        heartRate: 70,
+        healthToken: 'token-sarah',
+      },
+    ],
+  }
+  await writeFile(path.join(running.dataDirectory, 'settings.json'), JSON.stringify(initialSettings))
+
+  // 1. Sync Michael's health data via POST /api/health/sync
+  const syncRes = await fetch(`${running.url}/api/health/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userName: 'Michael',
+      moveCalories: 640,
+      exerciseMinutes: 45,
+      standHours: 12,
+      steps: 12500,
+      distanceKm: 9.3,
+      heartRate: 64,
+    }),
+  })
+  assert.equal(syncRes.status, 200)
+  const syncData = await syncRes.json()
+  assert.equal(syncData.success, true)
+  assert.equal(syncData.updatedWidgets, 1)
+
+  // 2. Fetch updated health data via GET /api/health/data
+  const dataRes = await fetch(`${running.url}/api/health/data`)
+  assert.equal(dataRes.status, 200)
+  const healthData = await dataRes.json()
+  assert.equal(healthData.success, true)
+  assert.equal(healthData.count, 2)
+
+  const michael = healthData.users.find((u) => u.userName === 'Michael')
+  assert.ok(michael)
+  assert.equal(michael.moveCalories, 640)
+  assert.equal(michael.exerciseMinutes, 45)
+  assert.equal(michael.standHours, 12)
+  assert.equal(michael.steps, 12500)
+  assert.equal(michael.distanceKm, 9.3)
+  assert.equal(michael.heartRate, 64)
+  assert.ok(michael.lastSync)
+
+  // Sarah's widget should remain unchanged
+  const sarah = healthData.users.find((u) => u.userName === 'Sarah')
+  assert.ok(sarah)
+  assert.equal(sarah.moveCalories, 150)
+})

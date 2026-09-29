@@ -329,4 +329,59 @@ test('normalizeSettings preserves, filters and defaults headerItems', () => {
   assert.deepEqual(empty.headerItems, [])
 })
 
+test('createWidget and normalizeSettings support camera and fitness widgets', () => {
+  const camWidget = createWidget('camera')
+  assert.equal(camWidget.type, 'camera')
+  assert.equal(camWidget.cameraRefreshSeconds, 5)
+  assert.equal(camWidget.cameraFit, 'cover')
+
+  const fitWidget = createWidget('fitness')
+  assert.equal(fitWidget.type, 'fitness')
+  assert.equal(fitWidget.moveGoal, 500)
+  assert.equal(fitWidget.exerciseGoal, 30)
+  assert.equal(fitWidget.standGoal, 12)
+
+  const normalized = normalizeSettings({
+    version: 3,
+    dateFormat: 'long',
+    timeFormat: '12h',
+    widgets: [
+      {
+        id: 'cam1',
+        type: 'camera',
+        cameraUrl: 'https://camera.example.com/stream.mjpg',
+        cameraRefreshSeconds: 10,
+        cameraFit: 'contain',
+        cameraType: 'mjpeg',
+      },
+      {
+        id: 'fit1',
+        type: 'fitness',
+        userName: 'Michael',
+        userAvatar: '🏃‍♂️',
+        moveCalories: 550,
+        moveGoal: 600,
+        exerciseMinutes: 40,
+        exerciseGoal: 30,
+        standHours: 11,
+        standGoal: 12,
+        steps: 9200,
+        distanceKm: 7.1,
+        heartRate: 65,
+        healthToken: 'tok-michael',
+      },
+    ],
+  })
+
+  assert.equal(normalized.dateFormat, 'long')
+  assert.equal(normalized.timeFormat, '12h')
+  assert.equal(normalized.widgets[0]?.cameraUrl, 'https://camera.example.com/stream.mjpg')
+  assert.equal(normalized.widgets[0]?.cameraRefreshSeconds, 10)
+  assert.equal(normalized.widgets[0]?.cameraFit, 'contain')
+  assert.equal(normalized.widgets[0]?.cameraType, 'mjpeg')
+  assert.equal(normalized.widgets[1]?.userName, 'Michael')
+  assert.equal(normalized.widgets[1]?.moveCalories, 550)
+  assert.equal(normalized.widgets[1]?.healthToken, 'tok-michael')
+})
+
 

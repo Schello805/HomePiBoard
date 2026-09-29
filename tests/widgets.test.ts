@@ -35,7 +35,7 @@ test('iCalendar URLs use the calendar feed renderer instead of an iframe downloa
 })
 
 test('calendar agenda escapes remote event content', () => {
-  const html = calendarAgendaMarkup([{ start: '2026-09-28T08:15:00.000Z', end: '2026-09-28T09:00:00.000Z', summary: '<script>alert(1)</script>', location: 'A & B', allDay: false }])
+  const html = calendarAgendaMarkup([{ start: '2026-09-28T08:15:00.000Z', end: '2026-09-28T09:00:00.000Z', summary: '<script>alert(1)</script>', location: 'A & B', allDay: false }], new Date('2026-09-28T00:00:00.000Z'))
 
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/)
   assert.match(html, /A &amp; B/)
@@ -426,4 +426,103 @@ test('editorMarkup includes a widget resize overlay with size readout', () => {
 
   assert.match(editor, /class="widget-resize-overlay"/)
   assert.match(editor, /data-overlay-size>24 × 9</)
+})
+
+test('camera widget renders snapshot image, live badge, and auto-refresh intervals', () => {
+  const camHtml = renderWidget({
+    id: 'cam-1',
+    type: 'camera',
+    title: 'Garten-Kamera',
+    cameraUrl: 'https://images.example.com/snapshot.jpg',
+    cameraRefreshSeconds: 3,
+    cameraFit: 'contain',
+    cameraType: 'snapshot',
+    columns: 8,
+    rows: 5,
+  })
+
+  assert.match(camHtml, /data-camera-widget/)
+  assert.match(camHtml, /data-camera-url="https:\/\/images\.example\.com\/snapshot\.jpg"/)
+  assert.match(camHtml, /data-camera-interval="3"/)
+  assert.match(camHtml, /class="camera-snapshot-img"/)
+  assert.match(camHtml, /object-fit: contain;/)
+  assert.match(camHtml, /LIVE/)
+  assert.match(camHtml, /3s/)
+})
+
+test('camera widget supports stream / iframe mode', () => {
+  const streamHtml = renderWidget({
+    id: 'cam-stream',
+    type: 'camera',
+    title: 'Haustür Live',
+    cameraUrl: 'https://camera.local:8080/stream',
+    cameraType: 'stream',
+    columns: 12,
+    rows: 6,
+  })
+
+  assert.match(streamHtml, /class="camera-stream-frame"/)
+  assert.match(streamHtml, /src="https:\/\/camera\.local:8080\/stream"/)
+  assert.match(streamHtml, /LIVE/)
+})
+
+test('fitness widget renders authentic Apple Health 3-ring activity card', () => {
+  const fitHtml = renderWidget({
+    id: 'fit-user-1',
+    type: 'fitness',
+    title: 'Michael Fitness',
+    userName: 'Michael',
+    userAvatar: '🚴',
+    moveCalories: 620,
+    moveGoal: 600,
+    exerciseMinutes: 45,
+    exerciseGoal: 30,
+    standHours: 12,
+    standGoal: 12,
+    steps: 11200,
+    distanceKm: 8.4,
+    heartRate: 68,
+    columns: 6,
+    rows: 4,
+  })
+
+  assert.match(fitHtml, /data-fitness-widget/)
+  assert.match(fitHtml, /class="fitness-name">Michael</)
+  assert.match(fitHtml, /class="fitness-avatar">🚴</)
+  assert.match(fitHtml, /class="fitness-rings-svg"/)
+  assert.match(fitHtml, /Bewegen/)
+  assert.match(fitHtml, /620/)
+  assert.match(fitHtml, /600 kcal/)
+  assert.match(fitHtml, /Trainieren/)
+  assert.match(fitHtml, /45/)
+  assert.match(fitHtml, /30 min/)
+  assert.match(fitHtml, /Stehen/)
+  assert.match(fitHtml, /12/)
+  assert.match(fitHtml, /12 Std\./)
+  assert.match(fitHtml, /11\.200/)
+  assert.match(fitHtml, /8\.4 km/)
+  assert.match(fitHtml, /68 bpm/)
+  assert.match(fitHtml, /3\/3/)
+  assert.match(fitHtml, /is-all-closed/)
+})
+
+test('editorMarkup for fitness widget includes Apple Shortcuts webhook setup guide', () => {
+  const editorHtml = renderWidget({
+    id: 'fit-editor',
+    type: 'fitness',
+    title: 'Sarah Fitness',
+    userName: 'Sarah',
+    userAvatar: '🏃‍♀️',
+    healthToken: 'sarah-token-123',
+    columns: 6,
+    rows: 4,
+  }, true)
+
+  assert.match(editorHtml, /data-field="userName"/)
+  assert.match(editorHtml, /data-field="userAvatar"/)
+  assert.match(editorHtml, /data-field="moveCalories"/)
+  assert.match(editorHtml, /data-field="healthToken"/)
+  assert.match(editorHtml, /\/api\/health\/sync/)
+  assert.match(editorHtml, /Apple Health/)
+  assert.match(editorHtml, /Kurzbefehl/)
 })

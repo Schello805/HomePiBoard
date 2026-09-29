@@ -11,6 +11,10 @@ echo "=========================================="
 echo "==> 1/5: Sichere Berechtigungen & Git-Konfiguration ab..."
 if [ -n "${USER:-}" ] && command -v sudo >/dev/null 2>&1; then
   sudo -n chown -R "${USER}:${USER}" "$APP_DIR" 2>/dev/null || true
+  if [ -d "/etc/sudoers.d" ] && [ ! -f "/etc/sudoers.d/homepiboard" ]; then
+    echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart homepiboard, /usr/bin/systemctl restart homepiboard.service, /bin/systemctl restart homepiboard, /bin/systemctl restart homepiboard.service, /bin/chown, /usr/bin/chown" | sudo -n tee /etc/sudoers.d/homepiboard > /dev/null 2>&1 || true
+    sudo -n chmod 0440 /etc/sudoers.d/homepiboard 2>/dev/null || true
+  fi
 fi
 git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
 git config --global --add safe.directory "*" 2>/dev/null || true

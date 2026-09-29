@@ -2455,7 +2455,7 @@ button:has(.loading-spinner) {
   gap: 5px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--line);
-  padding: 3px 8px;
+  padding: 3px 9px;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
@@ -2466,6 +2466,16 @@ button:has(.loading-spinner) {
 .header-chip .chip-icon {
   font-size: 0.85em;
   line-height: 1;
+}
+.header-chip .chip-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+.header-chip .chip-val {
+  font-weight: 700;
 }
 .header-chip-cpu {
   color: #ff9d66;
@@ -2486,7 +2496,16 @@ button:has(.loading-spinner) {
   color: #34d399;
   border-color: rgba(52, 211, 153, 0.25);
   background: rgba(52, 211, 153, 0.08);
-  font-family: monospace;
+}
+.header-chip-location {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.25);
+  background: rgba(56, 189, 248, 0.08);
+}
+.header-chip-weather {
+  color: #fde047;
+  border-color: rgba(253, 224, 71, 0.25);
+  background: rgba(253, 224, 71, 0.08);
 }
 
 /* Card Header Builder in /settings */
@@ -2736,6 +2755,285 @@ button:has(.loading-spinner) {
   transition: color 0.15s ease;
 }
 .settings-text-btn:hover {
+  color: var(--acid);
+}
+
+/* ==========================================================================
+   Camera Widget Styles
+   ========================================================================== */
+.camera-widget-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.camera-snapshot-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transition: opacity 0.3s ease;
+}
+.camera-stream-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+.camera-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+  z-index: 2;
+}
+.camera-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(220, 38, 38, 0.85);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 3px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  backdrop-filter: blur(4px);
+}
+.camera-reload-indicator {
+  background: rgba(0, 0, 0, 0.65);
+  color: var(--ink);
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  backdrop-filter: blur(4px);
+}
+.camera-reload-indicator .reload-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--acid);
+}
+.camera-offline-msg {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(18, 20, 18, 0.92);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 16px;
+  color: var(--muted);
+  gap: 6px;
+  z-index: 3;
+}
+.camera-offline-msg .offline-icon {
+  font-size: 1.8rem;
+}
+.camera-offline-msg strong {
+  color: #f87171;
+  font-size: 0.9rem;
+}
+.camera-offline-msg span {
+  font-size: 0.75rem;
+}
+.camera-widget-container.is-offline .camera-offline-msg {
+  display: flex;
+}
+.camera-empty-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
+  padding: 16px;
+  color: var(--muted);
+  gap: 6px;
+}
+.camera-empty-placeholder strong {
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+.camera-empty-placeholder .placeholder-sub {
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+/* ==========================================================================
+   Fitness & Apple Health Activity Rings Widget
+   ========================================================================== */
+.fitness-widget-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  width: 100%;
+  gap: 8px;
+  padding: 4px;
+}
+.fitness-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.fitness-user-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fitness-avatar {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+.fitness-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.fitness-score-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--acid);
+}
+.fitness-score-tag.is-all-closed {
+  background: rgba(201, 242, 105, 0.2);
+  border-color: var(--acid);
+  color: var(--acid);
+}
+.fitness-main-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.fitness-rings-wrap {
+  position: relative;
+  width: 82px;
+  height: 82px;
+  flex-shrink: 0;
+}
+.fitness-rings-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.fitness-center-score {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+.fitness-metrics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+.fitness-metric-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  padding: 2px 0;
+}
+.fitness-metric-row.metric-move .metric-bullet { color: #fa114f; }
+.fitness-metric-row.metric-exercise .metric-bullet { color: #a0ff00; }
+.fitness-metric-row.metric-stand .metric-bullet { color: #00f0ff; }
+.fitness-metric-row .metric-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.fitness-metric-row .metric-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-weight: 600;
+}
+.fitness-metric-row .metric-val {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fitness-metric-row .metric-val small {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+.fitness-metric-row .metric-pct {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.fitness-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.fitness-footer-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 600;
+}
+.fitness-sync-time {
+  font-size: 0.62rem;
+  opacity: 0.7;
+}
+.fitness-help-box {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.fitness-help-code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
   color: var(--acid);
 }
 

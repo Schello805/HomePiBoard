@@ -159,6 +159,7 @@ export function showNotificationBanner(
 }
 
 async function loadWeather(city: string, target: HTMLElement) {
+  const textEl = target.querySelector('.weather-text') || target
   try {
     const search = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=de&format=json`)
     if (!search.ok) throw new Error(`geocoding-${search.status}`)
@@ -171,9 +172,9 @@ async function loadWeather(city: string, target: HTMLElement) {
     const data = await forecast.json() as { current?: { temperature_2m: number; relative_humidity_2m: number; weather_code: number } }
     if (!data.current) throw new Error('weather-missing')
 
-    target.textContent = `${Math.round(data.current.temperature_2m)}° · ${weatherSymbol(data.current.weather_code)} · ${data.current.relative_humidity_2m}% Luftfeuchte`
+    textEl.textContent = `${Math.round(data.current.temperature_2m)}° · ${weatherSymbol(data.current.weather_code)} · ${data.current.relative_humidity_2m}% Feuchte`
   } catch {
-    target.textContent = 'Wetter nicht verfügbar'
+    textEl.textContent = 'Wetter n.v.'
     target.classList.add('is-unavailable')
   }
 }
@@ -219,22 +220,22 @@ export function renderHeaderItemHtml(item: HeaderItemType, settings: DisplaySett
       return `<span class="connection-status ${isOnline ? 'is-online' : 'is-offline'}" id="network-status" title="Netzwerkstatus">${isOnline ? 'ONLINE' : (source === 'local' ? 'LOKAL' : 'OFFLINE')}</span>`
     case 'location': {
       const loc = settings.location || settings.weatherCity
-      return loc ? `<span class="weather-location" id="header-location">${escapeHtml(loc)}</span>` : ''
+      return loc ? `<span class="weather-location header-chip-location" id="header-location" title="Standort"><span class="chip-icon">📍</span> <span class="chip-label">Ort:</span> <span class="chip-val">${escapeHtml(loc)}</span></span>` : ''
     }
     case 'weather':
-      return '<span class="weather-status" id="weather"></span>'
+      return '<span class="weather-status header-chip-weather" id="weather" title="Wetter"><span class="chip-icon">🌤️</span> <span class="chip-val weather-text">--</span></span>'
     case 'date':
       return '<time id="date">--.--.----</time>'
     case 'clock':
       return '<strong id="clock">--:--</strong>'
     case 'cpu':
-      return '<span class="header-chip header-chip-cpu" id="header-cpu" title="Raspberry Pi CPU Temperatur"><span class="chip-icon">🔥</span> <span class="chip-val" id="header-cpu-val">-- °C</span></span>'
+      return '<span class="header-chip header-chip-cpu" id="header-cpu" title="Raspberry Pi CPU Temperatur"><span class="chip-icon">🔥</span> <span class="chip-label">CPU:</span> <span class="chip-val" id="header-cpu-val">-- °C</span></span>'
     case 'ram':
-      return '<span class="header-chip header-chip-ram" id="header-ram" title="Raspberry Pi RAM Nutzung"><span class="chip-icon">💾</span> <span class="chip-val" id="header-ram-val">--%</span></span>'
+      return '<span class="header-chip header-chip-ram" id="header-ram" title="Raspberry Pi RAM Nutzung"><span class="chip-icon">💾</span> <span class="chip-label">RAM:</span> <span class="chip-val" id="header-ram-val">--%</span></span>'
     case 'uptime':
-      return '<span class="header-chip header-chip-uptime" id="header-uptime" title="System-Betriebszeit"><span class="chip-icon">⏱️</span> <span class="chip-val" id="header-uptime-val">--</span></span>'
+      return '<span class="header-chip header-chip-uptime" id="header-uptime" title="System-Betriebszeit"><span class="chip-icon">⏱️</span> <span class="chip-label">Uptime:</span> <span class="chip-val" id="header-uptime-val">--</span></span>'
     case 'ip':
-      return '<span class="header-chip header-chip-ip" id="header-ip" title="Lokale IP-Adresse"><span class="chip-icon">🌐</span> <span class="chip-val" id="header-ip-val">--</span></span>'
+      return '<span class="header-chip header-chip-ip" id="header-ip" title="Lokale IP-Adresse"><span class="chip-icon">🌐</span> <span class="chip-label">IP:</span> <span class="chip-val" id="header-ip-val">--</span></span>'
     default:
       return ''
   }
@@ -342,18 +343,39 @@ export async function renderDisplayPage(app: HTMLElement) {
 
   const showWeekday = settings.showWeekday !== false
   const locale = settings.locale || 'de-DE'
+  const hour12 = settings.timeFormat === '12h'
   const timeOptions: Intl.DateTimeFormatOptions = {
     hour: '2-digit',
     minute: '2-digit',
+    hour12,
     ...(settings.showSeconds ? { second: '2-digit' } : {}),
     ...(settings.timezone && settings.timezone !== 'auto' ? { timeZone: settings.timezone } : {}),
   }
-  const dateOptions: Intl.DateTimeFormatOptions = {
-    ...(showWeekday ? { weekday: 'short' } : {}),
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    ...(settings.timezone && settings.timezone !== 'auto' ? { timeZone: settings.timezone } : {}),
+
+  let dateOptions: Intl.DateTimeFormatOptions
+  if (settings.dateFormat === 'short') {
+    dateOptions = {
+      day: '2-digit',
+      month: '2-digit',
+      ...(settings.timezone && settings.timezone !== 'auto' ? { timeZone: settings.timezone } : {}),
+    }
+  } else if (settings.dateFormat === 'long') {
+    dateOptions = {
+      weekday: showWeekday ? 'long' : undefined,
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      ...(settings.timezone && settings.timezone !== 'auto' ? { timeZone: settings.timezone } : {}),
+    }
+  } else {
+    // 'medium' (standard)
+    dateOptions = {
+      ...(showWeekday ? { weekday: 'short' } : {}),
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      ...(settings.timezone && settings.timezone !== 'auto' ? { timeZone: settings.timezone } : {}),
+    }
   }
 
   const updateTime = () => {
@@ -363,7 +385,7 @@ export async function renderDisplayPage(app: HTMLElement) {
       const formattedDate = now.toLocaleDateString(locale, dateOptions)
       if (clock) clock.textContent = formattedTime
       if (date) {
-        if (showWeekday) {
+        if (showWeekday && settings.dateFormat !== 'short') {
           const parts = formattedDate.split(/(^[^\d]+)/).filter(Boolean)
           if (parts.length >= 2) {
             const weekdayStr = parts[0]!.trim()
