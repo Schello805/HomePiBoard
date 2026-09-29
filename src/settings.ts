@@ -68,7 +68,7 @@ export type DashboardWidget = {
   cameraUrl?: string
   cameraRefreshSeconds?: number
   cameraFit?: 'cover' | 'contain'
-  cameraType?: 'snapshot' | 'mjpeg' | 'stream'
+  cameraType?: 'snapshot' | 'mjpeg' | 'stream' | 'rtsp'
 }
 
 export type DisplaySettings = {
@@ -333,7 +333,7 @@ export function normalizeSettings(value: unknown): DisplaySettings {
           ? Math.max(1, Math.min(3600, Math.round(Number(widget.cameraRefreshSeconds))))
           : 5,
         cameraFit: widget.cameraFit === 'contain' ? 'contain' : 'cover',
-        cameraType: widget.cameraType === 'mjpeg' ? 'mjpeg' : (widget.cameraType === 'stream' ? 'stream' : 'snapshot'),
+        cameraType: widget.cameraType === 'mjpeg' ? 'mjpeg' : (widget.cameraType === 'stream' ? 'stream' : (widget.cameraType === 'rtsp' ? 'rtsp' : 'snapshot')),
       } : {}),
     }
   })

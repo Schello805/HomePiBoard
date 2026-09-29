@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { GERMAN_RADIO_STATIONS, calendarAgendaMarkup, isWasteCalendarFeed, parseSlideshowUrls, parseWasteItems, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent } from '../src/widgets.ts'
+import { GERMAN_RADIO_STATIONS, calendarAgendaMarkup, isWasteCalendarFeed, parseSlideshowUrls, parseWasteItems, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent, resolveCameraDisplayUrl, safeResourceUrl } from '../src/widgets.ts'
 
 test('renderWidget escapes text content', () => {
   const markup = renderWidget({ id: 'note', type: 'text', title: '<Titel>', url: '<script>', columns: 6, rows: 2 })
@@ -464,4 +464,45 @@ test('camera widget supports stream / iframe mode', () => {
   assert.match(streamHtml, /src="https:\/\/camera\.local:8080\/stream"/)
   assert.match(streamHtml, /LIVE/)
 })
+
+test('camera widget supports RTSP live streams and resolves camera proxy URL', () => {
+  const rtspUrl = 'rtsp://admin:secret@192.168.1.50:554/Streaming/Channels/101'
+  const rtspHtml = renderWidget({
+    id: 'cam-rtsp',
+    type: 'camera',
+    title: 'Einfahrt RTSP',
+    cameraUrl: rtspUrl,
+    cameraType: 'rtsp',
+    columns: 12,
+    rows: 6,
+  })
+
+  assert.match(rtspHtml, /data-camera-widget/)
+  assert.match(rtspHtml, /data-camera-type="rtsp"/)
+  assert.match(rtspHtml, /data-camera-url="rtsp:\/\/admin:secret@192\.168\.1\.50:554\/Streaming\/Channels\/101"/)
+  assert.match(rtspHtml, /src="\/api\/camera\/mjpeg\?url=rtsp%3A%2F%2Fadmin%3Asecret%40192\.168\.1\.50%3A554%2FStreaming%2FChannels%2F101"/)
+  assert.match(rtspHtml, /LIVE/)
+})
+
+test('safeResourceUrl allows rtsp protocol for camera and rejects it for other widgets', () => {
+  assert.equal(safeResourceUrl('rtsp://192.168.1.20:554/live', 'camera'), 'rtsp://192.168.1.20:554/live')
+  assert.equal(safeResourceUrl('rtsp://192.168.1.20:554/live', 'web'), null)
+  assert.equal(safeResourceUrl('rtsp://192.168.1.20:554/live', 'image'), null)
+})
+
+test('resolveCameraDisplayUrl routes RTSP streams to appropriate endpoints', () => {
+  const rtsp = 'rtsp://192.168.1.100:554/live'
+  assert.equal(resolveCameraDisplayUrl(rtsp, 'snapshot'), '/api/camera/snapshot?url=rtsp%3A%2F%2F192.168.1.100%3A554%2Flive')
+  assert.equal(resolveCameraDisplayUrl(rtsp, 'rtsp'), '/api/camera/mjpeg?url=rtsp%3A%2F%2F192.168.1.100%3A554%2Flive')
+  assert.equal(resolveCameraDisplayUrl(rtsp, 'mjpeg'), '/api/camera/mjpeg?url=rtsp%3A%2F%2F192.168.1.100%3A554%2Flive')
+  assert.equal(resolveCameraDisplayUrl('https://example.com/stream.mjpg', 'mjpeg'), 'https://example.com/stream.mjpg')
+})
+
+test('editorMarkup includes RTSP live stream option and camera hint', () => {
+  const editor = renderWidget({ id: 'cam-edit', type: 'camera', title: 'Kamera', cameraUrl: 'rtsp://192.168.1.10:554/feed', cameraType: 'rtsp', columns: 8, rows: 4 }, true)
+  assert.match(editor, /<option value="rtsp" selected>RTSP Live-Stream<\/option>/)
+  assert.match(editor, /placeholder="rtsp:\/\/192\.168\.1\.100:554\/stream/)
+  assert.match(editor, /Unterstützt RTSP-Streams/)
+})
+
 

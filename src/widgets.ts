@@ -337,18 +337,30 @@ export function mediaContent(widget: DashboardWidget) {
   </div>`
 }
 
-function safeResourceUrl(value: string, type: WidgetType) {
+export function safeResourceUrl(value: string, type: WidgetType) {
   const url = value.trim()
   if (!url) return ''
   if ((type === 'image' || type === 'slideshow' || type === 'camera') && /^data:image\/(?:png|jpeg|gif|webp|svg\+xml);/i.test(url)) return url
 
   try {
     const parsed = new URL(url, 'https://homepiboard.local')
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:' && (type !== 'camera' || parsed.protocol !== 'rtsp:')) return null
     return url
   } catch {
     return null
   }
+}
+
+export function resolveCameraDisplayUrl(rawUrl: string, camType?: string): string {
+  const url = (rawUrl || '').trim()
+  if (!url) return ''
+  if (url.startsWith('rtsp://')) {
+    if (camType === 'snapshot') {
+      return `/api/camera/snapshot?url=${encodeURIComponent(url)}`
+    }
+    return `/api/camera/mjpeg?url=${encodeURIComponent(url)}`
+  }
+  return url
 }
 
 export function parseSlideshowUrls(content: string): string[] {
@@ -421,15 +433,19 @@ function cameraContent(widget: DashboardWidget) {
   if (!url) {
     return '<div class="camera-empty-state"><span class="placeholder-icon">📷</span><strong>Kamera-Stream / Bild</strong><span>URL in den Widget-Einstellungen hinterlegen</span></div>'
   }
-  const camType = widget.cameraType || 'snapshot'
+  const isRtsp = url.trim().startsWith('rtsp://')
+  const camType = widget.cameraType || (isRtsp ? 'rtsp' : 'snapshot')
   const refreshSec = widget.cameraRefreshSeconds || 5
   const fit = widget.cameraFit || 'cover'
+  const displayUrl = resolveCameraDisplayUrl(url, camType)
 
-  if (camType === 'stream') {
-    return `<div class="camera-container" data-camera-widget data-camera-type="stream"><div class="camera-badge"><span class="camera-live-dot"></span> LIVE</div><iframe class="camera-stream-frame" src="${escapeHtml(url)}" sandbox="allow-scripts allow-same-origin" allow="autoplay; fullscreen" loading="lazy"></iframe></div>`
+  if (camType === 'stream' && !isRtsp) {
+    return `<div class="camera-container" data-camera-widget data-camera-type="stream"><div class="camera-badge"><span class="camera-live-dot"></span> LIVE</div><iframe class="camera-stream-frame" src="${escapeHtml(displayUrl)}" sandbox="allow-scripts allow-same-origin" allow="autoplay; fullscreen" loading="lazy"></iframe></div>`
   }
 
-  return `<div class="camera-container" data-camera-widget data-camera-type="${escapeHtml(camType)}" data-camera-url="${escapeHtml(url)}" data-camera-interval="${refreshSec}"><div class="camera-badge"><span class="camera-live-dot"></span> LIVE <span class="camera-refresh-pill">${refreshSec}s</span></div><img class="camera-snapshot-img camera-image camera-fit-${escapeHtml(fit)}" style="object-fit: ${escapeHtml(fit)};" src="${escapeHtml(url)}" alt="${escapeHtml(widget.title || 'Kamera')}" /></div>`
+  const badgeExtra = camType === 'snapshot' ? ` <span class="camera-refresh-pill">${refreshSec}s</span>` : ''
+
+  return `<div class="camera-container" data-camera-widget data-camera-type="${escapeHtml(camType)}" data-camera-url="${escapeHtml(url)}" data-camera-interval="${refreshSec}"><div class="camera-badge"><span class="camera-live-dot"></span> LIVE${badgeExtra}</div><img class="camera-snapshot-img camera-image camera-fit-${escapeHtml(fit)}" style="object-fit: ${escapeHtml(fit)};" src="${escapeHtml(displayUrl)}" alt="${escapeHtml(widget.title || 'Kamera')}" /></div>`
 }
 
 export function renderWidgetContent(widget: DashboardWidget) {
@@ -598,8 +614,8 @@ function editorMarkup(widget: DashboardWidget, index: number) {
           ` : widget.type === 'camera' ? `
           <div class="camera-form-group">
             <label class="content-field" for="${controlId}-camera-url">
-              <span>Kamera-URL (Snapshot-Bild oder MJPEG/Web-Stream)</span>
-              <input type="url" id="${controlId}-camera-url" data-field="cameraUrl" value="${escapeHtml(widget.cameraUrl || widget.url || '')}" placeholder="http://192.168.1.100/snapshot.jpg oder https://..." />
+              <span>Kamera-URL (RTSP-Stream, Snapshot-Bild oder MJPEG/Web-Stream)</span>
+              <input type="text" id="${controlId}-camera-url" data-field="cameraUrl" value="${escapeHtml(widget.cameraUrl || widget.url || '')}" placeholder="rtsp://192.168.1.100:554/stream, http://... oder https://..." />
             </label>
             <div class="grid-3-cols" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
               <label for="${controlId}-camera-refresh">Aktualisierung
@@ -608,7 +624,8 @@ function editorMarkup(widget: DashboardWidget, index: number) {
               </label>
               <label for="${controlId}-camera-type">Kameratyp
                 <select id="${controlId}-camera-type" data-field="cameraType">
-                  <option value="snapshot" ${widget.cameraType !== 'mjpeg' && widget.cameraType !== 'stream' ? 'selected' : ''}>Snapshot (Auto-Reload)</option>
+                  <option value="snapshot" ${widget.cameraType === 'snapshot' || (!widget.cameraType && !widget.cameraUrl?.startsWith('rtsp://') && !widget.url?.startsWith('rtsp://')) ? 'selected' : ''}>Snapshot (Auto-Reload)</option>
+                  <option value="rtsp" ${widget.cameraType === 'rtsp' || (!widget.cameraType && (widget.cameraUrl?.startsWith('rtsp://') || widget.url?.startsWith('rtsp://'))) ? 'selected' : ''}>RTSP Live-Stream</option>
                   <option value="mjpeg" ${widget.cameraType === 'mjpeg' ? 'selected' : ''}>MJPEG Live-Stream</option>
                   <option value="stream" ${widget.cameraType === 'stream' ? 'selected' : ''}>Webseite / Iframe Stream</option>
                 </select>
@@ -620,7 +637,7 @@ function editorMarkup(widget: DashboardWidget, index: number) {
                 </select>
               </label>
             </div>
-            <p class="editor-field-hint">💡 Funktioniert mit allen IP-Kameras, Webcams, RTSP-to-HTTP Gateways, Home Assistant Kameras und öffentlichen Webcams.</p>
+            <p class="editor-field-hint">💡 Unterstützt RTSP-Streams (z.B. rtsp://192.168.1.50:554/live), IP-Kameras, Webcams, MJPEG-Streams, Home Assistant Kameras und öffentliche Webcams.</p>
           </div>
           ` : `
           ${(widget.type === 'image' || widget.type === 'slideshow') ? `<div class="content-field upload-field"><label class="upload-zone" for="${controlId}-upload"><input type="file" id="${controlId}-upload" data-action="upload" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" ${widget.type === 'slideshow' ? 'multiple' : ''} style="display: none;" /><span class="upload-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>${widget.type === 'slideshow' ? 'Bilder hochladen (max. 10 Bilder, je max. 5 MB)' : 'Bild hochladen (max. 5 MB)'}</span></span><span class="upload-status" data-upload-status aria-live="polite"></span></label></div>` : ''}
@@ -788,10 +805,12 @@ export function bindCameraWidgets(root: ParentNode = document) {
     const type = container.dataset.cameraType
     if (type !== 'snapshot') return
 
-    const baseUrl = container.dataset.cameraUrl
+    const rawUrl = container.dataset.cameraUrl
     const intervalSec = Math.max(1, Number(container.dataset.cameraInterval) || 5)
     const img = container.querySelector<HTMLImageElement>('.camera-snapshot-img')
-    if (!baseUrl || !img) return
+    if (!rawUrl || !img) return
+
+    const baseUrl = resolveCameraDisplayUrl(rawUrl, 'snapshot')
 
     window.setInterval(() => {
       const sep = baseUrl.includes('?') ? '&' : '?'

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import http from 'node:http'
 import { scrypt as scryptCallback } from 'node:crypto'
 import { mkdtemp, readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -6,7 +7,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
 
-import { createHomePiBoardServer, getSystemInfo, getSystemNetwork, parentDirectoriesToSync } from '../server.mjs'
+import { createHomePiBoardServer, getSystemInfo, getSystemNetwork, parentDirectoriesToSync, validateCameraUrl } from '../server.mjs'
 
 const scrypt = promisify(scryptCallback)
 
@@ -18,6 +19,8 @@ async function startServer({
   lookupFunction,
   updateStatusHandler,
   updateExecuteHandler,
+  cameraExec,
+  cameraSpawn,
 } = {}) {
   dataDirectory ||= await mkdtemp(path.join(tmpdir(), 'homepiboard-'))
   const server = createHomePiBoardServer({
@@ -28,6 +31,8 @@ async function startServer({
     lookupFunction,
     updateStatusHandler,
     updateExecuteHandler,
+    cameraExec,
+    cameraSpawn,
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
@@ -701,4 +706,82 @@ test('presets API allows listing, creating, activating, updating, and deleting d
 
   const listFinal = await (await fetch(`${running.url}/api/presets`)).json()
   assert.deepEqual(listFinal, [])
+})
+
+test('validateCameraUrl allows RTSP, HTTP, and HTTPS and rejects invalid URLs', () => {
+  assert.equal(validateCameraUrl('rtsp://admin:pass@192.168.1.100:554/live'), 'rtsp://admin:pass@192.168.1.100:554/live')
+  assert.equal(validateCameraUrl('http://192.168.1.100/snapshot.jpg'), 'http://192.168.1.100/snapshot.jpg')
+  assert.equal(validateCameraUrl('https://example.com/cam.mjpg'), 'https://example.com/cam.mjpg')
+  assert.equal(validateCameraUrl('javascript:alert(1)'), null)
+  assert.equal(validateCameraUrl('file:///etc/passwd'), null)
+  assert.equal(validateCameraUrl(''), null)
+})
+
+test('camera snapshot endpoint validates URL and returns image buffer from ffmpeg', async (context) => {
+  const fakeJpegBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46])
+  let capturedArgs = null
+
+  const running = await startServer({
+    cameraExec: async (file, args, options) => {
+      capturedArgs = { file, args, options }
+      return { stdout: fakeJpegBuffer }
+    },
+  })
+  context.after(() => running.server.close())
+
+  // Missing or invalid URL rejected
+  const badRes = await fetch(`${running.url}/api/camera/snapshot?url=ftp://bad.host/stream`)
+  assert.equal(badRes.status, 400)
+
+  // Valid RTSP URL calls cameraExec and returns image/jpeg
+  const rtspUrl = 'rtsp://192.168.1.50:554/stream1'
+  const okRes = await fetch(`${running.url}/api/camera/snapshot?url=${encodeURIComponent(rtspUrl)}`)
+  assert.equal(okRes.status, 200)
+  assert.equal(okRes.headers.get('content-type'), 'image/jpeg')
+  const body = Buffer.from(await okRes.arrayBuffer())
+  assert.deepEqual(body, fakeJpegBuffer)
+  assert.equal(capturedArgs.file, 'ffmpeg')
+  assert.ok(capturedArgs.args.includes(rtspUrl))
+})
+
+test('camera mjpeg endpoint validates URL and streams multipart MJPEG via ffmpeg', async (context) => {
+  const { EventEmitter } = await import('node:events')
+  const { PassThrough } = await import('node:stream')
+
+  let spawnedProcess = null
+  const fakeStream = new PassThrough()
+  const fakeProc = new EventEmitter()
+  fakeProc.stdout = fakeStream
+  fakeProc.kill = (signal) => {
+    fakeProc.killedWith = signal
+    fakeStream.end()
+  }
+
+  const running = await startServer({
+    cameraSpawn: (file, args) => {
+      spawnedProcess = { file, args, proc: fakeProc }
+      return fakeProc
+    },
+  })
+  context.after(() => running.server.close())
+
+  // Missing or invalid URL rejected
+  const badRes = await fetch(`${running.url}/api/camera/mjpeg?url=invalid`)
+  assert.equal(badRes.status, 400)
+
+  // Valid RTSP stream starts streaming
+  const rtspUrl = 'rtsp://192.168.1.50:554/live'
+  const req = http.get(`${running.url}/api/camera/mjpeg?url=${encodeURIComponent(rtspUrl)}`)
+  req.on('error', () => {})
+  const res = await new Promise((resolve) => req.once('response', resolve))
+  assert.equal(res.statusCode, 200)
+  assert.match(res.headers['content-type'] || '', /multipart\/x-mixed-replace; boundary=ffmpeg-stream-boundary/)
+  assert.equal(spawnedProcess.file, 'ffmpeg')
+  assert.ok(spawnedProcess.args.includes(rtspUrl))
+  assert.ok(spawnedProcess.args.includes('mpjpeg'))
+
+  res.destroy()
+  req.destroy()
+  await new Promise((r) => setTimeout(r, 60))
+  assert.equal(fakeProc.killedWith, 'SIGTERM')
 })

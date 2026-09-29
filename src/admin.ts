@@ -3,7 +3,7 @@ import { bindRadioWidgets } from './display.ts'
 import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type DisplaySettings, type WidgetType } from './settings.ts'
 import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
 import { parseCalendarFeed } from './calendar-feed.ts'
-import { bindWidgetFrames, isBuiltInCalendar, parseSlideshowUrls, renderSlideshowCrudList, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
+import { bindCameraWidgets, bindWidgetFrames, isBuiltInCalendar, parseSlideshowUrls, renderSlideshowCrudList, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
 
 const pinKey = 'homepiboard-admin-pin'
 
@@ -381,8 +381,8 @@ export async function renderAdminPage(app: HTMLElement) {
   }
 
   function readWidget(editor: HTMLElement): DashboardWidget {
-    const type = editor.querySelector<HTMLSelectElement>('[data-field="type"]')!.value as WidgetType
-    const constraints = widgetConstraints[type]
+    const type = (editor.querySelector<HTMLSelectElement>('[data-field="type"]')?.value || 'web') as WidgetType
+    const constraints = widgetConstraints[type] || { minColumns: 2, minRows: 2, defaultColumns: 6, defaultRows: 4 }
     const refreshInput = editor.querySelector<HTMLInputElement>('[data-field="refreshIntervalMinutes"]')
     const intervalInput = editor.querySelector<HTMLInputElement>('[data-field="intervalSeconds"]')
     const refreshIntervalMinutes = type === 'web' && refreshInput
@@ -402,7 +402,6 @@ export async function renderAdminPage(app: HTMLElement) {
     const wasteInput = editor.querySelector<HTMLTextAreaElement>('[data-field="wasteItems"]')
     const wasteItems = type === 'waste' && wasteInput ? wasteInput.value.trim() : undefined
 
-
     const mediaTitleInput = editor.querySelector<HTMLInputElement>('[data-field="mediaTitle"]')
     const mediaArtistInput = editor.querySelector<HTMLInputElement>('[data-field="mediaArtist"]')
     const mediaAlbumInput = editor.querySelector<HTMLInputElement>('[data-field="mediaAlbum"]')
@@ -420,15 +419,19 @@ export async function renderAdminPage(app: HTMLElement) {
     const cameraFitInput = editor.querySelector<HTMLSelectElement>('[data-field="cameraFit"]')
     const cameraUrl = type === 'camera' && cameraUrlInput ? cameraUrlInput.value.trim() : undefined
     const cameraRefreshSeconds = type === 'camera' && cameraRefreshInput ? Math.max(1, Math.min(3600, Number(cameraRefreshInput.value) || 5)) : undefined
-    const cameraType = type === 'camera' && cameraTypeInput ? (cameraTypeInput.value as 'snapshot' | 'mjpeg' | 'stream') : undefined
+    const cameraType = type === 'camera' && cameraTypeInput ? (cameraTypeInput.value as 'snapshot' | 'mjpeg' | 'stream' | 'rtsp') : undefined
     const cameraFit = type === 'camera' && cameraFitInput ? (cameraFitInput.value as 'cover' | 'contain') : undefined
+
+    const titleVal = editor.querySelector<HTMLInputElement>('[data-field="title"]')?.value
+    const colVal = editor.querySelector<HTMLInputElement>('[data-field="columns"]')?.value
+    const rowVal = editor.querySelector<HTMLInputElement>('[data-field="rows"]')?.value
 
     return {
       id: editor.dataset.id || `widget-${Date.now()}`,
       type,
-      title: editor.querySelector<HTMLInputElement>('[data-field="title"]')!.value.trim(),
-      columns: Math.max(constraints.minColumns, Math.min(24, Math.round(Number(editor.querySelector<HTMLInputElement>('[data-field="columns"]')!.value) || constraints.defaultColumns))),
-      rows: Math.max(constraints.minRows, Math.min(14, Math.round(Number(editor.querySelector<HTMLInputElement>('[data-field="rows"]')!.value) || constraints.defaultRows))),
+      title: titleVal !== undefined ? titleVal.trim() : '',
+      columns: Math.max(constraints.minColumns, Math.min(24, Math.round(Number(colVal) || constraints.defaultColumns))),
+      rows: Math.max(constraints.minRows, Math.min(14, Math.round(Number(rowVal) || constraints.defaultRows))),
       url,
       ...(refreshIntervalMinutes !== undefined ? { refreshIntervalMinutes } : {}),
       ...(intervalSeconds !== undefined ? { intervalSeconds } : {}),
@@ -578,6 +581,7 @@ export async function renderAdminPage(app: HTMLElement) {
       previewContent.innerHTML = `${widget.showTitle ? `<header class="kiosk-widget-header preview-header"><h2 class="kiosk-widget-title">${escapeHtml(widget.title)}</h2></header>` : ''}<div class="iframe-placeholder">${renderWidgetContent(widget)}</div>`
       bindWidgetFrames(previewContent)
       bindRadioWidgets(previewContent, { allowAutoplay: false })
+      bindCameraWidgets(previewContent)
     }
     validateLayout()
   }
@@ -590,6 +594,7 @@ export async function renderAdminPage(app: HTMLElement) {
     bindEditor(editor)
     bindWidgetFrames(editor)
     bindRadioWidgets(editor, { allowAutoplay: false })
+    bindCameraWidgets(editor)
     updateEditorIndexes()
     markDirty()
     editor.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -609,6 +614,7 @@ export async function renderAdminPage(app: HTMLElement) {
     bindEditor(copy)
     bindWidgetFrames(copy)
     bindRadioWidgets(copy, { allowAutoplay: false })
+    bindCameraWidgets(copy)
     updateEditorIndexes()
     markDirty()
     copy.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -731,11 +737,11 @@ export async function renderAdminPage(app: HTMLElement) {
     const toggleButton = editor.querySelector<HTMLButtonElement>('[data-action="toggle"]')
     editor.querySelector<HTMLButtonElement>('[data-action="duplicate"]')?.addEventListener('click', () => duplicateWidget(editor))
 
-    const urlInput = editor.querySelector<HTMLTextAreaElement>('[data-field="url"]')!
+    const urlInput = editor.querySelector<HTMLInputElement | HTMLTextAreaElement>('[data-field="url"]')
     const crudSection = editor.querySelector<HTMLElement>('[data-slideshow-crud]')
 
     const refreshSlideshowCrud = () => {
-      if (!crudSection) return
+      if (!crudSection || !urlInput) return
       const urls = parseSlideshowUrls(urlInput.value).slice(0, 10)
       const countBadge = crudSection.querySelector<HTMLElement>('[data-slideshow-count]')
       if (countBadge) countBadge.textContent = `Bilder (${urls.length} / 10)`
@@ -745,7 +751,7 @@ export async function renderAdminPage(app: HTMLElement) {
         list.querySelectorAll<HTMLButtonElement>('[data-action="slide-up"]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const idx = Number(btn.dataset.index)
-            if (idx > 0) {
+            if (idx > 0 && urlInput) {
               const temp = urls[idx]!
               urls[idx] = urls[idx - 1]!
               urls[idx - 1] = temp
@@ -759,7 +765,7 @@ export async function renderAdminPage(app: HTMLElement) {
         list.querySelectorAll<HTMLButtonElement>('[data-action="slide-down"]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const idx = Number(btn.dataset.index)
-            if (idx < urls.length - 1) {
+            if (idx < urls.length - 1 && urlInput) {
               const temp = urls[idx]!
               urls[idx] = urls[idx + 1]!
               urls[idx + 1] = temp
@@ -774,7 +780,7 @@ export async function renderAdminPage(app: HTMLElement) {
           btn.addEventListener('click', () => {
             const idx = Number(btn.dataset.index)
             urls.splice(idx, 1)
-            urlInput.value = urls.join('\n')
+            if (urlInput) urlInput.value = urls.join('\n')
             refreshEditor(editor)
             markDirty()
             refreshSlideshowCrud()
@@ -787,7 +793,7 @@ export async function renderAdminPage(app: HTMLElement) {
       const addUrlInput = crudSection.querySelector<HTMLInputElement>('[data-slideshow-url-input]')
       const addUrlBtn = crudSection.querySelector<HTMLButtonElement>('[data-action="add-slideshow-url"]')
       const handleAddUrl = () => {
-        if (!addUrlInput) return
+        if (!addUrlInput || !urlInput) return
         const val = addUrlInput.value.trim()
         if (!val) return
         const urls = parseSlideshowUrls(urlInput.value)
@@ -813,13 +819,13 @@ export async function renderAdminPage(app: HTMLElement) {
     }
 
     editor.querySelector<HTMLButtonElement>('[data-action="clear-image"]')?.addEventListener('click', () => {
-      urlInput.value = ''
+      if (urlInput) urlInput.value = ''
       editor.querySelector<HTMLElement>('[data-single-image-item]')?.remove()
       refreshEditor(editor)
       markDirty()
     })
 
-    urlInput.addEventListener('input', () => {
+    urlInput?.addEventListener('input', () => {
       refreshSlideshowCrud()
     })
 
@@ -837,7 +843,7 @@ export async function renderAdminPage(app: HTMLElement) {
       }
 
       const currentType = editor.querySelector<HTMLSelectElement>('[data-field="type"]')?.value
-      const existingUrls = currentType === 'slideshow' ? parseSlideshowUrls(urlInput.value) : []
+      const existingUrls = currentType === 'slideshow' && urlInput ? parseSlideshowUrls(urlInput.value) : []
 
       if (currentType === 'slideshow' && existingUrls.length >= 10) {
         if (uploadStatus) uploadStatus.textContent = 'Maximal 10 Bilder pro Diashow erreicht.'
@@ -892,10 +898,10 @@ export async function renderAdminPage(app: HTMLElement) {
 
           if (currentType === 'slideshow') {
             existingUrls.push(data.url)
-            urlInput.value = existingUrls.slice(0, 10).join('\n')
+            if (urlInput) urlInput.value = existingUrls.slice(0, 10).join('\n')
             addedCount++
           } else {
-            urlInput.value = data.url
+            if (urlInput) urlInput.value = data.url
           }
           refreshEditor(editor)
           markDirty()
@@ -1080,7 +1086,7 @@ export async function renderAdminPage(app: HTMLElement) {
       }
     })
 
-    editor.querySelector<HTMLInputElement>('[data-field="title"]')!.addEventListener('input', () => {
+    editor.querySelector<HTMLInputElement>('[data-field="title"]')?.addEventListener('input', () => {
       refreshEditor(editor, false)
       markDirty()
     })
@@ -1098,7 +1104,7 @@ export async function renderAdminPage(app: HTMLElement) {
       updateEditorIndexes()
       markDirty()
     })
-    editor.querySelector<HTMLSelectElement>('[data-field="type"]')!.addEventListener('change', () => {
+    editor.querySelector<HTMLSelectElement>('[data-field="type"]')?.addEventListener('change', () => {
       const widget = readWidget(editor)
       const index = [...editorList.children].indexOf(editor)
       editor.outerHTML = renderWidgetEditor(widget, index)
@@ -1106,6 +1112,7 @@ export async function renderAdminPage(app: HTMLElement) {
       bindEditor(newEditor)
       bindWidgetFrames(newEditor)
       bindRadioWidgets(newEditor, { allowAutoplay: false })
+      bindCameraWidgets(newEditor)
       markDirty()
       const newDialog = newEditor.querySelector<HTMLDialogElement>('[data-widget-dialog]')
       if (newDialog && typeof newDialog.showModal === 'function') {
@@ -1119,14 +1126,16 @@ export async function renderAdminPage(app: HTMLElement) {
         markDirty()
       })
     })
-    const resizeHandle = editor.querySelector<HTMLButtonElement>('[data-resize-handle]')!
+    const resizeHandle = editor.querySelector<HTMLButtonElement>('[data-resize-handle]')
     const applyResize = (deltaColumns: number, deltaRows: number, startColumns = readWidget(editor).columns, startRows = readWidget(editor).rows, markAsDirty = true) => {
-      const type = editor.querySelector<HTMLSelectElement>('[data-field="type"]')!.value as WidgetType
+      const type = (editor.querySelector<HTMLSelectElement>('[data-field="type"]')?.value || 'web') as WidgetType
       const current = readWidget(editor)
       const resized = resizeWidgetDimensions(type, startColumns, startRows, deltaColumns, deltaRows, current.columns, current.rows)
       if (!resized.changed) return false
-      editor.querySelector<HTMLInputElement>('[data-field="columns"]')!.value = String(resized.columns)
-      editor.querySelector<HTMLInputElement>('[data-field="rows"]')!.value = String(resized.rows)
+      const colInput = editor.querySelector<HTMLInputElement>('[data-field="columns"]')
+      const rowInput = editor.querySelector<HTMLInputElement>('[data-field="rows"]')
+      if (colInput) colInput.value = String(resized.columns)
+      if (rowInput) rowInput.value = String(resized.rows)
       editor.style.gridColumn = `span ${Math.min(GRID_COLUMNS, resized.columns)}`
       editor.style.gridRow = `span ${resized.rows}`
       refreshEditor(editor, false)
@@ -1134,7 +1143,7 @@ export async function renderAdminPage(app: HTMLElement) {
       return true
     }
     let keyResizeTimeout: number | undefined
-    resizeHandle.addEventListener('keydown', (event) => {
+    resizeHandle?.addEventListener('keydown', (event) => {
       const direction = resizeKeyboardDelta(event.key, event.shiftKey)
       if (!direction) return
       event.preventDefault()
@@ -1146,7 +1155,7 @@ export async function renderAdminPage(app: HTMLElement) {
       }, 700)
     })
     let activeResizePointer: number | null = null
-    resizeHandle.addEventListener('pointerdown', (event) => {
+    resizeHandle?.addEventListener('pointerdown', (event) => {
       if (event.button !== 0 || activeResizePointer !== null) return
       event.preventDefault()
       event.stopPropagation()
@@ -1219,8 +1228,8 @@ export async function renderAdminPage(app: HTMLElement) {
       resizeHandle.addEventListener('lostpointercapture', lostCapture)
       window.addEventListener('keydown', cancelWithEscape)
     })
-    const dragHandle = editor.querySelector<HTMLElement>('.drag-handle')!
-    dragHandle.addEventListener('dragstart', (event) => {
+    const dragHandle = editor.querySelector<HTMLElement>('.drag-handle')
+    dragHandle?.addEventListener('dragstart', (event) => {
       editor.classList.add('is-dragging')
       event.dataTransfer?.setData('text/plain', editor.dataset.widgetId || '')
       if (event.dataTransfer) {
@@ -1332,6 +1341,7 @@ export async function renderAdminPage(app: HTMLElement) {
   })
   bindWidgetFrames(editorList)
   bindRadioWidgets(editorList, { allowAutoplay: false })
+  bindCameraWidgets(editorList)
   updateEditorIndexes()
 
   app.querySelectorAll<HTMLButtonElement>('[data-add-type]').forEach((button) => button.addEventListener('click', () => addWidget(button.dataset.addType as WidgetType)))
@@ -1370,6 +1380,7 @@ export async function renderAdminPage(app: HTMLElement) {
     editorList.querySelectorAll<HTMLElement>('.widget-editor').forEach(bindEditor)
     bindWidgetFrames(editorList)
     bindRadioWidgets(editorList, { allowAutoplay: false })
+    bindCameraWidgets(editorList)
     updateEditorIndexes()
     validateLayout()
   }

@@ -1,4 +1,4 @@
-import { execFile as execFileCallback } from 'node:child_process'
+import { execFile as execFileCallback, spawn as spawnProcess } from 'node:child_process'
 import http, { createServer } from 'node:http'
 import https from 'node:https'
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
@@ -86,6 +86,20 @@ async function validateCalendarFeedUrl(value, lookupFunction) {
     throw new CalendarFeedError(422, 'Private Netzwerkadressen sind für Kalender-Feeds nicht erlaubt.')
   }
   return url
+}
+
+export function validateCameraUrl(rawUrl) {
+  const normalized = String(rawUrl || '').trim()
+  if (!normalized) return null
+  try {
+    const parsed = new URL(normalized)
+    if (parsed.protocol !== 'rtsp:' && parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null
+    }
+    return normalized
+  } catch {
+    return null
+  }
 }
 
 const icyMetadataCache = new Map()
@@ -674,6 +688,8 @@ export function createHomePiBoardServer({
   updateStatusHandler,
   updateExecuteHandler,
   audioOutputExecuteHandler = (output) => applySystemAudioOutput(output, { exec: execFile }),
+  cameraExec = execFile,
+  cameraSpawn = spawnProcess,
 } = {}) {
   if (typeof adminPin !== 'string' || adminPin.length === 0) {
     throw new Error('HOMEPIBOARD_PIN muss explizit gesetzt sein.')
@@ -944,6 +960,101 @@ export function createHomePiBoardServer({
         } catch (error) {
           json(response, 500, { success: false, error: error instanceof Error ? error.message : String(error) })
         }
+        return
+      }
+
+      if (url.pathname === '/api/camera/snapshot' && request.method === 'GET') {
+        const targetUrl = validateCameraUrl(url.searchParams.get('url'))
+        if (!targetUrl) {
+          json(response, 400, { error: 'Ungültige oder fehlende Kamera-URL. Erlaubte Protokolle: rtsp, http, https' })
+          return
+        }
+        try {
+          const { stdout } = await cameraExec('ffmpeg', [
+            '-y',
+            '-rtsp_transport', 'tcp',
+            '-i', targetUrl,
+            '-vframes', '1',
+            '-f', 'image2',
+            '-q:v', '2',
+            'pipe:1',
+          ], {
+            timeout: 8000,
+            maxBuffer: 10 * 1024 * 1024,
+            encoding: 'buffer',
+          })
+          response.writeHead(200, {
+            'Content-Type': 'image/jpeg',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+          })
+          response.end(stdout)
+        } catch (err) {
+          json(response, 502, { error: 'Kamera-Snapshot konnte nicht geladen werden.', details: err instanceof Error ? err.message : String(err) })
+        }
+        return
+      }
+
+      if (url.pathname === '/api/camera/mjpeg' && request.method === 'GET') {
+        const targetUrl = validateCameraUrl(url.searchParams.get('url'))
+        if (!targetUrl) {
+          json(response, 400, { error: 'Ungültige oder fehlende Kamera-URL. Erlaubte Protokolle: rtsp, http, https' })
+          return
+        }
+
+        const boundary = 'ffmpeg-stream-boundary'
+        response.writeHead(200, {
+          'Content-Type': `multipart/x-mixed-replace; boundary=${boundary}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Connection': 'close',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        })
+        response.flushHeaders()
+
+        const ffmpegArgs = [
+          '-rtsp_transport', 'tcp',
+          '-i', targetUrl,
+          '-f', 'mpjpeg',
+          '-boundary_tag', boundary,
+          '-q:v', '3',
+          '-r', '15',
+          'pipe:1',
+        ]
+
+        let ffmpegProcess
+        try {
+          ffmpegProcess = cameraSpawn('ffmpeg', ffmpegArgs)
+        } catch (err) {
+          if (!response.headersSent) {
+            json(response, 502, { error: 'FFmpeg-Prozess konnte nicht gestartet werden.' })
+          } else {
+            response.end()
+          }
+          return
+        }
+
+        if (ffmpegProcess && ffmpegProcess.stdout) {
+          ffmpegProcess.stdout.pipe(response)
+          ffmpegProcess.on('error', () => {
+            try { response.end() } catch {}
+          })
+        }
+
+        request.on('close', () => {
+          if (ffmpegProcess) {
+            try {
+              ffmpegProcess.kill('SIGTERM')
+              const killTimer = setTimeout(() => {
+                try { ffmpegProcess.kill('SIGKILL') } catch {}
+              }, 1000)
+              if (killTimer && typeof killTimer.unref === 'function') {
+                killTimer.unref()
+              }
+            } catch {}
+          }
+        })
         return
       }
 

@@ -24,7 +24,7 @@ COPY --from=build /app/dist ./dist
 COPY server.mjs ./server.mjs
 COPY src ./src
 
-RUN mkdir -p /app/data && chown -R node:node /app
+RUN apk add --no-cache ffmpeg && mkdir -p /app/data && chown -R node:node /app
 
 USER node
 EXPOSE 80

@@ -359,4 +359,23 @@ test('createWidget and normalizeSettings support camera widget and date/time for
   assert.equal(normalized.widgets[0]?.cameraType, 'mjpeg')
 })
 
+test('normalizeSettings supports RTSP camera stream URLs and rtsp cameraType', () => {
+  const normalized = normalizeSettings({
+    version: 3,
+    widgets: [
+      {
+        id: 'rtsp-cam',
+        type: 'camera',
+        cameraUrl: 'rtsp://admin:pass@192.168.1.100:554/live/ch0',
+        cameraType: 'rtsp',
+        cameraFit: 'cover',
+      },
+    ],
+  })
+
+  assert.equal(normalized.widgets[0]?.cameraUrl, 'rtsp://admin:pass@192.168.1.100:554/live/ch0')
+  assert.equal(normalized.widgets[0]?.cameraType, 'rtsp')
+  assert.equal(normalized.widgets[0]?.cameraFit, 'cover')
+})
+
 
