@@ -1,4 +1,4 @@
-export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow' | 'waste' | 'media' | 'camera' | 'fitness'
+export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow' | 'waste' | 'media' | 'camera'
 
 export type HeaderItemType =
   | 'clock'
@@ -69,20 +69,6 @@ export type DashboardWidget = {
   cameraRefreshSeconds?: number
   cameraFit?: 'cover' | 'contain'
   cameraType?: 'snapshot' | 'mjpeg' | 'stream'
-  // Apple Health / Fitness widget fields
-  userName?: string
-  userAvatar?: string
-  moveCalories?: number
-  moveGoal?: number
-  exerciseMinutes?: number
-  exerciseGoal?: number
-  standHours?: number
-  standGoal?: number
-  steps?: number
-  distanceKm?: number
-  heartRate?: number
-  healthToken?: string
-  lastSync?: number
 }
 
 export type DisplaySettings = {
@@ -151,7 +137,7 @@ export const defaultSettings: DisplaySettings = {
   widgets: [],
 }
 
-const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image', 'slideshow', 'waste', 'media', 'camera', 'fitness'])
+const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image', 'slideshow', 'waste', 'media', 'camera'])
 
 export const widgetConstraints: Record<WidgetType, { minColumns: number; minRows: number; defaultColumns: number; defaultRows: number }> = {
   web: { minColumns: 4, minRows: 2, defaultColumns: 12, defaultRows: 3 },
@@ -162,7 +148,6 @@ export const widgetConstraints: Record<WidgetType, { minColumns: number; minRows
   waste: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
   media: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
   camera: { minColumns: 4, minRows: 3, defaultColumns: 8, defaultRows: 4 },
-  fitness: { minColumns: 4, minRows: 4, defaultColumns: 6, defaultRows: 5 },
 }
 
 const widgetTitles: Record<WidgetType, string> = {
@@ -174,7 +159,6 @@ const widgetTitles: Record<WidgetType, string> = {
   waste: 'Müllkalender',
   media: 'Radio',
   camera: 'Kamera',
-  fitness: 'Fitness-Ringe',
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -215,21 +199,6 @@ export function createWidget(type: WidgetType, index: number, id = `widget-${ind
     widget.cameraRefreshSeconds = 5
     widget.cameraType = 'snapshot'
     widget.cameraFit = 'cover'
-  } else if (type === 'fitness') {
-    widget.title = 'Michael'
-    widget.userName = 'Michael'
-    widget.userAvatar = '🏃'
-    widget.moveCalories = 480
-    widget.moveGoal = 500
-    widget.exerciseMinutes = 35
-    widget.exerciseGoal = 30
-    widget.standHours = 9
-    widget.standGoal = 12
-    widget.steps = 7650
-    widget.distanceKm = 5.4
-    widget.heartRate = 72
-    widget.healthToken = `user-${index}`
-    widget.lastSync = Date.now()
   }
   return widget
 }
@@ -365,21 +334,6 @@ export function normalizeSettings(value: unknown): DisplaySettings {
           : 5,
         cameraFit: widget.cameraFit === 'contain' ? 'contain' : 'cover',
         cameraType: widget.cameraType === 'mjpeg' ? 'mjpeg' : (widget.cameraType === 'stream' ? 'stream' : 'snapshot'),
-      } : {}),
-      ...(type === 'fitness' ? {
-        userName: text(widget.userName, text(widget.title, 'Sportler')),
-        userAvatar: text(widget.userAvatar, '🏃'),
-        moveCalories: Number.isFinite(Number(widget.moveCalories)) ? Math.max(0, Math.round(Number(widget.moveCalories))) : 0,
-        moveGoal: Number.isFinite(Number(widget.moveGoal)) && Number(widget.moveGoal) > 0 ? Math.round(Number(widget.moveGoal)) : 500,
-        exerciseMinutes: Number.isFinite(Number(widget.exerciseMinutes)) ? Math.max(0, Math.round(Number(widget.exerciseMinutes))) : 0,
-        exerciseGoal: Number.isFinite(Number(widget.exerciseGoal)) && Number(widget.exerciseGoal) > 0 ? Math.round(Number(widget.exerciseGoal)) : 30,
-        standHours: Number.isFinite(Number(widget.standHours)) ? Math.max(0, Math.round(Number(widget.standHours))) : 0,
-        standGoal: Number.isFinite(Number(widget.standGoal)) && Number(widget.standGoal) > 0 ? Math.round(Number(widget.standGoal)) : 12,
-        steps: Number.isFinite(Number(widget.steps)) ? Math.max(0, Math.round(Number(widget.steps))) : 0,
-        distanceKm: Number.isFinite(Number(widget.distanceKm)) ? Math.max(0, Math.round(Number(widget.distanceKm) * 10) / 10) : 0,
-        heartRate: Number.isFinite(Number(widget.heartRate)) ? Math.max(0, Math.round(Number(widget.heartRate))) : 0,
-        healthToken: text(widget.healthToken, id),
-        lastSync: Number.isFinite(Number(widget.lastSync)) ? Number(widget.lastSync) : Date.now(),
       } : {}),
     }
   })

@@ -248,7 +248,6 @@ export async function renderAdminPage(app: HTMLElement) {
           <button type="button" data-add-type="waste">🗑️ Müll</button>
           <button type="button" data-add-type="media">📻 Radio</button>
           <button type="button" data-add-type="camera">📷 Kamera</button>
-          <button type="button" data-add-type="fitness">🍎 Fitness</button>
         </div>
       </div>
       <p class="layout-warning" id="layout-warning" role="alert"></p>
@@ -424,30 +423,17 @@ export async function renderAdminPage(app: HTMLElement) {
     const cameraType = type === 'camera' && cameraTypeInput ? (cameraTypeInput.value as 'snapshot' | 'mjpeg' | 'stream') : undefined
     const cameraFit = type === 'camera' && cameraFitInput ? (cameraFitInput.value as 'cover' | 'contain') : undefined
 
-    const fitnessUserInput = editor.querySelector<HTMLInputElement>('[data-field="userName"]')
-    const fitnessAvatarInput = editor.querySelector<HTMLInputElement>('[data-field="userAvatar"]')
-    const fitnessMoveInput = editor.querySelector<HTMLInputElement>('[data-field="moveCalories"]')
-    const fitnessMoveGoalInput = editor.querySelector<HTMLInputElement>('[data-field="moveGoal"]')
-    const fitnessExerciseInput = editor.querySelector<HTMLInputElement>('[data-field="exerciseMinutes"]')
-    const fitnessExerciseGoalInput = editor.querySelector<HTMLInputElement>('[data-field="exerciseGoal"]')
-    const fitnessStandInput = editor.querySelector<HTMLInputElement>('[data-field="standHours"]')
-    const fitnessStandGoalInput = editor.querySelector<HTMLInputElement>('[data-field="standGoal"]')
-    const fitnessStepsInput = editor.querySelector<HTMLInputElement>('[data-field="steps"]')
-    const fitnessDistanceInput = editor.querySelector<HTMLInputElement>('[data-field="distanceKm"]')
-    const fitnessHrInput = editor.querySelector<HTMLInputElement>('[data-field="heartRate"]')
-    const fitnessTokenInput = editor.querySelector<HTMLInputElement>('[data-field="healthToken"]')
-
     return {
-      id: editor.dataset.widgetId!,
+      id: editor.dataset.id || `widget-${Date.now()}`,
       type,
-      title: editor.querySelector<HTMLInputElement>('[data-field="title"]')!.value.trim() || widgetTypeLabel(type),
+      title: editor.querySelector<HTMLInputElement>('[data-field="title"]')!.value.trim(),
+      columns: Math.max(constraints.minColumns, Math.min(24, Math.round(Number(editor.querySelector<HTMLInputElement>('[data-field="columns"]')!.value) || constraints.defaultColumns))),
+      rows: Math.max(constraints.minRows, Math.min(14, Math.round(Number(editor.querySelector<HTMLInputElement>('[data-field="rows"]')!.value) || constraints.defaultRows))),
       url,
-      columns: Math.max(constraints.minColumns, Math.min(MAX_WIDGET_COLUMNS, Math.round(Number(editor.querySelector<HTMLInputElement>('[data-field="columns"]')!.value) || constraints.defaultColumns))),
-      rows: Math.max(constraints.minRows, Math.min(MAX_WIDGET_ROWS, Math.round(Number(editor.querySelector<HTMLInputElement>('[data-field="rows"]')!.value) || constraints.defaultRows))),
       ...(refreshIntervalMinutes !== undefined ? { refreshIntervalMinutes } : {}),
       ...(intervalSeconds !== undefined ? { intervalSeconds } : {}),
-      ...(breakBefore ? { breakBefore: true } : {}),
-      ...(showTitle ? { showTitle: true } : {}),
+      breakBefore,
+      showTitle,
       ...(wasteItems !== undefined ? { wasteItems } : {}),
       ...(mediaTitle !== undefined ? { mediaTitle } : {}),
       ...(mediaArtist !== undefined ? { mediaArtist } : {}),
@@ -458,20 +444,6 @@ export async function renderAdminPage(app: HTMLElement) {
       ...(cameraRefreshSeconds !== undefined ? { cameraRefreshSeconds } : {}),
       ...(cameraType !== undefined ? { cameraType } : {}),
       ...(cameraFit !== undefined ? { cameraFit } : {}),
-      ...(type === 'fitness' ? {
-        userName: fitnessUserInput ? fitnessUserInput.value.trim() : 'Michael',
-        userAvatar: fitnessAvatarInput ? fitnessAvatarInput.value.trim() : '🏃',
-        moveCalories: fitnessMoveInput ? Math.max(0, Number(fitnessMoveInput.value) || 0) : 0,
-        moveGoal: fitnessMoveGoalInput ? Math.max(50, Number(fitnessMoveGoalInput.value) || 500) : 500,
-        exerciseMinutes: fitnessExerciseInput ? Math.max(0, Number(fitnessExerciseInput.value) || 0) : 0,
-        exerciseGoal: fitnessExerciseGoalInput ? Math.max(5, Number(fitnessExerciseGoalInput.value) || 30) : 30,
-        standHours: fitnessStandInput ? Math.max(0, Number(fitnessStandInput.value) || 0) : 0,
-        standGoal: fitnessStandGoalInput ? Math.max(1, Number(fitnessStandGoalInput.value) || 12) : 12,
-        steps: fitnessStepsInput ? Math.max(0, Number(fitnessStepsInput.value) || 0) : 0,
-        distanceKm: fitnessDistanceInput ? Math.max(0, Number(fitnessDistanceInput.value) || 0) : 0,
-        heartRate: fitnessHrInput ? Math.max(0, Number(fitnessHrInput.value) || 0) : 0,
-        healthToken: fitnessTokenInput ? fitnessTokenInput.value.trim() : editor.dataset.widgetId!,
-      } : {}),
     }
   }
 
