@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { GERMAN_RADIO_STATIONS, calendarAgendaMarkup, isWasteCalendarFeed, parseSlideshowUrls, parseWasteItems, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent, resolveCameraDisplayUrl, safeResourceUrl } from '../src/widgets.ts'
+import { GERMAN_RADIO_STATIONS, calendarAgendaMarkup, isWasteCalendarFeed, normalizeCameraUrl, parseSlideshowUrls, parseWasteItems, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent, resolveCameraDisplayUrl, safeResourceUrl } from '../src/widgets.ts'
 
 test('renderWidget escapes text content', () => {
   const markup = renderWidget({ id: 'note', type: 'text', title: '<Titel>', url: '<script>', columns: 6, rows: 2 })
@@ -495,7 +495,8 @@ test('resolveCameraDisplayUrl routes RTSP streams to appropriate endpoints', () 
   assert.equal(resolveCameraDisplayUrl(rtsp, 'snapshot'), '/api/camera/snapshot?url=rtsp%3A%2F%2F192.168.1.100%3A554%2Flive')
   assert.equal(resolveCameraDisplayUrl(rtsp, 'rtsp'), '/api/camera/mjpeg?url=rtsp%3A%2F%2F192.168.1.100%3A554%2Flive')
   assert.equal(resolveCameraDisplayUrl(rtsp, 'mjpeg'), '/api/camera/mjpeg?url=rtsp%3A%2F%2F192.168.1.100%3A554%2Flive')
-  assert.equal(resolveCameraDisplayUrl('https://example.com/stream.mjpg', 'mjpeg'), 'https://example.com/stream.mjpg')
+  assert.equal(resolveCameraDisplayUrl('https://example.com/stream.mjpg', 'mjpeg'), '/api/camera/mjpeg?url=https%3A%2F%2Fexample.com%2Fstream.mjpg')
+  assert.equal(resolveCameraDisplayUrl('http://192.168.1.20/snapshot.jpg', 'snapshot'), '/api/camera/snapshot?url=http%3A%2F%2F192.168.1.20%2Fsnapshot.jpg')
 })
 
 test('editorMarkup includes RTSP live stream option and camera hint', () => {
@@ -503,6 +504,45 @@ test('editorMarkup includes RTSP live stream option and camera hint', () => {
   assert.match(editor, /<option value="rtsp" selected>RTSP Live-Stream<\/option>/)
   assert.match(editor, /placeholder="rtsp:\/\/192\.168\.1\.100:554\/stream/)
   assert.match(editor, /Unterstützt RTSP-Streams/)
+})
+
+test('camera widget renders loading spinner and offline overlay structure', () => {
+  const camHtml = renderWidget({
+    id: 'cam-loading',
+    type: 'camera',
+    title: 'Kamera Garten',
+    cameraUrl: '192.168.1.74/av_stream/ch0',
+    cameraType: 'snapshot',
+    columns: 8,
+    rows: 5,
+  })
+
+  assert.match(camHtml, /class="[^"]*camera-loading-status[^"]*"/)
+  assert.match(camHtml, /class="[^"]*loading-spinner[^"]*"/)
+  assert.match(camHtml, /Kamerabild wird geladen/)
+  assert.match(camHtml, /class="[^"]*camera-offline-msg[^"]*"/)
+  assert.match(camHtml, /is-loading/)
+})
+
+test('normalizeCameraUrl infers rtsp for av_stream or port 554 and http for others', () => {
+  assert.equal(normalizeCameraUrl('192.168.1.74/av_stream/ch0'), 'rtsp://192.168.1.74/av_stream/ch0')
+  assert.equal(normalizeCameraUrl('192.168.1.74/av_stream/ch1'), 'rtsp://192.168.1.74/av_stream/ch1')
+  assert.equal(normalizeCameraUrl('192.168.1.100:554/live'), 'rtsp://192.168.1.100:554/live')
+  assert.equal(normalizeCameraUrl('192.168.1.100/feed', 'rtsp'), 'rtsp://192.168.1.100/feed')
+  assert.equal(normalizeCameraUrl('192.168.1.50/snapshot.jpg', 'snapshot'), 'http://192.168.1.50/snapshot.jpg')
+  assert.equal(normalizeCameraUrl('rtsp://user:pass@192.168.1.50:554/stream'), 'rtsp://user:pass@192.168.1.50:554/stream')
+  assert.equal(normalizeCameraUrl('https://example.com/cam.mjpg'), 'https://example.com/cam.mjpg')
+})
+
+test('resolveCameraDisplayUrl routes bare IP / av_stream paths without protocol to proxy', () => {
+  assert.equal(
+    resolveCameraDisplayUrl('192.168.1.74/av_stream/ch0', 'snapshot'),
+    '/api/camera/snapshot?url=rtsp%3A%2F%2F192.168.1.74%2Fav_stream%2Fch0'
+  )
+  assert.equal(
+    resolveCameraDisplayUrl('192.168.1.74/av_stream/ch1', 'rtsp'),
+    '/api/camera/mjpeg?url=rtsp%3A%2F%2F192.168.1.74%2Fav_stream%2Fch1'
+  )
 })
 
 

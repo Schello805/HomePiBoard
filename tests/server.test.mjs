@@ -712,6 +712,9 @@ test('validateCameraUrl allows RTSP, HTTP, and HTTPS and rejects invalid URLs', 
   assert.equal(validateCameraUrl('rtsp://admin:pass@192.168.1.100:554/live'), 'rtsp://admin:pass@192.168.1.100:554/live')
   assert.equal(validateCameraUrl('http://192.168.1.100/snapshot.jpg'), 'http://192.168.1.100/snapshot.jpg')
   assert.equal(validateCameraUrl('https://example.com/cam.mjpg'), 'https://example.com/cam.mjpg')
+  assert.equal(validateCameraUrl('192.168.1.74/av_stream/ch0'), 'rtsp://192.168.1.74/av_stream/ch0')
+  assert.equal(validateCameraUrl('192.168.1.100/snapshot.jpg'), 'http://192.168.1.100/snapshot.jpg')
+  assert.equal(validateCameraUrl('camera/snapshot.jpg'), 'http://camera/snapshot.jpg')
   assert.equal(validateCameraUrl('javascript:alert(1)'), null)
   assert.equal(validateCameraUrl('file:///etc/passwd'), null)
   assert.equal(validateCameraUrl(''), null)
@@ -742,6 +745,26 @@ test('camera snapshot endpoint validates URL and returns image buffer from ffmpe
   assert.deepEqual(body, fakeJpegBuffer)
   assert.equal(capturedArgs.file, 'ffmpeg')
   assert.ok(capturedArgs.args.includes(rtspUrl))
+  assert.ok(capturedArgs.args.includes('-rtsp_transport'))
+  assert.ok(capturedArgs.args.includes('image2pipe'))
+})
+
+test('camera snapshot endpoint does not apply RTSP options to HTTP cameras', async (context) => {
+  let capturedArgs = null
+  const running = await startServer({
+    cameraExec: async (_file, args) => {
+      capturedArgs = args
+      return { stdout: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) }
+    },
+  })
+  context.after(() => running.server.close())
+
+  const cameraUrl = 'http://192.168.1.50/snapshot.jpg'
+  const response = await fetch(`${running.url}/api/camera/snapshot?url=${encodeURIComponent(cameraUrl)}`)
+
+  assert.equal(response.status, 200)
+  assert.ok(capturedArgs.includes(cameraUrl))
+  assert.ok(!capturedArgs.includes('-rtsp_transport'))
 })
 
 test('camera mjpeg endpoint validates URL and streams multipart MJPEG via ffmpeg', async (context) => {

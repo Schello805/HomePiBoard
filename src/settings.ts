@@ -245,6 +245,26 @@ export function layoutFits(widgets: DashboardWidget[]) {
   ))
 }
 
+export function normalizeCameraUrl(rawUrl: string, camType?: string): string {
+  let url = (rawUrl || '').trim()
+  if (!url) return ''
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(url) || url.startsWith('//') || url.startsWith('/') || url.startsWith('data:')) {
+    return url
+  }
+  if (!url.includes('/') && !url.includes(':') && !/\.[a-z0-9]/i.test(url)) {
+    return url
+  }
+  if (
+    camType === 'rtsp' ||
+    /[:/](?:554|8554)(?:\/|$)/.test(url) ||
+    /\/(?:av_stream|live|h264|Streaming|onvif|ch\d)\b/i.test(url) ||
+    /\.sdp(?:\?|$)/i.test(url)
+  ) {
+    return `rtsp://${url}`
+  }
+  return `http://${url}`
+}
+
 export function normalizeSettings(value: unknown): DisplaySettings {
   const parsed = record(value)
   const sourceVersion = Number(parsed.version)
@@ -327,14 +347,17 @@ export function normalizeSettings(value: unknown): DisplaySettings {
         mediaCoverUrl: text(widget.mediaCoverUrl),
         mediaPlaying: Boolean(widget.mediaPlaying),
       } : {}),
-      ...(type === 'camera' ? {
-        cameraUrl: text(widget.cameraUrl || widget.url),
-        cameraRefreshSeconds: Number.isFinite(Number(widget.cameraRefreshSeconds)) && Number(widget.cameraRefreshSeconds) > 0
-          ? Math.max(1, Math.min(3600, Math.round(Number(widget.cameraRefreshSeconds))))
-          : 5,
-        cameraFit: widget.cameraFit === 'contain' ? 'contain' : 'cover',
-        cameraType: widget.cameraType === 'mjpeg' ? 'mjpeg' : (widget.cameraType === 'stream' ? 'stream' : (widget.cameraType === 'rtsp' ? 'rtsp' : 'snapshot')),
-      } : {}),
+      ...(type === 'camera' ? (() => {
+        const cameraType = widget.cameraType === 'mjpeg' ? 'mjpeg' : (widget.cameraType === 'stream' ? 'stream' : (widget.cameraType === 'rtsp' ? 'rtsp' : 'snapshot'))
+        return {
+          cameraUrl: normalizeCameraUrl(text(widget.cameraUrl || widget.url), cameraType),
+          cameraRefreshSeconds: Number.isFinite(Number(widget.cameraRefreshSeconds)) && Number(widget.cameraRefreshSeconds) > 0
+            ? Math.max(1, Math.min(3600, Math.round(Number(widget.cameraRefreshSeconds))))
+            : 5,
+          cameraFit: widget.cameraFit === 'contain' ? 'contain' : 'cover',
+          cameraType,
+        }
+      })() : {}),
     }
   })
 

@@ -1,6 +1,8 @@
 import { calendarMarkup, escapeHtml } from './dashboard-utils.ts'
 import type { CalendarFeedEvent } from './calendar-feed.ts'
 import type { DashboardWidget, WidgetType } from './settings.ts'
+import { normalizeCameraUrl } from './settings.ts'
+export { normalizeCameraUrl } from './settings.ts'
 
 const typeLabels: Record<WidgetType, string> = {
   web: 'WEB',
@@ -352,14 +354,10 @@ export function safeResourceUrl(value: string, type: WidgetType) {
 }
 
 export function resolveCameraDisplayUrl(rawUrl: string, camType?: string): string {
-  const url = (rawUrl || '').trim()
+  const url = normalizeCameraUrl(rawUrl, camType)
   if (!url) return ''
-  if (url.startsWith('rtsp://')) {
-    if (camType === 'snapshot') {
-      return `/api/camera/snapshot?url=${encodeURIComponent(url)}`
-    }
-    return `/api/camera/mjpeg?url=${encodeURIComponent(url)}`
-  }
+  if (camType === 'snapshot') return `/api/camera/snapshot?url=${encodeURIComponent(url)}`
+  if (camType === 'rtsp' || camType === 'mjpeg') return `/api/camera/mjpeg?url=${encodeURIComponent(url)}`
   return url
 }
 
@@ -429,23 +427,24 @@ export function isBuiltInCalendar(type: WidgetType, url: string) {
 }
 
 function cameraContent(widget: DashboardWidget) {
-  const url = widget.cameraUrl || widget.url || ''
-  if (!url) {
+  const rawUrl = widget.cameraUrl || widget.url || ''
+  if (!rawUrl) {
     return '<div class="camera-empty-state"><span class="placeholder-icon">📷</span><strong>Kamera-Stream / Bild</strong><span>URL in den Widget-Einstellungen hinterlegen</span></div>'
   }
-  const isRtsp = url.trim().startsWith('rtsp://')
+  const url = normalizeCameraUrl(rawUrl, widget.cameraType)
+  const isRtsp = url.startsWith('rtsp://')
   const camType = widget.cameraType || (isRtsp ? 'rtsp' : 'snapshot')
   const refreshSec = widget.cameraRefreshSeconds || 5
   const fit = widget.cameraFit || 'cover'
   const displayUrl = resolveCameraDisplayUrl(url, camType)
 
   if (camType === 'stream' && !isRtsp) {
-    return `<div class="camera-container" data-camera-widget data-camera-type="stream"><div class="camera-badge"><span class="camera-live-dot"></span> LIVE</div><iframe class="camera-stream-frame" src="${escapeHtml(displayUrl)}" sandbox="allow-scripts allow-same-origin" allow="autoplay; fullscreen" loading="lazy"></iframe></div>`
+    return `<div class="camera-container camera-widget-container is-loading" data-camera-widget data-camera-type="stream"><div class="camera-badge"><span class="camera-live-dot"></span> LIVE</div><iframe class="camera-stream-frame" src="${escapeHtml(displayUrl)}" sandbox="allow-scripts allow-same-origin" allow="autoplay; fullscreen" loading="lazy"></iframe><div class="camera-loading-status" role="status" aria-label="Kamera-Stream wird geladen"><span class="loading-spinner loading-spinner-acid" aria-hidden="true"></span> <span>Stream wird geladen …</span></div><div class="camera-offline-msg" role="status"><span class="offline-icon">⚠️</span><strong>Kamera nicht erreichbar</strong><span>Verbindung wird geprüft …</span></div></div>`
   }
 
   const badgeExtra = camType === 'snapshot' ? ` <span class="camera-refresh-pill">${refreshSec}s</span>` : ''
 
-  return `<div class="camera-container" data-camera-widget data-camera-type="${escapeHtml(camType)}" data-camera-url="${escapeHtml(url)}" data-camera-interval="${refreshSec}"><div class="camera-badge"><span class="camera-live-dot"></span> LIVE${badgeExtra}</div><img class="camera-snapshot-img camera-image camera-fit-${escapeHtml(fit)}" style="object-fit: ${escapeHtml(fit)};" src="${escapeHtml(displayUrl)}" alt="${escapeHtml(widget.title || 'Kamera')}" /></div>`
+  return `<div class="camera-container camera-widget-container is-loading" data-camera-widget data-camera-type="${escapeHtml(camType)}" data-camera-url="${escapeHtml(url)}" data-camera-interval="${refreshSec}"><div class="camera-badge"><span class="camera-live-dot"></span> LIVE${badgeExtra}</div><img class="camera-snapshot-img camera-image camera-fit-${escapeHtml(fit)}" style="object-fit: ${escapeHtml(fit)};" src="${escapeHtml(displayUrl)}" alt="${escapeHtml(widget.title || 'Kamera')}" /><div class="camera-loading-status" role="status" aria-label="Kamerabild wird geladen"><span class="loading-spinner loading-spinner-acid" aria-hidden="true"></span> <span>Kamerabild wird geladen …</span></div><div class="camera-offline-msg" role="status"><span class="offline-icon">⚠️</span><strong>Kamera nicht erreichbar</strong><span>Verbindung wird geprüft …</span><button type="button" class="camera-retry-btn" data-action="camera-retry">Erneut versuchen</button></div></div>`
 }
 
 export function renderWidgetContent(widget: DashboardWidget) {
@@ -624,8 +623,8 @@ function editorMarkup(widget: DashboardWidget, index: number) {
               </label>
               <label for="${controlId}-camera-type">Kameratyp
                 <select id="${controlId}-camera-type" data-field="cameraType">
-                  <option value="snapshot" ${widget.cameraType === 'snapshot' || (!widget.cameraType && !widget.cameraUrl?.startsWith('rtsp://') && !widget.url?.startsWith('rtsp://')) ? 'selected' : ''}>Snapshot (Auto-Reload)</option>
-                  <option value="rtsp" ${widget.cameraType === 'rtsp' || (!widget.cameraType && (widget.cameraUrl?.startsWith('rtsp://') || widget.url?.startsWith('rtsp://'))) ? 'selected' : ''}>RTSP Live-Stream</option>
+                  <option value="snapshot" ${widget.cameraType === 'snapshot' || (!widget.cameraType && !widget.cameraUrl?.startsWith('rtsp://') && !widget.url?.startsWith('rtsp://') && !widget.cameraUrl?.includes('/av_stream/') && !widget.url?.includes('/av_stream/')) ? 'selected' : ''}>Snapshot (Auto-Reload)</option>
+                  <option value="rtsp" ${widget.cameraType === 'rtsp' || (!widget.cameraType && (widget.cameraUrl?.startsWith('rtsp://') || widget.url?.startsWith('rtsp://') || widget.cameraUrl?.includes('/av_stream/') || widget.url?.includes('/av_stream/'))) ? 'selected' : ''}>RTSP Live-Stream</option>
                   <option value="mjpeg" ${widget.cameraType === 'mjpeg' ? 'selected' : ''}>MJPEG Live-Stream</option>
                   <option value="stream" ${widget.cameraType === 'stream' ? 'selected' : ''}>Webseite / Iframe Stream</option>
                 </select>
@@ -637,7 +636,7 @@ function editorMarkup(widget: DashboardWidget, index: number) {
                 </select>
               </label>
             </div>
-            <p class="editor-field-hint">💡 Unterstützt RTSP-Streams (z.B. rtsp://192.168.1.50:554/live), IP-Kameras, Webcams, MJPEG-Streams, Home Assistant Kameras und öffentliche Webcams.</p>
+            <p class="editor-field-hint">💡 Unterstützt RTSP-Streams (z.B. rtsp://192.168.1.50:554/live oder /av_stream/ch0), IP-Kameras, Webcams, MJPEG-Streams und öffentliche Webcams.</p>
           </div>
           ` : `
           ${(widget.type === 'image' || widget.type === 'slideshow') ? `<div class="content-field upload-field"><label class="upload-zone" for="${controlId}-upload"><input type="file" id="${controlId}-upload" data-action="upload" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" ${widget.type === 'slideshow' ? 'multiple' : ''} style="display: none;" /><span class="upload-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>${widget.type === 'slideshow' ? 'Bilder hochladen (max. 10 Bilder, je max. 5 MB)' : 'Bild hochladen (max. 5 MB)'}</span></span><span class="upload-status" data-upload-status aria-live="polite"></span></label></div>` : ''}
@@ -803,27 +802,85 @@ export function bindCameraWidgets(root: ParentNode = document) {
     if (container.dataset.cameraBound === 'true') return
     container.dataset.cameraBound = 'true'
     const type = container.dataset.cameraType
-    if (type !== 'snapshot') return
-
     const rawUrl = container.dataset.cameraUrl
     const intervalSec = Math.max(1, Number(container.dataset.cameraInterval) || 5)
     const img = container.querySelector<HTMLImageElement>('.camera-snapshot-img')
-    if (!rawUrl || !img) return
+    const iframe = container.querySelector<HTMLIFrameElement>('.camera-stream-frame')
 
-    const baseUrl = resolveCameraDisplayUrl(rawUrl, 'snapshot')
+    const markLoaded = () => {
+      container.classList.remove('is-loading')
+      container.classList.remove('is-offline')
+      container.classList.add('is-loaded')
+    }
 
-    window.setInterval(() => {
-      const sep = baseUrl.includes('?') ? '&' : '?'
-      const freshUrl = `${baseUrl}${sep}_t=${Date.now()}`
-      const preloader = new Image()
-      preloader.onload = () => {
-        img.src = freshUrl
-        container.classList.remove('is-offline')
+    const markOffline = () => {
+      container.classList.remove('is-loading')
+      container.classList.add('is-offline')
+      container.classList.remove('is-loaded')
+    }
+
+    if (iframe) {
+      iframe.addEventListener('load', markLoaded)
+      iframe.addEventListener('error', markOffline)
+    }
+
+    if (img) {
+      img.addEventListener('load', markLoaded)
+      img.addEventListener('error', markOffline)
+
+      if (img.complete) {
+        if (img.naturalWidth > 0) {
+          markLoaded()
+        } else if (img.src && !img.src.includes('/api/camera/mjpeg')) {
+          markOffline()
+        }
       }
-      preloader.onerror = () => {
-        container.classList.add('is-offline')
+
+      if (type === 'snapshot' && rawUrl) {
+        const baseUrl = resolveCameraDisplayUrl(rawUrl, 'snapshot')
+        const refreshTimer = window.setInterval(() => {
+          if (!container.isConnected) {
+            window.clearInterval(refreshTimer)
+            return
+          }
+          const sep = baseUrl.includes('?') ? '&' : '?'
+          const freshUrl = `${baseUrl}${sep}_t=${Date.now()}`
+          const preloader = new Image()
+          preloader.onload = () => {
+            img.src = freshUrl
+            markLoaded()
+          }
+          preloader.onerror = () => {
+            markOffline()
+          }
+          preloader.src = freshUrl
+        }, intervalSec * 1000)
+      } else if ((type === 'rtsp' || type === 'mjpeg') && rawUrl) {
+        let reconnectTimeout: number | null = null
+        const reconnect = () => {
+          markOffline()
+          if (reconnectTimeout !== null) return
+          reconnectTimeout = window.setTimeout(() => {
+            reconnectTimeout = null
+            if (!container.isConnected) return
+            const displayUrl = resolveCameraDisplayUrl(rawUrl, type)
+            const sep = displayUrl.includes('?') ? '&' : '?'
+            img.src = `${displayUrl}${sep}_r=${Date.now()}`
+          }, 4000)
+        }
+        img.addEventListener('error', reconnect)
       }
-      preloader.src = freshUrl
-    }, intervalSec * 1000)
+    }
+
+    container.querySelector('[data-action="camera-retry"]')?.addEventListener('click', (e) => {
+      e.preventDefault()
+      container.classList.remove('is-offline')
+      container.classList.add('is-loading')
+      if (img && rawUrl) {
+        const displayUrl = resolveCameraDisplayUrl(rawUrl, type)
+        const sep = displayUrl.includes('?') ? '&' : '?'
+        img.src = `${displayUrl}${sep}_r=${Date.now()}`
+      }
+    })
   })
 }

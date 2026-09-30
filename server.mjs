@@ -89,8 +89,17 @@ async function validateCalendarFeedUrl(value, lookupFunction) {
 }
 
 export function validateCameraUrl(rawUrl) {
-  const normalized = String(rawUrl || '').trim()
+  let normalized = String(rawUrl || '').trim()
   if (!normalized) return null
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(normalized)) {
+    if (normalized.includes('/') || normalized.includes(':') || /\.[a-z0-9]/i.test(normalized)) {
+      if (/[:/](?:554|8554)(?:\/|$)/.test(normalized) || /\/(?:av_stream|live|h264|Streaming|onvif|ch\d)\b/i.test(normalized) || /\.sdp(?:\?|$)/i.test(normalized)) {
+        normalized = `rtsp://${normalized}`
+      } else {
+        normalized = `http://${normalized}`
+      }
+    }
+  }
   try {
     const parsed = new URL(normalized)
     if (parsed.protocol !== 'rtsp:' && parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -100,6 +109,12 @@ export function validateCameraUrl(rawUrl) {
   } catch {
     return null
   }
+}
+
+function cameraInputArgs(targetUrl) {
+  return targetUrl.startsWith('rtsp://')
+    ? ['-rtsp_transport', 'tcp', '-i', targetUrl]
+    : ['-i', targetUrl]
 }
 
 const icyMetadataCache = new Map()
@@ -972,11 +987,13 @@ export function createHomePiBoardServer({
         try {
           const { stdout } = await cameraExec('ffmpeg', [
             '-y',
-            '-rtsp_transport', 'tcp',
-            '-i', targetUrl,
+            '-hide_banner',
+            '-loglevel', 'error',
+            ...cameraInputArgs(targetUrl),
             '-vframes', '1',
-            '-f', 'image2',
+            '-c:v', 'mjpeg',
             '-q:v', '2',
+            '-f', 'image2pipe',
             'pipe:1',
           ], {
             timeout: 8000,
@@ -1014,8 +1031,9 @@ export function createHomePiBoardServer({
         response.flushHeaders()
 
         const ffmpegArgs = [
-          '-rtsp_transport', 'tcp',
-          '-i', targetUrl,
+          '-hide_banner',
+          '-loglevel', 'error',
+          ...cameraInputArgs(targetUrl),
           '-f', 'mpjpeg',
           '-boundary_tag', boundary,
           '-q:v', '3',

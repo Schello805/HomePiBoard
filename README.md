@@ -100,6 +100,10 @@ docker run --rm -p 4173:80 \
 
 Danach sind die Anzeige unter `http://localhost:4173/` und die Konfiguration unter `http://localhost:4173/admin` erreichbar. Updates erfolgen bei CapRover durch ein neues Deployment; der 1-Klick-System-Updater ist für Raspberry-Pi-Installationen gedacht.
 
+### Kamera-Streams mit CapRover
+
+RTSP-, MJPEG- und Snapshot-Kameras werden serverseitig über FFmpeg geladen. Dadurch funktionieren auch lokale HTTP-Kameras auf einer per HTTPS ausgelieferten CapRover-Seite, ohne vom Browser als Mixed Content blockiert zu werden. Der CapRover-Server muss die Kamera-Adresse über sein Netzwerk erreichen können. Für den Modus **Webseite / Iframe Stream** muss die Kamera selbst eine einbettbare HTTPS-Webseite liefern; Browser- und Kamera-Sicherheitsrichtlinien lassen sich dabei nicht serverseitig umgehen.
+
 ## 🚀 Schnellanleitung: Installation auf dem Raspberry Pi
 
 ### Schritt 1: Raspberry Pi OS Lite mit dem Raspberry Pi Imager flashen

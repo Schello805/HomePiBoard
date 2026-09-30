@@ -1,13 +1,14 @@
-import { adminErrorMessage, clearPinError, formatCpuTemp, formatUptime, validatePinChange } from './admin.ts'
-import { escapeHtml } from './dashboard-utils.ts'
+import { adminErrorMessage, clearPinError, createConfirmModal, formatCpuTemp, formatUptime, validatePinChange } from './admin.ts'
+import { downloadJson, escapeHtml } from './dashboard-utils.ts'
 import { playNotificationSound } from './display.ts'
-import { ALL_HEADER_ITEMS_META, DEFAULT_HEADER_ITEMS, type HeaderItemType, normalizeSettings, SETTINGS_VERSION } from './settings.ts'
+import { ALL_HEADER_ITEMS_META, DEFAULT_HEADER_ITEMS, type DisplaySettings, type HeaderItemType, normalizeSettings, SETTINGS_VERSION } from './settings.ts'
 import { createSettingsStore } from './settings-store.ts'
+import { widgetTypeLabel } from './widgets.ts'
 
 export async function renderSettingsPage(app: HTMLElement) {
   const store = createSettingsStore()
   const pinKey = 'homepiboard-admin-pin'
-  const { settings } = await store.load()
+  let { settings } = await store.load()
 
   app.innerHTML = `
     <div class="settings-page-shell">
@@ -46,12 +47,24 @@ export async function renderSettingsPage(app: HTMLElement) {
         </div>
       </header>
 
+      <nav class="settings-category-bar" aria-label="Einstellungskategorien">
+        <a class="settings-category-link" href="#card-display"><span class="cat-icon">📺</span> <span>Bildschirm</span></a>
+        <a class="settings-category-link" href="#card-header-builder"><span class="cat-icon">📊</span> <span>Header</span></a>
+        <a class="settings-category-link is-highlight" href="#card-presets"><span class="cat-icon">📋</span> <span>Displays &amp; Vorlagen</span></a>
+        <a class="settings-category-link" href="#card-time"><span class="cat-icon">🕒</span> <span>Zeit &amp; Region</span></a>
+        <a class="settings-category-link" href="#card-night"><span class="cat-icon">🌙</span> <span>Nachtmodus</span></a>
+        <a class="settings-category-link" href="#card-audio"><span class="cat-icon">🔊</span> <span>Sound</span></a>
+        <a class="settings-category-link" href="#card-telemetry"><span class="cat-icon">⚡</span> <span>Telemetrie</span></a>
+        <a class="settings-category-link" href="#card-update"><span class="cat-icon">🚀</span> <span>Updates</span></a>
+        <a class="settings-category-link" href="#card-pin"><span class="cat-icon">🔒</span> <span>Sicherheit</span></a>
+      </nav>
+
       <main class="settings-main-content">
         <!-- 3-Column / Balanced Responsive Grid Layout -->
         <div class="settings-grid-layout">
           
           <!-- CARD 1: HDMI & Bildschirm -->
-          <section class="settings-card card-display">
+          <section class="settings-card card-display" id="card-display">
             <div class="settings-card-header">
               <div class="settings-icon-badge icon-hdmi">📺</div>
               <div>
@@ -104,7 +117,7 @@ export async function renderSettingsPage(app: HTMLElement) {
           </section>
 
           <!-- CARD: Header-Elemente & Info-Leiste (Drag & Drop) -->
-          <section class="settings-card card-header-builder span-full">
+          <section class="settings-card card-header-builder span-full" id="card-header-builder">
             <div class="settings-card-header">
               <div class="settings-icon-badge icon-builder">📊</div>
               <div>
@@ -135,8 +148,61 @@ export async function renderSettingsPage(app: HTMLElement) {
             </div>
           </section>
 
+          <!-- CARD: Displays & Vorlagen (Display-Profile & Presets) -->
+          <section class="settings-card card-presets span-full" id="card-presets">
+            <div class="settings-card-header">
+              <div class="settings-icon-badge icon-presets">📋</div>
+              <div>
+                <h2 class="settings-card-title">Displays &amp; Vorlagen</h2>
+                <p class="settings-card-desc">Gespeicherte Display-Profile laden, aktivieren, neue Vorlagen anlegen und als JSON importieren oder exportieren</p>
+              </div>
+            </div>
+            <div class="settings-card-body">
+              <div class="preset-create-card settings-preset-create-panel">
+                <div class="settings-panel-heading">
+                  <span class="settings-panel-step">1</span>
+                  <div><strong>Aktuellen Stand sichern</strong><span>Speichere das aktive Board als wiederverwendbares Profil oder JSON-Datei.</span></div>
+                </div>
+                <label for="settings-new-preset-name">
+                  <span class="label-title">Name der Vorlage</span>
+                  <div class="preset-input-row" style="margin-top: 8px;">
+                    <input class="settings-input" id="settings-new-preset-name" maxlength="60" placeholder="z. B. Wohnzimmer Standard, Party, Nacht-Ansicht" />
+                    <button class="settings-save-btn small" id="settings-save-new-preset-btn" type="button">
+                      <span>💾</span> <span>Als Profil speichern</span>
+                    </button>
+                  </div>
+                </label>
+                <div class="preset-json-tools">
+                  <button class="settings-action-btn secondary small" id="settings-export-json-btn" type="button" title="Aktuelles Layout als JSON-Datei herunterladen">
+                    <span>📤</span> <span>Aktuelles Display als JSON exportieren</span>
+                  </button>
+                  <label class="settings-action-btn secondary small file-label-btn" for="settings-import-json-file" title="JSON-Layout von Datei importieren">
+                    <span>📥</span> <span>JSON importieren</span>
+                    <input type="file" id="settings-import-json-file" accept=".json" style="display:none" />
+                  </label>
+                </div>
+              </div>
+
+              <div class="presets-list-section settings-preset-list-panel">
+                <div class="header-builder-heading-row">
+                  <div class="settings-panel-heading">
+                    <span class="settings-panel-step">2</span>
+                    <div><strong>Gespeicherte Profile</strong><span>Aktivieren, aktualisieren, exportieren oder verwalten.</span></div>
+                  </div>
+                  <button class="settings-action-btn secondary small" id="settings-presets-refresh-btn" type="button" title="Vorlagen neu laden">
+                    <span>↻ Aktualisieren</span>
+                  </button>
+                </div>
+                <p class="presets-list-hint">Nur ein Display-Profil ist jeweils aktiv. Klicke auf <strong>„Laden &amp; Aktivieren“</strong>, um ein Profil sofort auf dem Bildschirm anzuzeigen.</p>
+                <div class="presets-list" id="settings-presets-list-container">
+                  <div class="preset-item-loading">Lade Vorlagen …</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <!-- CARD 3: Uhrzeit, Datum & Sprache -->
-          <section class="settings-card card-time">
+          <section class="settings-card card-time" id="card-time">
             <div class="settings-card-header">
               <div class="settings-icon-badge icon-time">🕒</div>
               <div>
@@ -212,7 +278,7 @@ export async function renderSettingsPage(app: HTMLElement) {
           </section>
 
           <!-- CARD 3: Nachtmodus & Bildschirmschutz -->
-          <section class="settings-card card-night">
+          <section class="settings-card card-night" id="card-night">
             <div class="settings-card-header">
               <div class="settings-icon-badge icon-night">🌙</div>
               <div>
@@ -270,7 +336,7 @@ export async function renderSettingsPage(app: HTMLElement) {
           </section>
 
           <!-- CARD 4: Audio & Benachrichtigungen -->
-          <section class="settings-card card-audio">
+          <section class="settings-card card-audio" id="card-audio">
             <div class="settings-card-header">
               <div class="settings-icon-badge icon-audio">🔊</div>
               <div>
@@ -320,7 +386,7 @@ export async function renderSettingsPage(app: HTMLElement) {
           </section>
 
           <!-- CARD 5: Live Raspberry Pi Telemetrie -->
-          <section class="settings-card card-telemetry">
+          <section class="settings-card card-telemetry" id="card-telemetry">
             <div class="settings-card-header">
               <div class="settings-icon-badge icon-telemetry">📊</div>
               <div>
@@ -342,7 +408,7 @@ export async function renderSettingsPage(app: HTMLElement) {
           </section>
 
           <!-- CARD 6: Software-Aktualisierung (1-Klick-Update) -->
-          <section class="settings-card card-update">
+          <section class="settings-card card-update" id="card-update">
             <div class="settings-card-header">
               <div class="settings-icon-badge icon-update">🚀</div>
               <div>
@@ -378,7 +444,7 @@ export async function renderSettingsPage(app: HTMLElement) {
           </section>
 
           <!-- CARD 7: Sicherheit & Admin-PIN (Span Full width for balance) -->
-          <section class="settings-card card-security span-full">
+          <section class="settings-card card-security span-full" id="card-pin">
             <div class="settings-card-header">
               <div class="settings-icon-badge icon-security">🔒</div>
               <div>
@@ -436,6 +502,21 @@ export async function renderSettingsPage(app: HTMLElement) {
             <button class="secondary-button" id="settings-pin-cancel" type="button">Abbrechen</button>
             <button class="save-button" id="settings-dialog-pin-submit" value="default">Entsperren</button>
           </div>
+        </form>
+      </dialog>
+
+      <dialog class="pin-dialog confirm-dialog" id="confirm-dialog">
+        <form method="dialog">
+          <div class="confirm-content">
+            <span class="widget-kicker" id="confirm-kicker">Bestätigung</span>
+            <h2 id="confirm-title">Aktion bestätigen</h2>
+            <p id="confirm-message">Bist du sicher?</p>
+          </div>
+          <div class="dialog-actions">
+            <button class="secondary-button" id="confirm-cancel" type="button">Abbrechen</button>
+            <button class="save-button" id="confirm-ok" type="submit">Bestätigen</button>
+          </div>
+          <button class="close-button" id="confirm-close" type="button" aria-label="Schließen">×</button>
         </form>
       </dialog>
     </div>
@@ -945,19 +1026,41 @@ export async function renderSettingsPage(app: HTMLElement) {
     saveBtn.classList.remove('is-dirty')
   }
 
-  async function saveSettings() {
-    let pin = sessionStorage.getItem(pinKey)
-    if (!pin) {
-      pin = await requestPin()
-      if (!pin) return
+  function applySettingsToForm(s: DisplaySettings) {
+    if (locationInput) locationInput.value = s.location || 'Zuhause'
+    if (weatherCityInput) weatherCityInput.value = s.weatherCity || ''
+    if (timezoneSelect) timezoneSelect.value = s.timezone || 'auto'
+    if (localeSelect) localeSelect.value = s.locale || 'de-DE'
+    if (dateFormatSelect) dateFormatSelect.value = s.dateFormat || 'medium'
+    if (timeFormatSelect) timeFormatSelect.value = s.timeFormat || '24h'
+    if (showWeekdayCheckbox) showWeekdayCheckbox.checked = s.showWeekday !== false
+    if (showSecondsCheckbox) showSecondsCheckbox.checked = Boolean(s.showSeconds)
+    if (displayScaleSelect) displayScaleSelect.value = String(s.displayScale || 1)
+    if (hideCursorCheckbox) hideCursorCheckbox.checked = Boolean(s.hideCursor)
+    if (nightModeEnabledCheckbox) nightModeEnabledCheckbox.checked = Boolean(s.nightModeEnabled)
+    if (nightModeStartInput) nightModeStartInput.value = s.nightModeStart || '22:00'
+    if (nightModeEndInput) nightModeEndInput.value = s.nightModeEnd || '07:00'
+    if (nightModeStyleSelect) nightModeStyleSelect.value = s.nightModeStyle || 'dim'
+    if (pixelShiftCheckbox) pixelShiftCheckbox.checked = Boolean(s.pixelShiftEnabled)
+    if (notificationSoundEnabledCheckbox) notificationSoundEnabledCheckbox.checked = s.notificationSoundEnabled !== false
+    if (notificationSoundVolumeInput) {
+      notificationSoundVolumeInput.value = String(s.notificationSoundVolume ?? 0.8)
+      const soundVolumeValEl = app.querySelector<HTMLElement>('#settings-notification-sound-volume-val')
+      if (soundVolumeValEl) {
+        soundVolumeValEl.textContent = `${Math.round(Number(notificationSoundVolumeInput.value) * 100)}%`
+      }
     }
+    if (audioOutputSelect) audioOutputSelect.value = s.audioOutput || 'hdmi'
+    currentHeaderItems = [...(s.headerItems && s.headerItems.length ? s.headerItems : DEFAULT_HEADER_ITEMS)]
+    renderHeaderBuilderUI()
+  }
 
-    const { settings: currentSettings } = await store.load()
-    const nextSettings = normalizeSettings({
-      ...currentSettings,
+  function getCurrentFormSettings(): DisplaySettings {
+    return normalizeSettings({
+      ...settings,
       version: SETTINGS_VERSION,
-      location: locationInput ? locationInput.value.trim() || 'Zuhause' : currentSettings.location,
-      weatherCity: weatherCityInput ? weatherCityInput.value.trim() : currentSettings.weatherCity,
+      location: locationInput ? locationInput.value.trim() || 'Zuhause' : settings.location,
+      weatherCity: weatherCityInput ? weatherCityInput.value.trim() : settings.weatherCity,
       timezone: timezoneSelect.value,
       locale: localeSelect.value,
       dateFormat: (dateFormatSelect.value as 'short' | 'medium' | 'long') || 'medium',
@@ -976,12 +1079,23 @@ export async function renderSettingsPage(app: HTMLElement) {
       audioOutput: (audioOutputSelect?.value as 'hdmi' | 'jack') || 'hdmi',
       headerItems: currentHeaderItems,
     })
+  }
+
+  async function saveSettings() {
+    let pin = sessionStorage.getItem(pinKey)
+    if (!pin) {
+      pin = await requestPin()
+      if (!pin) return
+    }
+
+    const nextSettings = getCurrentFormSettings()
 
     saveBtn.disabled = true
     saveBtn.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Speichert …</span>'
 
     try {
       const saved = await store.save(nextSettings, pin)
+      settings = nextSettings
       if (saved.source === 'local') {
         showFeedback('Änderungen nur lokal gespeichert (Server offline).', true)
       } else {
@@ -1000,9 +1114,216 @@ export async function renderSettingsPage(app: HTMLElement) {
     }
   }
 
+  // Display Presets & JSON Export/Import Logic
+  const showConfirm = createConfirmModal(app)
+  const saveNewPresetBtn = app.querySelector<HTMLButtonElement>('#settings-save-new-preset-btn')
+  const newPresetNameInput = app.querySelector<HTMLInputElement>('#settings-new-preset-name')
+  const exportJsonBtn = app.querySelector<HTMLButtonElement>('#settings-export-json-btn')
+  const importJsonFile = app.querySelector<HTMLInputElement>('#settings-import-json-file')
+  const presetsRefreshBtn = app.querySelector<HTMLButtonElement>('#settings-presets-refresh-btn')
+  const presetsListContainer = app.querySelector<HTMLElement>('#settings-presets-list-container')
+
+  async function loadAndRenderPresets() {
+    if (!presetsListContainer) return
+    presetsListContainer.innerHTML = '<div class="preset-item-loading">Lade Vorlagen …</div>'
+    try {
+      const list = await store.listPresets()
+      if (!list.length) {
+        presetsListContainer.innerHTML = '<div class="preset-empty-state">Noch keine Vorlagen gespeichert. Speichere das aktuelle Display oben als Profil!</div>'
+        return
+      }
+      presetsListContainer.innerHTML = list.map((preset) => {
+        const count = preset.settings?.widgets?.length || 0
+        const widgetSummary = preset.settings?.widgets?.map((w) => widgetTypeLabel(w.type)).slice(0, 4).join(', ') || 'Keine Widgets'
+        const dateStr = new Date(preset.updatedAt || preset.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        return `
+          <div class="preset-item-card" data-id="${escapeHtml(preset.id)}">
+            <div class="preset-item-info">
+              <div class="preset-item-title-row">
+                <span class="preset-item-title">${escapeHtml(preset.name)}</span>
+              </div>
+              <div class="preset-item-meta">
+                <span>📊 ${count} ${count === 1 ? 'Widget' : 'Widgets'} (${escapeHtml(widgetSummary)})</span>
+                <span>🕒 ${escapeHtml(dateStr)}</span>
+              </div>
+            </div>
+            <div class="preset-item-actions">
+              <button class="save-button" data-preset-action="activate" data-id="${escapeHtml(preset.id)}" type="button" title="Dieses Display sofort auf der Anzeige aktivieren">▶ Laden &amp; Aktivieren</button>
+              <button class="settings-action-btn secondary small" data-preset-action="override" data-id="${escapeHtml(preset.id)}" type="button" title="Vorlage mit dem aktuellen Stand aus den Einstellungen überschreiben">💾 Überschreiben</button>
+              <button class="settings-action-btn secondary small" data-preset-action="export" data-id="${escapeHtml(preset.id)}" type="button" title="Als JSON-Datei herunterladen">⬇ JSON</button>
+              <button class="settings-action-btn secondary small" data-preset-action="rename" data-id="${escapeHtml(preset.id)}" type="button" title="Profil umbenennen">✏ Umbenennen</button>
+              <button class="settings-action-btn secondary small danger" data-preset-action="delete" data-id="${escapeHtml(preset.id)}" type="button" title="Profil löschen">🗑 Löschen</button>
+            </div>
+          </div>
+        `
+      }).join('')
+    } catch {
+      presetsListContainer.innerHTML = '<div class="preset-empty-state">Fehler beim Laden der Vorlagen.</div>'
+    }
+  }
+
+  saveNewPresetBtn?.addEventListener('click', async () => {
+    let pin = sessionStorage.getItem(pinKey)
+    if (!pin) {
+      pin = await requestPin()
+      if (!pin) return
+    }
+    const name = newPresetNameInput?.value.trim() || `Display ${new Date().toLocaleDateString('de-DE')}`
+    saveNewPresetBtn.disabled = true
+    saveNewPresetBtn.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span> <span>Speichert …</span>'
+    try {
+      const cur = getCurrentFormSettings()
+      await store.savePreset(name, cur, pin)
+      if (newPresetNameInput) newPresetNameInput.value = ''
+      showFeedback(`✓ Profil "${name}" erfolgreich gespeichert!`)
+      await loadAndRenderPresets()
+    } catch (error) {
+      showFeedback(adminErrorMessage(error, 'Fehler beim Speichern der Vorlage.'), true)
+    } finally {
+      saveNewPresetBtn.disabled = false
+      saveNewPresetBtn.innerHTML = '<span>💾</span> <span>Als Profil speichern</span>'
+    }
+  })
+
+  exportJsonBtn?.addEventListener('click', () => {
+    const cur = getCurrentFormSettings()
+    const loc = (cur.location || 'display').toLowerCase().replace(/\s+/g, '-')
+    const date = new Date().toISOString().slice(0, 10)
+    downloadJson(`homepiboard-${loc}-${date}.json`, cur)
+    showFeedback('✓ Aktuelles Display als JSON-Datei exportiert.')
+  })
+
+  importJsonFile?.addEventListener('change', async () => {
+    const file = importJsonFile.files?.[0]
+    if (!file) return
+    try {
+      const text = await file.text()
+      const raw = JSON.parse(text)
+      const imported = normalizeSettings(raw)
+      settings = imported
+      applySettingsToForm(imported)
+      markDirty()
+      showFeedback(`✓ Layout "${imported.location}" aus JSON importiert. Klicke auf „Änderungen speichern“, um es aktiv zu schalten!`)
+    } catch {
+      showFeedback('Die ausgewählte Datei enthält kein gültiges HomePiBoard JSON-Layout.', true)
+    } finally {
+      importJsonFile.value = ''
+    }
+  })
+
+  presetsRefreshBtn?.addEventListener('click', async () => {
+    presetsRefreshBtn.disabled = true
+    try {
+      await loadAndRenderPresets()
+    } finally {
+      presetsRefreshBtn.disabled = false
+    }
+  })
+
+  presetsListContainer?.addEventListener('click', async (event) => {
+    const target = event.target as HTMLElement
+    const actionBtn = target.closest<HTMLButtonElement>('[data-preset-action]')
+    if (!actionBtn) return
+    const action = actionBtn.dataset.presetAction
+    const presetId = actionBtn.dataset.id
+    if (!presetId) return
+
+    const list = await store.listPresets()
+    const preset = list.find((p) => p.id === presetId)
+    if (!preset) return
+
+    if (action === 'export') {
+      const safeName = (preset.name || 'preset').toLowerCase().replace(/[^a-z0-9äöüß_-]/gi, '-')
+      downloadJson(`homepiboard-${safeName}.json`, preset.settings)
+      showFeedback(`✓ Profil "${preset.name}" als JSON heruntergeladen.`)
+      return
+    }
+
+    let pin = sessionStorage.getItem(pinKey)
+    if (!pin) {
+      pin = await requestPin()
+      if (!pin) return
+    }
+
+    if (action === 'activate') {
+      actionBtn.disabled = true
+      actionBtn.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span>'
+      try {
+        const activated = await store.activatePreset(presetId, pin)
+        settings = activated
+        applySettingsToForm(activated)
+        markClean()
+        showFeedback(`✓ Display "${preset.name}" wurde als aktives Board geladen!`)
+      } catch (error) {
+        showFeedback(adminErrorMessage(error, 'Fehler beim Aktivieren der Vorlage.'), true)
+      } finally {
+        actionBtn.disabled = false
+        actionBtn.textContent = '▶ Laden & Aktivieren'
+      }
+      return
+    }
+
+    if (action === 'override') {
+      const confirmed = await showConfirm({
+        kicker: 'Profil überschreiben',
+        title: `"${preset.name}" aktualisieren?`,
+        message: `Möchtest du das Profil "${preset.name}" mit dem aktuellen Stand aus den Einstellungen überschreiben?`,
+        confirmText: 'Überschreiben',
+        isDanger: false,
+      })
+      if (!confirmed) return
+      actionBtn.disabled = true
+      try {
+        await store.updatePreset(presetId, { settings: getCurrentFormSettings() }, pin)
+        showFeedback(`✓ Profil "${preset.name}" erfolgreich mit aktuellem Stand aktualisiert.`)
+        await loadAndRenderPresets()
+      } catch (error) {
+        showFeedback(adminErrorMessage(error, 'Fehler beim Aktualisieren.'), true)
+      } finally {
+        actionBtn.disabled = false
+      }
+      return
+    }
+
+    if (action === 'rename') {
+      const newName = window.prompt('Neuer Name für dieses Display-Profil:', preset.name)
+      if (!newName || !newName.trim() || newName.trim() === preset.name) return
+      try {
+        await store.updatePreset(presetId, { name: newName.trim() }, pin)
+        showFeedback(`✓ Profil in "${newName.trim()}" umbenannt.`)
+        await loadAndRenderPresets()
+      } catch (error) {
+        showFeedback(adminErrorMessage(error, 'Fehler beim Umbenennen.'), true)
+      }
+      return
+    }
+
+    if (action === 'delete') {
+      const confirmed = await showConfirm({
+        kicker: 'Profil löschen',
+        title: `"${preset.name}" löschen?`,
+        message: `Möchtest du die Vorlage "${preset.name}" wirklich unwiderruflich löschen?`,
+        confirmText: 'Löschen',
+        isDanger: true,
+      })
+      if (!confirmed) return
+      actionBtn.disabled = true
+      try {
+        await store.deletePreset(presetId, pin)
+        showFeedback(`✓ Profil "${preset.name}" gelöscht.`)
+        await loadAndRenderPresets()
+      } catch (error) {
+        showFeedback(adminErrorMessage(error, 'Fehler beim Löschen der Vorlage.'), true)
+      } finally {
+        actionBtn.disabled = false
+      }
+      return
+    }
+  })
+
   // Dirty tracking for settings form inputs
   app.querySelectorAll<HTMLInputElement | HTMLSelectElement>('.settings-main-content input, .settings-main-content select').forEach((ctrl) => {
-    if (ctrl.closest('#settings-pin-change-form')) return
+    if (ctrl.closest('#settings-pin-change-form') || ctrl.closest('#card-presets')) return
     ctrl.addEventListener('input', markDirty)
     ctrl.addEventListener('change', markDirty)
   })
@@ -1076,5 +1397,6 @@ export async function renderSettingsPage(app: HTMLElement) {
   updateResolutionDisplay()
   refreshTelemetry()
   checkUpdateStatus(false)
+  void loadAndRenderPresets()
   window.setInterval(refreshTelemetry, 30000)
 }
