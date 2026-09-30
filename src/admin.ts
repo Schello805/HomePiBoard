@@ -224,7 +224,7 @@ export async function renderAdminPage(app: HTMLElement) {
           <span class="admin-brand-title">HomePiBoard <em>EDIT</em></span>
         </div>
         <div class="admin-global-fields">
-          <a class="topbar-btn" id="display-settings-button" href="/settings" title="Einstellungen, Displays und Vorlagen verwalten">⚙ Einstellungen &amp; Vorlagen</a>
+          <a class="topbar-btn" id="display-settings-button" href="/settings" title="Einstellungen öffnen">⚙ Einstellungen</a>
         </div>
         <div class="admin-header-actions">
           <button class="topbar-btn secondary" id="reset-button" type="button" title="Werkseinstellungen: Löscht alle Widgets und setzt Einstellungen auf Standard zurück">↺ Zurücksetzen</button>
