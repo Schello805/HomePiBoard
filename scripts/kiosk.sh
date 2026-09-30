@@ -80,7 +80,7 @@ while true; do
     --fast \
     --fast-start \
     --disable-features=Translate,TranslateUI,PreloadMediaEngagementData,MediaEngagementBypassAutoplayPolicies \
-    --disable-pinch \
+    --touch-events=enabled \
     --overscroll-history-navigation=0 \
     --check-for-update-interval=31536000 \
     --autoplay-policy=no-user-gesture-required \

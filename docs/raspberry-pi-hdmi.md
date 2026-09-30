@@ -7,6 +7,7 @@ Diese Anleitung beschreibt, wie HomePiBoard auf einem **Raspberry Pi (3, 4, 5 od
 ## 1. Übersicht & Architektur
 
 - **HDMI-Ausgabe (Anzeige):** Der Pi bootet automatisch in den Desktop, startet den lokalen HomePiBoard-Server und öffnet Chromium im randlosen Vollbild-Kioskmodus auf `http://localhost:4173/`.
+- **Touchscreens:** USB-Touchcontroller werden über X11/libinput eingebunden. Chromium erhält Touch-Ereignisse explizit; Tippen und Browser-Touchgesten stehen damit zur Verfügung. Bei einem vorhandenen Setup kann der Treiber bei Bedarf mit `sudo apt install xserver-xorg-input-libinput` nachinstalliert werden; danach den Pi neu starten.
 - **Admin-Steuerung (Editing):** Die Konfiguration und das Hinzufügen von Widgets erfolgt bequem über das Netzwerk von einem PC, Mac oder Smartphone über die lokale IP: `http://<pi-ip>:4173/admin`.
 - **Mauszeiger:** Wird im Kiosk-Modus automatisch nach 2 Sekunden Inaktivität ausgeblendet.
 

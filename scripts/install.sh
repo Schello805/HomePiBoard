@@ -20,6 +20,7 @@ sudo apt-get install -y curl git unclutter
 echo "  -> Installiere X11, Openbox und Chromium für Kiosk-Ausgabe auf OS Lite..."
 sudo apt-get install -y --no-install-recommends \
   xserver-xorg \
+  xserver-xorg-input-libinput \
   xinit \
   x11-xserver-utils \
   xserver-xorg-legacy \
