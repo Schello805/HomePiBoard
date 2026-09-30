@@ -1695,28 +1695,45 @@ button:has(.loading-spinner) {
 }
 
 /* --- Settings Category Navigation Bar --- */
+.settings-workspace {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
 .settings-category-bar {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 6px 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 10px;
   background: rgba(15, 20, 28, 0.75);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  scrollbar-width: thin;
   position: sticky;
   top: 12px;
   z-index: 10;
+}
+
+.settings-sidebar-title {
+  padding: 2px 8px 7px;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .settings-category-link {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 5px 9px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
   border-radius: 8px;
   font-size: 0.78rem;
   font-weight: 500;
@@ -1732,7 +1749,7 @@ button:has(.loading-spinner) {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.14);
-  transform: translateY(-1px);
+  transform: translateX(2px);
 }
 
 .settings-category-link.is-active {
@@ -1772,16 +1789,11 @@ button:has(.loading-spinner) {
 }
 
 .settings-grid-layout {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
-  align-items: stretch;
+  display: block;
 }
 
-@media (max-width: 1024px) {
-  .settings-grid-layout {
-    grid-template-columns: 1fr;
-  }
+.settings-card[hidden] {
+  display: none !important;
 }
 
 /* --- Card Base Styling --- */
@@ -1829,6 +1841,34 @@ button:has(.loading-spinner) {
   .card-display .settings-card-body {
     grid-template-columns: 1fr;
   }
+}
+
+@media (max-width: 800px) {
+  .settings-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-category-bar {
+    position: sticky;
+    top: 8px;
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .settings-sidebar-title {
+    display: none;
+  }
+
+  .settings-category-link {
+    width: auto;
+    flex: 0 0 auto;
+  }
+
+  .settings-category-link:hover {
+    transform: translateY(-1px);
+  }
+
 }
 
 /* --- Card Header --- */

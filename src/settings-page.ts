@@ -47,10 +47,12 @@ export async function renderSettingsPage(app: HTMLElement) {
         </div>
       </header>
 
+      <div class="settings-workspace">
       <nav class="settings-category-bar" aria-label="Einstellungskategorien">
+        <span class="settings-sidebar-title">Themen</span>
         <a class="settings-category-link" href="#card-display"><span class="cat-icon">📺</span> <span>Bildschirm</span></a>
         <a class="settings-category-link" href="#card-header-builder"><span class="cat-icon">📊</span> <span>Header</span></a>
-        <a class="settings-category-link is-highlight" href="#card-presets"><span class="cat-icon">📋</span> <span>Displays &amp; Vorlagen</span></a>
+        <a class="settings-category-link" href="#card-presets"><span class="cat-icon">📋</span> <span>Displays &amp; Vorlagen</span></a>
         <a class="settings-category-link" href="#card-time"><span class="cat-icon">🕒</span> <span>Zeit &amp; Region</span></a>
         <a class="settings-category-link" href="#card-night"><span class="cat-icon">🌙</span> <span>Nachtmodus</span></a>
         <a class="settings-category-link" href="#card-audio"><span class="cat-icon">🔊</span> <span>Sound</span></a>
@@ -481,6 +483,7 @@ export async function renderSettingsPage(app: HTMLElement) {
 
         </div>
       </main>
+      </div>
 
       <p class="save-message" id="settings-save-message" role="status"></p>
 
@@ -574,6 +577,36 @@ export async function renderSettingsPage(app: HTMLElement) {
   const availableChipsContainer = app.querySelector<HTMLElement>('#available-header-chips')!
   const headerPreviewBar = app.querySelector<HTMLElement>('#settings-header-preview')!
   const headerResetBtn = app.querySelector<HTMLButtonElement>('#settings-header-reset-btn')!
+
+  const categoryLinks = [...app.querySelectorAll<HTMLAnchorElement>('.settings-category-link')]
+  const settingsCards = [...app.querySelectorAll<HTMLElement>('.settings-card')]
+
+  function activateSettingsTopic(cardId: string, updateHash = false) {
+    const targetId = settingsCards.some((card) => card.id === cardId) ? cardId : 'card-display'
+    settingsCards.forEach((card) => {
+      const active = card.id === targetId
+      card.hidden = !active
+      card.classList.toggle('is-active', active)
+    })
+    categoryLinks.forEach((link) => {
+      const active = link.hash === `#${targetId}`
+      link.classList.toggle('is-active', active)
+      if (active) link.setAttribute('aria-current', 'page')
+      else link.removeAttribute('aria-current')
+    })
+    if (updateHash && window.location.hash !== `#${targetId}`) {
+      window.history.replaceState(null, '', `#${targetId}`)
+    }
+  }
+
+  categoryLinks.forEach((link) => {
+    link.addEventListener('click', (event) => {
+      event.preventDefault()
+      activateSettingsTopic(link.hash.slice(1), true)
+      app.querySelector('.settings-main-content')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  })
+  window.addEventListener('hashchange', () => activateSettingsTopic(window.location.hash.slice(1)))
 
   let currentHeaderItems: HeaderItemType[] = [...(settings.headerItems && settings.headerItems.length ? settings.headerItems : DEFAULT_HEADER_ITEMS)]
 
@@ -1393,6 +1426,7 @@ export async function renderSettingsPage(app: HTMLElement) {
   })
 
   // Init
+  activateSettingsTopic(window.location.hash.slice(1))
   renderHeaderBuilderUI()
   updateResolutionDisplay()
   refreshTelemetry()
