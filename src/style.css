@@ -2603,6 +2603,14 @@ button:has(.loading-spinner) {
   height: 32px;
 }
 
+.preset-item-actions .preset-icon-action {
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+  justify-content: center;
+  font-size: 0.95rem;
+}
+
 .preset-empty-state, .preset-item-loading {
   font-size: 0.85rem;
   color: var(--muted);

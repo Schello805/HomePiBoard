@@ -195,7 +195,7 @@ export async function renderSettingsPage(app: HTMLElement) {
                     <span>↻ Aktualisieren</span>
                   </button>
                 </div>
-                <p class="presets-list-hint">Nur ein Display-Profil ist jeweils aktiv. Klicke auf <strong>„Laden &amp; Aktivieren“</strong>, um ein Profil sofort auf dem Bildschirm anzuzeigen.</p>
+                <p class="presets-list-hint">Nur ein Display-Profil ist jeweils aktiv. Klicke auf <strong>„Aktivieren“</strong>, um ein Profil sofort auf dem Bildschirm anzuzeigen.</p>
                 <div class="presets-list" id="settings-presets-list-container">
                   <div class="preset-item-loading">Lade Vorlagen …</div>
                 </div>
@@ -1181,11 +1181,11 @@ export async function renderSettingsPage(app: HTMLElement) {
               </div>
             </div>
             <div class="preset-item-actions">
-              <button class="save-button" data-preset-action="activate" data-id="${escapeHtml(preset.id)}" type="button" title="Dieses Display sofort auf der Anzeige aktivieren">▶ Laden &amp; Aktivieren</button>
-              <button class="settings-action-btn secondary small" data-preset-action="override" data-id="${escapeHtml(preset.id)}" type="button" title="Vorlage mit dem aktuellen Stand aus den Einstellungen überschreiben">💾 Überschreiben</button>
-              <button class="settings-action-btn secondary small" data-preset-action="export" data-id="${escapeHtml(preset.id)}" type="button" title="Als JSON-Datei herunterladen">⬇ JSON</button>
-              <button class="settings-action-btn secondary small" data-preset-action="rename" data-id="${escapeHtml(preset.id)}" type="button" title="Profil umbenennen">✏ Umbenennen</button>
-              <button class="settings-action-btn secondary small danger" data-preset-action="delete" data-id="${escapeHtml(preset.id)}" type="button" title="Profil löschen">🗑 Löschen</button>
+              <button class="save-button" data-preset-action="activate" data-id="${escapeHtml(preset.id)}" type="button" title="Dieses Display sofort auf der Anzeige aktivieren">▶ Aktivieren</button>
+              <button class="settings-action-btn secondary small preset-icon-action" data-preset-action="override" data-id="${escapeHtml(preset.id)}" type="button" title="Mit aktuellem Display überschreiben" aria-label="Profil mit aktuellem Display überschreiben">💾</button>
+              <button class="settings-action-btn secondary small preset-icon-action" data-preset-action="export" data-id="${escapeHtml(preset.id)}" type="button" title="Als JSON-Datei herunterladen" aria-label="Profil als JSON-Datei herunterladen">⬇</button>
+              <button class="settings-action-btn secondary small preset-icon-action" data-preset-action="rename" data-id="${escapeHtml(preset.id)}" type="button" title="Profil umbenennen" aria-label="Profil umbenennen">✏</button>
+              <button class="settings-action-btn secondary small danger preset-icon-action" data-preset-action="delete" data-id="${escapeHtml(preset.id)}" type="button" title="Profil löschen" aria-label="Profil löschen">🗑</button>
             </div>
           </div>
         `
@@ -1291,7 +1291,7 @@ export async function renderSettingsPage(app: HTMLElement) {
         showFeedback(adminErrorMessage(error, 'Fehler beim Aktivieren der Vorlage.'), true)
       } finally {
         actionBtn.disabled = false
-        actionBtn.textContent = '▶ Laden & Aktivieren'
+        actionBtn.textContent = '▶ Aktivieren'
       }
       return
     }
