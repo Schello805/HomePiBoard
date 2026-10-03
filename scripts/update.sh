@@ -23,11 +23,17 @@ echo "==> 2/5: Hole neuesten Code von GitHub..."
 git fetch origin main || git fetch --all
 git reset --hard origin/main || git pull
 
-echo "==> 3/5: Prüfe und installiere Node-Pakete..."
-npm install --no-audit --no-fund
+echo "==> Prüfe Systempakete (Kiosk, Touch, Audio)..."
+bash "$APP_DIR/scripts/ensure-system-deps.sh" || true
 
-echo "==> 4/5: Baue Frontend (TypeScript & Vite)..."
-npm run build
+echo "==> 3/5: Lade vorgebautes Frontend von GitHub..."
+if bash "$APP_DIR/scripts/fetch-prebuilt-dist.sh"; then
+  echo "==> 4/5: Lokaler Build nicht nötig."
+else
+  echo "==> 4/5: Installiere Node-Pakete und baue Frontend lokal (TypeScript & Vite)..."
+  npm install --no-audit --no-fund
+  npm run build
+fi
 
 echo "==> 5/5: Starte Backend-Dienst & HDMI-Anzeige neu..."
 if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files 2>/dev/null | grep -q "homepiboard.service"; then

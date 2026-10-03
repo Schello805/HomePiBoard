@@ -248,6 +248,19 @@ sudo apt update && sudo apt upgrade -y
 - `GET /api/notify/stream` – Server-Sent Events (SSE) Stream für Push-Benachrichtigungen
 - `POST /api/notify/clear` – Aktive Benachrichtigung sofort schließen
 - `POST /api/media` & `GET /api/media` – Aktuelle Musikwiedergabe übertragen (`{"title": "...", "artist": "...", "album": "...", "isPlaying": true}`)
+- `GET /api/camera/snapshot?url=…` & `GET /api/camera/mjpeg?url=…` – Kamera-Proxy (ffmpeg). Funktioniert nur für Kamera-URLs aus **gespeicherten** Widgets; max. 4 parallele Streams.
+
+**API-Token für Webhooks (empfohlen):** Ist die Umgebungsvariable `HOMEPIBOARD_API_TOKEN` gesetzt, verlangen `POST /api/notify`, `POST /api/notify/clear` und `POST /api/media` diesen Token – als Header `Authorization: Bearer <token>`, `x-api-token: <token>` oder Query `?token=<token>`. Ohne Variable bleiben die Endpunkte (wie bisher) offen. Einrichten auf dem Pi:
+
+```bash
+sudo systemctl edit homepiboard
+# im Editor ergänzen:
+# [Service]
+# Environment=HOMEPIBOARD_API_TOKEN=ein-langes-zufaelliges-geheimnis
+sudo systemctl restart homepiboard
+```
+
+Die Kiosk-Anzeige lädt sich automatisch neu, sobald im Admin-Bereich gespeichert wird oder der Server (z. B. nach einem Update) neu startet, sowie jede Nacht um 04:00 Uhr.
 
 Die PIN schützt Änderungen im lokalen Netzwerk, ersetzt aber keine HTTPS- oder Benutzerverwaltung für eine öffentliche Installation. HomePiBoard sollte nicht direkt aus dem Internet erreichbar sein.
 

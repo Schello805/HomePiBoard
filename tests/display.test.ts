@@ -283,3 +283,13 @@ test('renderHeaderItemHtml correctly outputs markup for all supported header ite
 
 
 
+
+test('msUntilNightlyReload schedules the next 04:00 reload', async () => {
+  const { msUntilNightlyReload } = await import('../src/display.ts')
+  const evening = new Date(2026, 9, 3, 22, 0, 0)
+  assert.equal(msUntilNightlyReload(evening), 6 * 60 * 60 * 1000)
+  const earlyMorning = new Date(2026, 9, 3, 3, 30, 0)
+  assert.equal(msUntilNightlyReload(earlyMorning), 30 * 60 * 1000)
+  const exactly = new Date(2026, 9, 3, 4, 0, 0)
+  assert.equal(msUntilNightlyReload(exactly), 24 * 60 * 60 * 1000)
+})

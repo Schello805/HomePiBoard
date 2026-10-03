@@ -43,11 +43,43 @@
 - [x] Einstellbare Zeitzone, Sprache/Datumsformat und Sekundenanzeige
 - [x] Kiosk-Autostart-Skript (`scripts/kiosk.sh`) und systemd-Service (`scripts/homepiboard.service`)
 - [x] Ausführliche Dokumentation für Raspberry Pi HDMI-Setup (`docs/raspberry-pi-hdmi.md`)
+- [x] Kiosk lädt automatisch neu bei gespeicherten Änderungen, Server-Neustart/Update und nachts um 04:00
+- [x] Wetter im Header alle 20 Minuten aktualisieren
+- [x] Kamera-Proxy nur für gespeicherte Kamera-Widgets, Limit paralleler ffmpeg-Prozesse, keine Zugangsdaten in Fehlermeldungen
+- [x] Optionaler API-Token (`HOMEPIBOARD_API_TOKEN`) für `/api/notify` und `/api/media`
+- [x] Defekte `settings.json` wird gesichert statt still überschrieben
+- [x] Vorgebautes Frontend per GitHub Actions (Release `build-latest`), lokaler Build nur noch als Fallback
+- [x] Netzwerkstatus prüft `/api/health` statt der kompletten Konfiguration
+- [x] Fehlende Systempakete (z. B. Touch-Treiber libinput) werden beim Update nachinstalliert
+- [x] CI: Tests und Build bei jedem Push (GitHub Actions)
+- [x] Tests rufen nicht mehr das echte Audio-Skript (sudo) auf
 
 ## Als Nächstes
 
+- [ ] USB-Touchmonitor am Raspberry Pi 3B zum Laufen bringen (Diagnose: `lsusb`, `vcgencmd get_throttled`, `/proc/bus/input/devices`, Xorg-Log)
 - [ ] Kiosk-Autostart auf einem echten Raspberry Pi testen
 - [ ] Netzwerk- und Offline-Verhalten prüfen
 - [ ] Produktionsbuild auf dem Raspberry Pi testen
+
+## Optimierungen (Backlog aus Code-Review)
+
+### Performance (Pi 3B)
+- [ ] Ein gemeinsamer ffmpeg-Prozess pro Kamera statt einer pro Zuschauer; MJPEG-fps reduzieren
+- [ ] gzip/Brotli-Kompression bzw. vorkomprimierte Assets für statische Dateien
+- [ ] ICY-Metadaten-Cache begrenzen (wächst aktuell unbegrenzt)
+- [ ] Verwaiste Uploads in `data/uploads` aufräumen (nicht mehr referenzierte Bilder löschen)
+
+### Wartbarkeit
+- [ ] `server.mjs` (~1400 Zeilen, lange if-Kette) in Routen-Module aufteilen
+- [ ] `admin.ts` und `settings-page.ts` (je ~1400 Zeilen) in kleinere Module zerlegen
+- [ ] `style.css` (~3200 Zeilen) nach Bereichen aufteilen (Display, Admin, Settings, Widgets)
+- [ ] Versionsnummer pflegen (aktuell `0.0.0`) und Changelog/Releases einführen
+- [ ] Linting (ESLint) und Formatierung in CI ergänzen
+
+### Sicherheit
+- [ ] Standard-PIN `0000`: nach der Installation Hinweis anzeigen bzw. PIN-Änderung erzwingen
+- [ ] Kamera-Zugangsdaten (rtsp://user:pass@…) sind über `GET /api/settings` öffentlich lesbar – serverseitig maskieren und Kamera per Widget-ID proxyen
+- [ ] API-Token in den Einstellungen generieren/anzeigen statt nur per Umgebungsvariable
+- [ ] Kamera-Vorschau im Admin für noch nicht gespeicherte Widgets (z. B. kurzlebiger Vorschau-Token)
 
 

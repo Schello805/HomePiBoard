@@ -1,0 +1,45 @@
+name: Test & Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+      - name: Paket für den Raspberry Pi erstellen
+        run: |
+          echo "${GITHUB_SHA}" > dist/.build-commit
+          tar -czf homepiboard-dist.tar.gz dist
+
+      # Rollierendes Release "build-latest": scripts/fetch-prebuilt-dist.sh lädt
+      # das Paket und nutzt es nur, wenn .build-commit zum Commit auf dem Pi passt.
+      - name: Als Release "build-latest" veröffentlichen
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view build-latest >/dev/null 2>&1; then
+            gh release create build-latest \
+              --prerelease \
+              --title "Automatischer Build (main)" \
+              --notes "Wird bei jedem Push auf main automatisch aktualisiert. Enthält das fertig gebaute Frontend für schnelle Updates auf dem Raspberry Pi."
+          fi
+          gh release upload build-latest homepiboard-dist.tar.gz --clobber

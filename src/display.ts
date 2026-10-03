@@ -173,6 +173,7 @@ async function loadWeather(city: string, target: HTMLElement) {
     if (!data.current) throw new Error('weather-missing')
 
     textEl.textContent = `${Math.round(data.current.temperature_2m)}° · ${weatherSymbol(data.current.weather_code)} · ${data.current.relative_humidity_2m}% Feuchte`
+    target.classList.remove('is-unavailable')
   } catch {
     textEl.textContent = 'Wetter n.v.'
     target.classList.add('is-unavailable')
@@ -202,7 +203,7 @@ export function initNetworkStatus(target: HTMLElement, initialSource: 'server' |
       return
     }
     try {
-      const res = await fetch('/api/settings', { method: 'GET', cache: 'no-store' })
+      const res = await fetch('/api/health', { method: 'GET', cache: 'no-store' })
       if (res.ok) {
         update(true, 'ONLINE', 'Server erreichbar')
       } else {
@@ -477,6 +478,26 @@ export async function renderDisplayPage(app: HTMLElement) {
   if (typeof EventSource !== 'undefined') {
     try {
       const sse = new EventSource('/api/notify/stream')
+      let knownBootId = ''
+      let reloadScheduled = false
+      const scheduleReload = () => {
+        if (reloadScheduled) return
+        reloadScheduled = true
+        window.setTimeout(() => window.location.reload(), 1000)
+      }
+      // Server neu gestartet (z. B. nach einem Update) → neues Frontend laden
+      sse.addEventListener('hello', (event) => {
+        try {
+          const { bootId } = JSON.parse((event as MessageEvent).data) as { bootId?: string }
+          if (!bootId) return
+          if (knownBootId && knownBootId !== bootId) scheduleReload()
+          knownBootId = bootId
+        } catch {
+          // ignore malformed
+        }
+      })
+      // Einstellungen im Admin-Bereich geändert → Anzeige neu aufbauen
+      sse.addEventListener('settings-changed', scheduleReload)
       sse.onmessage = (event) => {
         try {
           const notif = JSON.parse(event.data) as { id: string; title: string; message: string; image?: string; duration?: number; sound?: string }
@@ -531,10 +552,29 @@ export async function renderDisplayPage(app: HTMLElement) {
   window.setInterval(updateLiveWidgets, 10000)
 
   initScreenWakeLock()
+  scheduleNightlyReload()
   if (networkStatus) initNetworkStatus(networkStatus, source)
   bindWidgetFrames(app)
   bindRadioWidgets(app)
-  if (weather && settings.weatherCity) await loadWeather(settings.weatherCity, weather)
+  if (weather && settings.weatherCity) {
+    window.setInterval(() => void loadWeather(settings.weatherCity, weather), WEATHER_REFRESH_MS)
+    await loadWeather(settings.weatherCity, weather)
+  }
+}
+
+const WEATHER_REFRESH_MS = 20 * 60 * 1000
+
+/** Millisekunden bis zum nächsten täglichen Reload (Standard 04:00 Uhr Ortszeit). */
+export function msUntilNightlyReload(now = new Date(), hour = 4) {
+  const next = new Date(now)
+  next.setHours(hour, 0, 0, 0)
+  if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1)
+  return next.getTime() - now.getTime()
+}
+
+// Chromium läuft im Kiosk tagelang; ein nächtlicher Reload gibt Speicher frei (wichtig auf dem Pi 3B mit 1 GB RAM).
+function scheduleNightlyReload() {
+  window.setTimeout(() => window.location.reload(), msUntilNightlyReload())
 }
 
 export function initScreenWakeLock() {

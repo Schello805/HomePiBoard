@@ -9,6 +9,13 @@ import { promisify } from 'node:util'
 
 import { createHomePiBoardServer, getSystemInfo, getSystemNetwork, parentDirectoriesToSync, validateCameraUrl } from '../server.mjs'
 
+async function writeCameraSettings(dataDirectory, cameras) {
+  await writeFile(path.join(dataDirectory, 'settings.json'), JSON.stringify({
+    version: 3,
+    widgets: cameras.map(([cameraUrl, cameraType], index) => ({ id: `cam-${index}`, type: 'camera', title: 'Kamera', cameraUrl, cameraType, columns: 8, rows: 4 })),
+  }))
+}
+
 const scrypt = promisify(scryptCallback)
 
 async function startServer({
@@ -21,6 +28,8 @@ async function startServer({
   updateExecuteHandler,
   cameraExec,
   cameraSpawn,
+  apiToken = '',
+  maxCameraStreams,
 } = {}) {
   dataDirectory ||= await mkdtemp(path.join(tmpdir(), 'homepiboard-'))
   const server = createHomePiBoardServer({
@@ -33,6 +42,9 @@ async function startServer({
     updateExecuteHandler,
     cameraExec,
     cameraSpawn,
+    apiToken,
+    maxCameraStreams,
+    audioOutputExecuteHandler: async () => ({ success: true }),
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
@@ -731,13 +743,14 @@ test('camera snapshot endpoint validates URL and returns image buffer from ffmpe
     },
   })
   context.after(() => running.server.close())
+  const rtspUrl = 'rtsp://192.168.1.50:554/stream1'
+  await writeCameraSettings(running.dataDirectory, [[rtspUrl, 'snapshot']])
 
   // Missing or invalid URL rejected
   const badRes = await fetch(`${running.url}/api/camera/snapshot?url=ftp://bad.host/stream`)
   assert.equal(badRes.status, 400)
 
   // Valid RTSP URL calls cameraExec and returns image/jpeg
-  const rtspUrl = 'rtsp://192.168.1.50:554/stream1'
   const okRes = await fetch(`${running.url}/api/camera/snapshot?url=${encodeURIComponent(rtspUrl)}`)
   assert.equal(okRes.status, 200)
   assert.equal(okRes.headers.get('content-type'), 'image/jpeg')
@@ -760,6 +773,7 @@ test('camera snapshot endpoint does not apply RTSP options to HTTP cameras', asy
   context.after(() => running.server.close())
 
   const cameraUrl = 'http://192.168.1.50/snapshot.jpg'
+  await writeCameraSettings(running.dataDirectory, [[cameraUrl, 'snapshot']])
   const response = await fetch(`${running.url}/api/camera/snapshot?url=${encodeURIComponent(cameraUrl)}`)
 
   assert.equal(response.status, 200)
@@ -794,6 +808,7 @@ test('camera mjpeg endpoint validates URL and streams multipart MJPEG via ffmpeg
 
   // Valid RTSP stream starts streaming
   const rtspUrl = 'rtsp://192.168.1.50:554/live'
+  await writeCameraSettings(running.dataDirectory, [[rtspUrl, 'rtsp']])
   const req = http.get(`${running.url}/api/camera/mjpeg?url=${encodeURIComponent(rtspUrl)}`)
   req.on('error', () => {})
   const res = await new Promise((resolve) => req.once('response', resolve))
@@ -807,4 +822,118 @@ test('camera mjpeg endpoint validates URL and streams multipart MJPEG via ffmpeg
   req.destroy()
   await new Promise((r) => setTimeout(r, 60))
   assert.equal(fakeProc.killedWith, 'SIGTERM')
+})
+
+test('camera proxy rejects URLs that are not configured in a saved widget and hides ffmpeg errors', async (context) => {
+  let calls = 0
+  const running = await startServer({
+    cameraExec: async () => {
+      calls += 1
+      throw new Error('ffmpeg failed for rtsp://admin:secret@192.168.1.60/live')
+    },
+  })
+  context.after(() => running.server.close())
+  await writeCameraSettings(running.dataDirectory, [['rtsp://admin:secret@192.168.1.60/live', 'snapshot']])
+
+  const foreign = await fetch(`${running.url}/api/camera/snapshot?url=${encodeURIComponent('http://192.168.1.1/admin')}`)
+  assert.equal(foreign.status, 403)
+  const foreignStream = await fetch(`${running.url}/api/camera/mjpeg?url=${encodeURIComponent('http://192.168.1.1/admin')}`)
+  assert.equal(foreignStream.status, 403)
+  assert.equal(calls, 0)
+
+  const failed = await fetch(`${running.url}/api/camera/snapshot?url=${encodeURIComponent('rtsp://admin:secret@192.168.1.60/live')}`)
+  assert.equal(failed.status, 502)
+  const body = await failed.text()
+  assert.doesNotMatch(body, /secret/)
+})
+
+test('camera mjpeg endpoint limits concurrent ffmpeg streams', async (context) => {
+  const { EventEmitter } = await import('node:events')
+  const { PassThrough } = await import('node:stream')
+  const running = await startServer({
+    maxCameraStreams: 1,
+    cameraSpawn: () => {
+      const proc = new EventEmitter()
+      proc.stdout = new PassThrough()
+      proc.kill = () => proc.stdout.end()
+      return proc
+    },
+  })
+  context.after(() => running.server.close())
+  const rtspUrl = 'rtsp://192.168.1.50:554/live'
+  await writeCameraSettings(running.dataDirectory, [[rtspUrl, 'rtsp']])
+
+  const req = http.get(`${running.url}/api/camera/mjpeg?url=${encodeURIComponent(rtspUrl)}`)
+  req.on('error', () => {})
+  const first = await new Promise((resolve) => req.once('response', resolve))
+  assert.equal(first.statusCode, 200)
+
+  const second = await fetch(`${running.url}/api/camera/mjpeg?url=${encodeURIComponent(rtspUrl)}`)
+  assert.equal(second.status, 503)
+
+  first.destroy()
+  req.destroy()
+})
+
+test('webhook endpoints require the API token when one is configured', async (context) => {
+  const running = await startServer({ apiToken: 'geheim-123' })
+  context.after(() => running.server.close())
+
+  const denied = await fetch(`${running.url}/api/notify`, { method: 'POST', body: JSON.stringify({ title: 'Test' }) })
+  assert.equal(denied.status, 401)
+  const deniedMedia = await fetch(`${running.url}/api/media`, { method: 'POST', body: '{}' })
+  assert.equal(deniedMedia.status, 401)
+  const deniedClear = await fetch(`${running.url}/api/notify/clear`, { method: 'POST', headers: { authorization: 'Bearer falsch' } })
+  assert.equal(deniedClear.status, 401)
+
+  const bearer = await fetch(`${running.url}/api/notify`, { method: 'POST', headers: { authorization: 'Bearer geheim-123' }, body: JSON.stringify({ title: 'Test' }) })
+  assert.equal(bearer.status, 200)
+  const header = await fetch(`${running.url}/api/media`, { method: 'POST', headers: { 'x-api-token': 'geheim-123' }, body: '{}' })
+  assert.equal(header.status, 200)
+  const query = await fetch(`${running.url}/api/notify/clear?token=geheim-123`, { method: 'POST' })
+  assert.equal(query.status, 200)
+
+  // Lesende Endpunkte bleiben offen
+  assert.equal((await fetch(`${running.url}/api/notify/active`)).status, 200)
+})
+
+test('corrupted settings.json is backed up instead of being silently overwritten', async (context) => {
+  const running = await startServer()
+  context.after(() => running.server.close())
+  const { readdir } = await import('node:fs/promises')
+  await writeFile(path.join(running.dataDirectory, 'settings.json'), '{ "location": "Flur", kaputt')
+
+  const response = await fetch(`${running.url}/api/settings`)
+  assert.equal(response.status, 200)
+  const files = await readdir(running.dataDirectory)
+  const backup = files.find((name) => name.startsWith('settings.json.corrupt-'))
+  assert.ok(backup, 'Sicherung der defekten Datei fehlt')
+  assert.equal(await readFile(path.join(running.dataDirectory, backup), 'utf8'), '{ "location": "Flur", kaputt')
+})
+
+test('notification stream announces boot id and pushes settings changes', async (context) => {
+  const running = await startServer()
+  context.after(() => running.server.close())
+
+  const req = http.get(`${running.url}/api/notify/stream`)
+  req.on('error', () => {})
+  const res = await new Promise((resolve) => req.once('response', resolve))
+  let received = ''
+  res.setEncoding('utf8')
+  res.on('data', (chunk) => { received += chunk })
+
+  await new Promise((r) => setTimeout(r, 50))
+  assert.match(received, /event: hello\ndata: \{"bootId":"[0-9a-f-]+"\}/)
+
+  const save = await fetch(`${running.url}/api/settings`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', 'x-admin-pin': '2468' },
+    body: JSON.stringify({ version: 3, location: 'Küche', widgets: [] }),
+  })
+  assert.equal(save.status, 200)
+  await new Promise((r) => setTimeout(r, 50))
+  assert.match(received, /event: settings-changed/)
+
+  res.destroy()
+  req.destroy()
 })

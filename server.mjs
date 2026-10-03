@@ -10,7 +10,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 
-import { defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, normalizeSettings } from './src/settings.ts'
+import { defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, normalizeCameraUrl, normalizeSettings } from './src/settings.ts'
 import { parseCalendarFeed } from './src/calendar-feed.ts'
 
 const rootDirectory = path.dirname(fileURLToPath(import.meta.url))
@@ -334,15 +334,58 @@ async function readJsonBody(request) {
   }
 }
 
+export function corruptSettingsBackupName(settingsFile, now = new Date()) {
+  const stamp = now.toISOString().replace(/[:.]/g, '-')
+  return `${settingsFile}.corrupt-${stamp}`
+}
+
 async function loadSettings(settingsFile) {
+  let content
   try {
-    return normalizeSettings(JSON.parse(await readFile(settingsFile, 'utf8')))
+    content = await readFile(settingsFile, 'utf8')
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
       return normalizeSettings(defaultSettings)
     }
+    throw error
+  }
+  try {
+    return normalizeSettings(JSON.parse(content))
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error
+    // Defekte Datei sichern, damit sie beim nächsten Speichern nicht still überschrieben wird
+    const backupFile = corruptSettingsBackupName(settingsFile)
+    try {
+      await rename(settingsFile, backupFile)
+      console.error(`[HomePiBoard] settings.json ist beschädigt und wurde nach ${path.basename(backupFile)} gesichert. Es werden Standardwerte verwendet.`)
+    } catch {
+      // Bereits von einer parallelen Anfrage gesichert
+    }
     return normalizeSettings(defaultSettings)
   }
+}
+
+export function configuredCameraUrls(settings) {
+  const urls = new Set()
+  for (const widget of settings?.widgets || []) {
+    if (widget.type !== 'camera') continue
+    const normalized = validateCameraUrl(normalizeCameraUrl(String(widget.cameraUrl || widget.url || ''), widget.cameraType))
+    if (normalized) urls.add(normalized)
+  }
+  return urls
+}
+
+function isValidApiToken(provided, expected) {
+  if (typeof provided !== 'string' || !provided) return false
+  const a = Buffer.from(provided)
+  const b = Buffer.from(expected)
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+
+function requestApiToken(request, url) {
+  const authorization = String(request.headers.authorization || '')
+  const bearer = authorization.match(/^Bearer\s+(.+)$/i)?.[1]?.trim()
+  return bearer || String(request.headers['x-api-token'] || '') || url.searchParams.get('token') || ''
 }
 
 async function createPinCredential(pin, scryptFunction = scrypt) {
@@ -512,23 +555,43 @@ export async function performSystemUpdate({ cwd = rootDirectory, restartProcess 
     }
   }
 
-  log.push('2/4: Prüfe npm Abhängigkeiten...')
+  log.push('Prüfe Systempakete (Kiosk, Touch, Audio)...')
   try {
-    const { stdout: npmOut } = await exec('npm', ['install', '--no-audit', '--no-fund'], { cwd, env, timeout: 180000 })
-    if (npmOut.trim()) log.push(npmOut.trim().split('\n').slice(-2).join('\n'))
+    const { stdout: depsOut } = await exec('bash', ['./scripts/ensure-system-deps.sh'], { cwd, env, timeout: 600000, maxBuffer: 10 * 1024 * 1024 })
+    if (depsOut.trim()) log.push(depsOut.trim().split('\n').filter((line) => /^[✓⚠ℹ→ ]/.test(line)).join('\n'))
   } catch (err) {
-    log.push(`npm install: ${err.message}`)
+    log.push(`Systempakete: ${err.message}`)
   }
 
-  log.push('3/4: Kompiliere Frontend (Vite & TypeScript)...')
+  log.push('2/4: Lade vorgebautes Frontend von GitHub...')
   let buildSuccess = false
   try {
-    const { stdout: buildOut } = await exec('npm', ['run', 'build'], { cwd, env, timeout: 180000 })
-    if (buildOut.trim()) log.push(buildOut.trim().split('\n').slice(-3).join('\n'))
-    log.push('✓ Frontend erfolgreich gebaut!')
+    const { stdout: prebuiltOut } = await exec('bash', ['./scripts/fetch-prebuilt-dist.sh'], { cwd, env, timeout: 120000 })
+    if (prebuiltOut.trim()) log.push(prebuiltOut.trim().split('\n').slice(-2).join('\n'))
     buildSuccess = true
   } catch (err) {
-    log.push(`Build-Fehler: ${err.message}`)
+    const output = String(err?.stdout || '').trim()
+    log.push(output ? output.split('\n').slice(-1)[0] : 'ℹ Kein passendes vorgebautes Frontend – baue lokal.')
+  }
+
+  if (!buildSuccess) {
+    log.push('3/4: Installiere npm-Pakete und kompiliere Frontend lokal (dauert auf dem Pi 3 einige Minuten)...')
+    try {
+      const { stdout: npmOut } = await exec('npm', ['install', '--no-audit', '--no-fund'], { cwd, env, timeout: 600000 })
+      if (npmOut.trim()) log.push(npmOut.trim().split('\n').slice(-2).join('\n'))
+    } catch (err) {
+      log.push(`npm install: ${err.message}`)
+    }
+    try {
+      const { stdout: buildOut } = await exec('npm', ['run', 'build'], { cwd, env, timeout: 900000 })
+      if (buildOut.trim()) log.push(buildOut.trim().split('\n').slice(-3).join('\n'))
+      log.push('✓ Frontend erfolgreich gebaut!')
+      buildSuccess = true
+    } catch (err) {
+      log.push(`Build-Fehler: ${err.message}`)
+    }
+  } else {
+    log.push('3/4: ✓ Lokaler Build nicht nötig.')
   }
 
   log.push('4/4: Aktualisiere HDMI Monitor & Audio...')
@@ -705,6 +768,9 @@ export function createHomePiBoardServer({
   audioOutputExecuteHandler = (output) => applySystemAudioOutput(output, { exec: execFile }),
   cameraExec = execFile,
   cameraSpawn = spawnProcess,
+  apiToken = process.env.HOMEPIBOARD_API_TOKEN || '',
+  maxCameraStreams = 4,
+  maxCameraSnapshots = 3,
 } = {}) {
   if (typeof adminPin !== 'string' || adminPin.length === 0) {
     throw new Error('HOMEPIBOARD_PIN muss explizit gesetzt sein.')
@@ -720,6 +786,10 @@ export function createHomePiBoardServer({
 
   let activeNotification = null
   const sseClients = new Set()
+  const bootId = randomUUID()
+  let activeCameraStreams = 0
+  let activeCameraSnapshots = 0
+  const pendingSnapshots = new Map()
   let latestMedia = {
     title: 'Keine Wiedergabe',
     artist: 'Bereit',
@@ -730,7 +800,14 @@ export function createHomePiBoardServer({
   }
 
   function broadcastNotification(notification) {
-    const payload = `data: ${JSON.stringify(notification)}\n\n`
+    broadcastEvent(`data: ${JSON.stringify(notification)}\n\n`)
+  }
+
+  function broadcastSettingsChanged() {
+    broadcastEvent(`event: settings-changed\ndata: ${JSON.stringify({ updatedAt: Date.now() })}\n\n`)
+  }
+
+  function broadcastEvent(payload) {
     for (const client of sseClients) {
       try {
         client.write(payload)
@@ -743,6 +820,7 @@ export function createHomePiBoardServer({
   function persistSettings(settings) {
     const operation = settingsWriteQueue.then(async () => {
       await durableAtomicWrite(settingsFile, `${JSON.stringify(settings, null, 2)}\n`)
+      broadcastSettingsChanged()
       if (settings.audioOutput && typeof audioOutputExecuteHandler === 'function') {
         audioOutputExecuteHandler(settings.audioOutput).catch(() => {})
       }
@@ -893,6 +971,12 @@ export function createHomePiBoardServer({
         return
       }
 
+      const isWebhookWrite = request.method === 'POST' && (url.pathname === '/api/notify' || url.pathname === '/api/notify/clear' || url.pathname === '/api/media')
+      if (isWebhookWrite && apiToken && !isValidApiToken(requestApiToken(request, url), apiToken)) {
+        json(response, 401, { error: 'Ungültiger oder fehlender API-Token.' })
+        return
+      }
+
       if (url.pathname === '/api/notify' && request.method === 'POST') {
         const body = await readJsonBody(request)
         const durationSeconds = Math.max(3, Math.min(120, Number(body.durationSeconds ?? body.duration) || 15))
@@ -935,6 +1019,7 @@ export function createHomePiBoardServer({
           'Connection': 'keep-alive',
         })
         response.write(': connected\n\n')
+        response.write(`event: hello\ndata: ${JSON.stringify({ bootId })}\n\n`)
         sseClients.add(response)
         request.on('close', () => {
           sseClients.delete(response)
@@ -978,58 +1063,70 @@ export function createHomePiBoardServer({
         return
       }
 
-      if (url.pathname === '/api/camera/snapshot' && request.method === 'GET') {
+      if ((url.pathname === '/api/camera/snapshot' || url.pathname === '/api/camera/mjpeg') && request.method === 'GET') {
         const targetUrl = validateCameraUrl(url.searchParams.get('url'))
         if (!targetUrl) {
           json(response, 400, { error: 'Ungültige oder fehlende Kamera-URL. Erlaubte Protokolle: rtsp, http, https' })
           return
         }
-        try {
-          const { stdout } = await cameraExec('ffmpeg', [
-            '-y',
-            '-hide_banner',
-            '-loglevel', 'error',
-            ...cameraInputArgs(targetUrl),
-            '-vframes', '1',
-            '-c:v', 'mjpeg',
-            '-q:v', '2',
-            '-f', 'image2pipe',
-            'pipe:1',
-          ], {
-            timeout: 8000,
-            maxBuffer: 10 * 1024 * 1024,
-            encoding: 'buffer',
-          })
-          response.writeHead(200, {
-            'Content-Type': 'image/jpeg',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-          })
-          response.end(stdout)
-        } catch (err) {
-          json(response, 502, { error: 'Kamera-Snapshot konnte nicht geladen werden.', details: err instanceof Error ? err.message : String(err) })
+        // Nur Kameras aus gespeicherten Widgets proxyen – verhindert, dass Fremde
+        // beliebige Adressen im Heimnetz abrufen oder den Pi mit ffmpeg-Prozessen überlasten.
+        if (!configuredCameraUrls(await loadSettings(settingsFile)).has(targetUrl)) {
+          json(response, 403, { error: 'Diese Kamera ist in keinem gespeicherten Widget hinterlegt. Bitte das Widget zuerst speichern.' })
+          return
         }
-        return
-      }
 
-      if (url.pathname === '/api/camera/mjpeg' && request.method === 'GET') {
-        const targetUrl = validateCameraUrl(url.searchParams.get('url'))
-        if (!targetUrl) {
-          json(response, 400, { error: 'Ungültige oder fehlende Kamera-URL. Erlaubte Protokolle: rtsp, http, https' })
+        if (url.pathname === '/api/camera/snapshot') {
+          let snapshot = pendingSnapshots.get(targetUrl)
+          if (!snapshot) {
+            if (activeCameraSnapshots >= maxCameraSnapshots) {
+              response.writeHead(503, { 'content-type': 'application/json; charset=utf-8', 'retry-after': '2' })
+              response.end(JSON.stringify({ error: 'Zu viele gleichzeitige Kamera-Anfragen.' }))
+              return
+            }
+            activeCameraSnapshots += 1
+            snapshot = Promise.resolve().then(() => cameraExec('ffmpeg', [
+              '-y',
+              '-hide_banner',
+              '-loglevel', 'error',
+              ...cameraInputArgs(targetUrl),
+              '-vframes', '1',
+              '-c:v', 'mjpeg',
+              '-q:v', '2',
+              '-f', 'image2pipe',
+              'pipe:1',
+            ], {
+              timeout: 8000,
+              maxBuffer: 10 * 1024 * 1024,
+              encoding: 'buffer',
+            })).finally(() => {
+              activeCameraSnapshots -= 1
+              pendingSnapshots.delete(targetUrl)
+            })
+            pendingSnapshots.set(targetUrl, snapshot)
+          }
+          try {
+            const { stdout } = await snapshot
+            response.writeHead(200, {
+              'Content-Type': 'image/jpeg',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0',
+            })
+            response.end(stdout)
+          } catch {
+            json(response, 502, { error: 'Kamera-Snapshot konnte nicht geladen werden.' })
+          }
+          return
+        }
+
+        if (activeCameraStreams >= maxCameraStreams) {
+          response.writeHead(503, { 'content-type': 'application/json; charset=utf-8', 'retry-after': '5' })
+          response.end(JSON.stringify({ error: 'Zu viele gleichzeitige Kamera-Streams.' }))
           return
         }
 
         const boundary = 'ffmpeg-stream-boundary'
-        response.writeHead(200, {
-          'Content-Type': `multipart/x-mixed-replace; boundary=${boundary}`,
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Connection': 'close',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        })
-        response.flushHeaders()
-
         const ffmpegArgs = [
           '-hide_banner',
           '-loglevel', 'error',
@@ -1044,23 +1141,42 @@ export function createHomePiBoardServer({
         let ffmpegProcess
         try {
           ffmpegProcess = cameraSpawn('ffmpeg', ffmpegArgs)
-        } catch (err) {
-          if (!response.headersSent) {
-            json(response, 502, { error: 'FFmpeg-Prozess konnte nicht gestartet werden.' })
-          } else {
-            response.end()
-          }
+        } catch {
+          json(response, 502, { error: 'FFmpeg-Prozess konnte nicht gestartet werden.' })
           return
         }
 
-        if (ffmpegProcess && ffmpegProcess.stdout) {
-          ffmpegProcess.stdout.pipe(response)
-          ffmpegProcess.on('error', () => {
-            try { response.end() } catch {}
-          })
+        activeCameraStreams += 1
+        let slotReleased = false
+        const releaseSlot = () => {
+          if (slotReleased) return
+          slotReleased = true
+          activeCameraStreams -= 1
         }
 
+        response.writeHead(200, {
+          'Content-Type': `multipart/x-mixed-replace; boundary=${boundary}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Connection': 'close',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        })
+        response.flushHeaders()
+
+        if (ffmpegProcess && ffmpegProcess.stdout) {
+          ffmpegProcess.stdout.pipe(response)
+        }
+        ffmpegProcess?.on?.('error', () => {
+          releaseSlot()
+          try { response.end() } catch {}
+        })
+        ffmpegProcess?.on?.('close', () => {
+          releaseSlot()
+          try { response.end() } catch {}
+        })
+
         request.on('close', () => {
+          releaseSlot()
           if (ffmpegProcess) {
             try {
               ffmpegProcess.kill('SIGTERM')

@@ -81,9 +81,11 @@ else
 fi
 
 # 4. Abhängigkeiten installieren & Produktionsbuild erstellen
-echo "[4/6] Installiere Node-Abhängigkeiten und erstelle Build..."
-npm install
-npm run build
+echo "[4/6] Lade vorgebautes Frontend (oder baue lokal)..."
+if ! bash "${INSTALL_DIR}/scripts/fetch-prebuilt-dist.sh"; then
+  npm install
+  npm run build
+fi
 
 # 5. systemd Service für HomePiBoard Server einrichten
 echo "[5/6] Richte systemd-Dienst (homepiboard.service) ein..."
