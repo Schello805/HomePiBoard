@@ -21,8 +21,9 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm test
+      # Build vor den Tests: der Static-Route-Test liefert Dateien aus dist/ aus
       - run: npm run build
+      - run: npm test
 
       - name: Paket für den Raspberry Pi erstellen
         run: |
