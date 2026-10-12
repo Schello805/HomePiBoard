@@ -567,6 +567,30 @@ button:has(.loading-spinner) {
   resize: vertical;
 }
 
+.calendar-url-preview {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 190px;
+  overflow: auto;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.18);
+  font-size: 0.78rem;
+}
+.calendar-url-preview.is-error { color: var(--danger); }
+.calendar-url-preview .calendar-feed-empty { min-height: auto; padding: 2px; border: 0; background: transparent; }
+.calendar-url-preview .waste-widget-container { height: auto; padding: 0; gap: 5px; }
+.calendar-url-preview .waste-item { gap: 8px; padding: 5px 8px; border-radius: 5px; }
+.calendar-url-preview .waste-bin-icon { width: 22px; height: 24px; font-size: 1.1rem; }
+.calendar-url-preview .waste-wheelie-bin { width: 20px; height: 24px; }
+.calendar-url-preview .waste-label { font-size: 0.78rem; }
+.calendar-url-preview .waste-date-text { font-size: 0.68rem; }
+.calendar-url-preview .waste-badge { padding: 2px 6px; font-size: 0.65rem; }
+
 .checkbox-label {
   display: flex !important;
   flex-direction: row !important;

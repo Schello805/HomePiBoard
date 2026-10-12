@@ -2,8 +2,8 @@ import { escapeHtml } from './dashboard-utils.ts'
 import { bindRadioWidgets } from './display.ts'
 import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type WidgetType } from './settings.ts'
 import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
-import { parseCalendarFeed } from './calendar-feed.ts'
-import { bindCameraWidgets, bindWidgetFrames, isBuiltInCalendar, normalizeCameraUrl, parseSlideshowUrls, renderSlideshowCrudList, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
+import { parseCalendarFeed, type CalendarFeedEvent } from './calendar-feed.ts'
+import { bindCameraWidgets, bindWidgetFrames, isBuiltInCalendar, normalizeCameraUrl, parseSlideshowUrls, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
 
 const pinKey = 'homepiboard-admin-pin'
 
@@ -973,6 +973,44 @@ export async function renderAdminPage(app: HTMLElement) {
       }
     }
 
+    const calendarPreview = editor.querySelector<HTMLElement>('[data-calendar-preview]')
+    let calendarPreviewTimer: number | undefined
+    let calendarPreviewRequest = 0
+    const loadCalendarPreview = async () => {
+      if (!radioUrlInput || !calendarPreview) return
+      const calendarUrl = radioUrlInput.value.trim()
+      const requestId = ++calendarPreviewRequest
+      if (!calendarUrl) {
+        calendarPreview.textContent = 'Vorschau wird nach Eingabe der URL geladen.'
+        calendarPreview.classList.remove('is-error')
+        return
+      }
+
+      calendarPreview.textContent = 'Kalender wird geladen …'
+      calendarPreview.classList.remove('is-error')
+      try {
+        const response = await fetch('/api/calendar/preview', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ url: calendarUrl }),
+        })
+        const body = await response.json() as { events?: CalendarFeedEvent[]; error?: string }
+        if (!response.ok) throw new Error(body.error || 'Kalender konnte nicht geladen werden.')
+        if (requestId !== calendarPreviewRequest || radioUrlInput.value.trim() !== calendarUrl || !editor.isConnected) return
+        calendarPreview.innerHTML = renderWasteEvents(Array.isArray(body.events) ? body.events : [])
+      } catch (error) {
+        if (requestId !== calendarPreviewRequest || radioUrlInput.value.trim() !== calendarUrl || !editor.isConnected) return
+        calendarPreview.textContent = error instanceof Error ? error.message : 'Kalender konnte nicht geladen werden.'
+        calendarPreview.classList.add('is-error')
+      }
+    }
+    const scheduleCalendarPreview = () => {
+      if (!calendarPreview) return
+      window.clearTimeout(calendarPreviewTimer)
+      calendarPreviewTimer = window.setTimeout(() => void loadCalendarPreview(), 700)
+    }
+    radioUrlInput?.addEventListener('input', scheduleCalendarPreview)
+
     testRadioBtn?.addEventListener('click', () => {
       const streamUrl = radioUrlInput?.value.trim()
       if (!streamUrl) {
@@ -1006,6 +1044,9 @@ export async function renderAdminPage(app: HTMLElement) {
       }
       toggleButton?.setAttribute('aria-expanded', 'true')
       toggleButton?.classList.add('is-active')
+      if (calendarPreview && readWidget(editor).type === 'waste' && radioUrlInput?.value.trim()) {
+        scheduleCalendarPreview()
+      }
     }
 
     const closeDialog = () => {

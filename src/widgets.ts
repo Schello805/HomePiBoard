@@ -562,6 +562,7 @@ function editorMarkup(widget: DashboardWidget, index: number) {
           <label class="content-field checkbox-label" for="${controlId}-show-title"><input type="checkbox" id="${controlId}-show-title" data-field="showTitle" ${widget.showTitle ? 'checked' : ''} /><span>Titel in der Anzeige anzeigen</span></label>
           ${widget.type === 'waste' ? `
           <label class="content-field" for="${controlId}-waste-url"><span>iCal-Abo / Webcal URL (vom Landratsamt / Entsorger)</span><input type="text" id="${controlId}-waste-url" data-field="url" value="${escapeHtml(widget.url)}" placeholder="https://.../abfall.ics oder webcal://..." /></label>
+          <div class="calendar-url-preview" data-calendar-preview role="status" aria-live="polite">Vorschau wird nach Eingabe der URL geladen.</div>
           <div class="content-field upload-field">
             <label class="upload-zone" for="${controlId}-ics-upload">
               <input type="file" id="${controlId}-ics-upload" data-action="upload-ics" accept=".ics,text/calendar" style="display: none;" />

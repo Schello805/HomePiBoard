@@ -1211,6 +1211,23 @@ export function createHomePiBoardServer({
         return
       }
 
+      if (url.pathname === '/api/calendar/preview' && request.method === 'POST') {
+        const body = await readJsonBody(request)
+        const feedUrl = typeof body.url === 'string' ? body.url.trim() : ''
+        if (!feedUrl || feedUrl.length > 2048) {
+          json(response, 422, { error: 'Bitte gib eine gültige Kalender-URL ein.' })
+          return
+        }
+        try {
+          const events = await downloadCalendarFeed(feedUrl, calendarFetch, lookupFunction)
+          json(response, 200, { events })
+        } catch (error) {
+          if (error instanceof CalendarFeedError) json(response, error.status, { error: error.message })
+          else throw error
+        }
+        return
+      }
+
       if (url.pathname === '/api/auth' && request.method === 'POST') {
         const body = await readJsonBody(request)
         const result = await runAuthenticated(request, body.pin, async () => undefined)
