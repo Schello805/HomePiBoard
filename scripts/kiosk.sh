@@ -41,6 +41,8 @@ fi
 # Pfad zur statischen Splash-/Lade-Seite
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SPLASH_FILE="$SCRIPT_DIR/../public/splash.html"
+KIOSK_PROFILE_DIR="${HOME}/.config/homepiboard-chromium"
+mkdir -p "$KIOSK_PROFILE_DIR"
 
 # HDMI Audio entmuten und Ausgang konfigurieren
 if [ -f "$SCRIPT_DIR/setup-hdmi-audio.sh" ]; then
@@ -58,8 +60,8 @@ if ! command -v "$CHROMIUM_BIN" >/dev/null 2>&1; then
 fi
 
 # Crash-Meldungen bei unsauberem Ausschalten des Pi unterdrücken
-sed -i 's/"exited_cleanly":false/"exited_cleanly":true/' ~/.config/chromium/Default/Preferences 2>/dev/null || true
-sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/' ~/.config/chromium/Default/Preferences 2>/dev/null || true
+sed -i 's/"exited_cleanly":false/"exited_cleanly":true/' "$KIOSK_PROFILE_DIR/Default/Preferences" 2>/dev/null || true
+sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/' "$KIOSK_PROFILE_DIR/Default/Preferences" 2>/dev/null || true
 
 # Kiosk-Schleife: Startet Browser mit Splash-Screen oder Direkt-URL
 while true; do
@@ -74,6 +76,7 @@ while true; do
   "$CHROMIUM_BIN" \
     --kiosk \
     --disable-gpu \
+    --user-data-dir="$KIOSK_PROFILE_DIR" \
     --noerrdialogs \
     --disable-infobars \
     --disable-translate \
