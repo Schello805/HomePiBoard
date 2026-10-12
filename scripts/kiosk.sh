@@ -45,10 +45,9 @@ KIOSK_PROFILE_DIR="${HOME}/.config/homepiboard-chromium"
 KIOSK_LOG_FILE="${KIOSK_PROFILE_DIR}/chromium.log"
 mkdir -p "$KIOSK_PROFILE_DIR"
 
-# HDMI Audio entmuten und Ausgang konfigurieren
-if [ -f "$SCRIPT_DIR/setup-hdmi-audio.sh" ]; then
-  bash "$SCRIPT_DIR/setup-hdmi-audio.sh" 2>/dev/null || true
-fi
+# Audio configuration is performed by the installer or the explicit audio
+# setting.  Do not call it from the X11 kiosk startup: it uses sudo/raspi-config
+# and can wait invisibly for a password before Chromium is started.
 
 # Passenden Chromium-Befehl wählen
 CHROMIUM_BIN="chromium-browser"
