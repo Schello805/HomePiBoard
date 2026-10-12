@@ -2,6 +2,7 @@ import { calendarMarkup, escapeHtml } from './dashboard-utils.ts'
 import type { CalendarFeedEvent } from './calendar-feed.ts'
 import type { DashboardWidget, WidgetType } from './settings.ts'
 import { normalizeCameraUrl } from './settings.ts'
+import QRCode from 'qrcode'
 export { normalizeCameraUrl } from './settings.ts'
 
 const typeLabels: Record<WidgetType, string> = {
@@ -13,6 +14,7 @@ const typeLabels: Record<WidgetType, string> = {
   waste: 'MÜLL',
   media: 'RADIO',
   camera: 'KAMERA',
+  qr: 'QR-CODE',
 }
 
 export interface RadioStationPreset {
@@ -455,6 +457,26 @@ function cameraContent(widget: DashboardWidget) {
   return `<div class="camera-container camera-widget-container is-loading" data-camera-widget data-camera-type="${escapeHtml(camType)}" data-camera-url="${escapeHtml(url)}" data-camera-interval="${refreshSec}"><div class="camera-badge"><span class="camera-live-dot"></span> LIVE${badgeExtra}</div><img class="camera-snapshot-img camera-image camera-fit-${escapeHtml(fit)}" style="object-fit: ${escapeHtml(fit)};" src="${escapeHtml(displayUrl)}" alt="${escapeHtml(widget.title || 'Kamera')}" /><div class="camera-loading-status" role="status" aria-label="Kamerabild wird geladen"><span class="loading-spinner loading-spinner-acid" aria-hidden="true"></span> <span>Kamerabild wird geladen …</span></div><div class="camera-offline-msg" role="status"><span class="offline-icon">⚠️</span><strong>Kamera nicht erreichbar</strong><span>Verbindung wird geprüft …</span><button type="button" class="camera-retry-btn" data-action="camera-retry">Erneut versuchen</button></div></div>`
 }
 
+function escapeWifiValue(value: string) {
+  return value.replace(/([\\\\;,:])/g, '\\\\$1')
+}
+
+function qrPayload(widget: DashboardWidget) {
+  if (widget.qrKind === 'url') return (widget.url || '').trim()
+  const ssid = (widget.qrSsid || '').trim()
+  if (!ssid) return ''
+  const encryption = widget.qrEncryption === 'WEP' ? 'WEP' : (widget.qrEncryption === 'nopass' ? 'nopass' : 'WPA')
+  const password = encryption === 'nopass' ? '' : (widget.qrPassword || '')
+  return `WIFI:T:${encryption};S:${escapeWifiValue(ssid)};P:${escapeWifiValue(password)};;`
+}
+
+function qrContent(widget: DashboardWidget) {
+  const payload = qrPayload(widget)
+  if (!payload) return '<div class="qr-empty-state"><span class="placeholder-icon">▦</span><strong>QR-Code einrichten</strong><span>WLAN-Zugang oder Webadresse in den Einstellungen hinterlegen</span></div>'
+  const label = widget.qrKind === 'url' ? 'Webseite scannen' : `WLAN: ${(widget.qrSsid || '').trim()}`
+  return `<div class="qr-widget-container"><canvas class="qr-code-canvas" data-qr-code="${escapeHtml(payload)}" aria-label="${escapeHtml(label)}"></canvas><span class="qr-code-label">${escapeHtml(label)}</span></div>`
+}
+
 export function renderWidgetContent(widget: DashboardWidget) {
   if (widget.type === 'calendar') return isBuiltInCalendar(widget.type, widget.url) ? calendarMarkup() : calendarFeedContent(widget)
   if (widget.type === 'text') return `<p class="text-widget-content">${escapeHtml(widget.url || 'Deinen Text hier eintragen')}</p>`
@@ -469,6 +491,7 @@ export function renderWidgetContent(widget: DashboardWidget) {
   if (widget.type === 'waste') return wasteContent(widget)
   if (widget.type === 'media') return mediaContent(widget)
   if (widget.type === 'camera') return cameraContent(widget)
+  if (widget.type === 'qr') return qrContent(widget)
   return frameContent(widget)
 }
 
@@ -566,6 +589,7 @@ function editorMarkup(widget: DashboardWidget, index: number) {
             <option value="waste" ${widget.type === 'waste' ? 'selected' : ''}>Müllkalender</option>
             <option value="media" ${widget.type === 'media' ? 'selected' : ''}>Radio (Live-Stream)</option>
             <option value="camera" ${widget.type === 'camera' ? 'selected' : ''}>Kamera (Live / Snapshot)</option>
+            <option value="qr" ${widget.type === 'qr' ? 'selected' : ''}>QR-Code (WLAN / Webseite)</option>
           </select></label>
           <label for="${controlId}-title">Titel<input id="${controlId}-title" data-field="title" value="${escapeHtml(widget.title)}" maxlength="30" /></label>
           <label class="content-field checkbox-label" for="${controlId}-show-title"><input type="checkbox" id="${controlId}-show-title" data-field="showTitle" ${widget.showTitle ? 'checked' : ''} /><span>Titel in der Anzeige anzeigen</span></label>
@@ -648,6 +672,30 @@ function editorMarkup(widget: DashboardWidget, index: number) {
             </div>
             <p class="editor-field-hint">💡 Unterstützt RTSP-Streams (z.B. rtsp://192.168.1.50:554/live oder /av_stream/ch0), IP-Kameras, Webcams, MJPEG-Streams und öffentliche Webcams.</p>
           </div>
+          ` : widget.type === 'qr' ? `
+          <div class="qr-form-group" data-qr-fields data-qr-kind="${widget.qrKind === 'url' ? 'url' : 'wifi'}">
+            <label for="${controlId}-qr-kind">QR-Code erstellen für
+              <select id="${controlId}-qr-kind" data-field="qrKind">
+                <option value="wifi" ${widget.qrKind !== 'url' ? 'selected' : ''}>WLAN</option>
+                <option value="url" ${widget.qrKind === 'url' ? 'selected' : ''}>Webseite</option>
+              </select>
+            </label>
+            <div class="qr-wifi-fields">
+              <label for="${controlId}-qr-ssid">WLAN-Name (SSID)<input id="${controlId}-qr-ssid" data-field="qrSsid" value="${escapeHtml(widget.qrSsid || '')}" maxlength="128" placeholder="z. B. MeinWLAN" /></label>
+              <label for="${controlId}-qr-password">WLAN-Passwort<input id="${controlId}-qr-password" data-field="qrPassword" type="password" value="${escapeHtml(widget.qrPassword || '')}" maxlength="128" placeholder="WLAN-Passwort" /></label>
+              <label for="${controlId}-qr-encryption">Verschlüsselung
+                <select id="${controlId}-qr-encryption" data-field="qrEncryption">
+                  <option value="WPA" ${widget.qrEncryption !== 'WEP' && widget.qrEncryption !== 'nopass' ? 'selected' : ''}>WPA / WPA2 / WPA3</option>
+                  <option value="WEP" ${widget.qrEncryption === 'WEP' ? 'selected' : ''}>WEP</option>
+                  <option value="nopass" ${widget.qrEncryption === 'nopass' ? 'selected' : ''}>Offenes WLAN (kein Passwort)</option>
+                </select>
+              </label>
+            </div>
+            <div class="qr-url-fields">
+              <label class="content-field" for="${controlId}-url"><span>Webadresse</span><input type="url" id="${controlId}-url" data-field="url" value="${escapeHtml(widget.url)}" placeholder="https://example.com" /></label>
+            </div>
+          </div>
+          <p class="editor-field-hint">💡 Der QR-Code wird direkt auf dem Display erzeugt. WLAN-Zugangsdaten werden nicht an einen externen Dienst übertragen.</p>
           ` : `
           ${(widget.type === 'image' || widget.type === 'slideshow') ? `<div class="content-field upload-field"><label class="upload-zone" for="${controlId}-upload"><input type="file" id="${controlId}-upload" data-action="upload" accept="${widget.type === 'slideshow' ? 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml,video/mp4,video/x-m4v,video/webm,video/ogg,.m4v,.ogv,.ogg' : 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml'}" ${widget.type === 'slideshow' ? 'multiple' : ''} style="display: none;" /><span class="upload-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>${widget.type === 'slideshow' ? 'Bilder &amp; Videos hochladen (max. 10 Medien; Bilder 5 MB, Videos 100 MB)' : 'Bild hochladen (max. 5 MB)'}</span></span><span class="upload-status" data-upload-status aria-live="polite"></span></label></div>` : ''}
           ${widget.type === 'image' && widget.url ? `
@@ -705,6 +753,23 @@ export function renderWidget(widget: DashboardWidget, editable = false, index = 
 
 export function widgetTypeLabel(type: WidgetType) {
   return typeLabels[type]
+}
+
+export function bindQrWidgets(root: ParentNode = document) {
+  root.querySelectorAll<HTMLCanvasElement>('[data-qr-code]').forEach((canvas) => {
+    if (canvas.dataset.qrBound === 'true') return
+    canvas.dataset.qrBound = 'true'
+    const payload = canvas.dataset.qrCode || ''
+    if (!payload) return
+    void QRCode.toCanvas(canvas, payload, {
+      errorCorrectionLevel: 'M',
+      margin: 1,
+      width: 512,
+      color: { dark: '#f4f6ef', light: '#121411' },
+    }).catch(() => {
+      canvas.replaceWith(Object.assign(document.createElement('span'), { className: 'qr-error-state', textContent: 'QR-Code konnte nicht erstellt werden.' }))
+    })
+  })
 }
 
 export function bindWidgetFrames(root: ParentNode = document) {

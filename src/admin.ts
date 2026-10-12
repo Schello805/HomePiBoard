@@ -3,7 +3,7 @@ import { bindRadioWidgets } from './display.ts'
 import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type WidgetType } from './settings.ts'
 import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
 import { parseCalendarFeed, type CalendarFeedEvent } from './calendar-feed.ts'
-import { bindCameraWidgets, bindWidgetFrames, isBuiltInCalendar, normalizeCameraUrl, parseSlideshowUrls, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
+import { bindCameraWidgets, bindQrWidgets, bindWidgetFrames, isBuiltInCalendar, normalizeCameraUrl, parseSlideshowUrls, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
 
 const pinKey = 'homepiboard-admin-pin'
 
@@ -247,6 +247,7 @@ export async function renderAdminPage(app: HTMLElement) {
           <button type="button" data-add-type="waste">🗑️ Müll</button>
           <button type="button" data-add-type="media">📻 Radio</button>
           <button type="button" data-add-type="camera">📷 Kamera</button>
+          <button type="button" data-add-type="qr">▦ QR-Code</button>
         </div>
       </div>
       <p class="layout-warning" id="layout-warning" role="alert"></p>
@@ -385,6 +386,17 @@ export async function renderAdminPage(app: HTMLElement) {
     const cameraRefreshSeconds = type === 'camera' && cameraRefreshInput ? Math.max(1, Math.min(3600, Number(cameraRefreshInput.value) || 5)) : undefined
     const cameraFit = type === 'camera' && cameraFitInput ? (cameraFitInput.value as 'cover' | 'contain') : undefined
 
+    const qrKindInput = editor.querySelector<HTMLSelectElement>('[data-field="qrKind"]')
+    const qrSsidInput = editor.querySelector<HTMLInputElement>('[data-field="qrSsid"]')
+    const qrPasswordInput = editor.querySelector<HTMLInputElement>('[data-field="qrPassword"]')
+    const qrEncryptionInput = editor.querySelector<HTMLSelectElement>('[data-field="qrEncryption"]')
+    const qrKind = type === 'qr' && qrKindInput ? (qrKindInput.value === 'url' ? 'url' : 'wifi') : undefined
+    const qrSsid = type === 'qr' && qrSsidInput ? qrSsidInput.value.trim() : undefined
+    const qrPassword = type === 'qr' && qrPasswordInput ? qrPasswordInput.value : undefined
+    const qrEncryption = type === 'qr' && qrEncryptionInput
+      ? (qrEncryptionInput.value === 'WEP' ? 'WEP' : (qrEncryptionInput.value === 'nopass' ? 'nopass' : 'WPA'))
+      : undefined
+
     const titleVal = editor.querySelector<HTMLInputElement>('[data-field="title"]')?.value
     const colVal = editor.querySelector<HTMLInputElement>('[data-field="columns"]')?.value
     const rowVal = editor.querySelector<HTMLInputElement>('[data-field="rows"]')?.value
@@ -410,6 +422,10 @@ export async function renderAdminPage(app: HTMLElement) {
       ...(cameraRefreshSeconds !== undefined ? { cameraRefreshSeconds } : {}),
       ...(cameraType !== undefined ? { cameraType } : {}),
       ...(cameraFit !== undefined ? { cameraFit } : {}),
+      ...(qrKind !== undefined ? { qrKind } : {}),
+      ...(qrSsid !== undefined ? { qrSsid } : {}),
+      ...(qrPassword !== undefined ? { qrPassword } : {}),
+      ...(qrEncryption !== undefined ? { qrEncryption } : {}),
     }
   }
 
@@ -543,6 +559,7 @@ export async function renderAdminPage(app: HTMLElement) {
       preview.classList.toggle('has-title', Boolean(widget.showTitle))
       previewContent.innerHTML = `${widget.showTitle ? `<header class="kiosk-widget-header preview-header"><h2 class="kiosk-widget-title">${escapeHtml(widget.title)}</h2></header>` : ''}<div class="iframe-placeholder">${renderWidgetContent(widget)}</div>`
       bindWidgetFrames(previewContent)
+      bindQrWidgets(previewContent)
       bindRadioWidgets(previewContent, { allowAutoplay: false })
       bindCameraWidgets(previewContent)
     }
@@ -556,6 +573,7 @@ export async function renderAdminPage(app: HTMLElement) {
     const editor = editorList.lastElementChild as HTMLElement
     bindEditor(editor)
     bindWidgetFrames(editor)
+    bindQrWidgets(editor)
     bindRadioWidgets(editor, { allowAutoplay: false })
     bindCameraWidgets(editor)
     updateEditorIndexes()
@@ -576,6 +594,7 @@ export async function renderAdminPage(app: HTMLElement) {
     const copy = editor.nextElementSibling as HTMLElement
     bindEditor(copy)
     bindWidgetFrames(copy)
+    bindQrWidgets(copy)
     bindRadioWidgets(copy, { allowAutoplay: false })
     bindCameraWidgets(copy)
     updateEditorIndexes()
@@ -1121,6 +1140,7 @@ export async function renderAdminPage(app: HTMLElement) {
       const newEditor = editorList.children[index] as HTMLElement
       bindEditor(newEditor)
       bindWidgetFrames(newEditor)
+      bindQrWidgets(newEditor)
       bindRadioWidgets(newEditor, { allowAutoplay: false })
       bindCameraWidgets(newEditor)
       markDirty()
@@ -1129,6 +1149,13 @@ export async function renderAdminPage(app: HTMLElement) {
         newDialog.showModal()
         newEditor.querySelector<HTMLButtonElement>('[data-action="toggle"]')?.classList.add('is-active')
       }
+    })
+    const qrKindInput = editor.querySelector<HTMLSelectElement>('[data-field="qrKind"]')
+    qrKindInput?.addEventListener('change', () => {
+      const qrFields = editor.querySelector<HTMLElement>('[data-qr-fields]')
+      if (qrFields) qrFields.dataset.qrKind = qrKindInput.value === 'url' ? 'url' : 'wifi'
+      refreshEditor(editor)
+      markDirty()
     })
     editor.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[data-field]').forEach((control) => {
       control.addEventListener('change', () => {
@@ -1350,6 +1377,7 @@ export async function renderAdminPage(app: HTMLElement) {
     })
   })
   bindWidgetFrames(editorList)
+  bindQrWidgets(editorList)
   bindRadioWidgets(editorList, { allowAutoplay: false })
   bindCameraWidgets(editorList)
   updateEditorIndexes()

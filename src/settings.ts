@@ -1,4 +1,4 @@
-export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow' | 'waste' | 'media' | 'camera'
+export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow' | 'waste' | 'media' | 'camera' | 'qr'
 
 export type HeaderItemType =
   | 'clock'
@@ -69,6 +69,10 @@ export type DashboardWidget = {
   cameraRefreshSeconds?: number
   cameraFit?: 'cover' | 'contain'
   cameraType?: 'snapshot' | 'mjpeg' | 'stream' | 'rtsp'
+  qrKind?: 'wifi' | 'url'
+  qrSsid?: string
+  qrPassword?: string
+  qrEncryption?: 'WPA' | 'WEP' | 'nopass'
 }
 
 export type DisplaySettings = {
@@ -137,7 +141,7 @@ export const defaultSettings: DisplaySettings = {
   widgets: [],
 }
 
-const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image', 'slideshow', 'waste', 'media', 'camera'])
+const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image', 'slideshow', 'waste', 'media', 'camera', 'qr'])
 
 export const widgetConstraints: Record<WidgetType, { minColumns: number; minRows: number; defaultColumns: number; defaultRows: number }> = {
   web: { minColumns: 4, minRows: 2, defaultColumns: 12, defaultRows: 3 },
@@ -148,6 +152,7 @@ export const widgetConstraints: Record<WidgetType, { minColumns: number; minRows
   waste: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
   media: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
   camera: { minColumns: 4, minRows: 3, defaultColumns: 8, defaultRows: 4 },
+  qr: { minColumns: 3, minRows: 3, defaultColumns: 6, defaultRows: 5 },
 }
 
 const widgetTitles: Record<WidgetType, string> = {
@@ -159,6 +164,7 @@ const widgetTitles: Record<WidgetType, string> = {
   waste: 'Müllkalender',
   media: 'Radio',
   camera: 'Kamera',
+  qr: 'QR-Code',
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -199,6 +205,12 @@ export function createWidget(type: WidgetType, index: number, id = `widget-${ind
     widget.cameraRefreshSeconds = 5
     widget.cameraType = 'snapshot'
     widget.cameraFit = 'cover'
+  } else if (type === 'qr') {
+    widget.title = 'WLAN-Zugang'
+    widget.qrKind = 'wifi'
+    widget.qrSsid = ''
+    widget.qrPassword = ''
+    widget.qrEncryption = 'WPA'
   }
   return widget
 }
@@ -358,6 +370,12 @@ export function normalizeSettings(value: unknown): DisplaySettings {
           cameraType,
         }
       })() : {}),
+      ...(type === 'qr' ? {
+        qrKind: widget.qrKind === 'url' ? 'url' : 'wifi',
+        qrSsid: text(widget.qrSsid).slice(0, 128),
+        qrPassword: text(widget.qrPassword).slice(0, 128),
+        qrEncryption: widget.qrEncryption === 'WEP' ? 'WEP' : (widget.qrEncryption === 'nopass' ? 'nopass' : 'WPA'),
+      } : {}),
     }
   })
 
