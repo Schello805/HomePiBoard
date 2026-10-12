@@ -274,11 +274,16 @@
           const testEndpoint = targetUrl + 'api/system'
           const res = await fetch(testEndpoint, {
             method: 'GET',
+            // The splash screen is loaded via file:// during server restarts.
+            // A normal fetch from that opaque origin is blocked by CORS even
+            // though navigating to localhost works. no-cors still rejects a
+            // failed network connection but lets us detect that the server is up.
+            mode: 'no-cors',
             cache: 'no-store',
             headers: { 'Accept': 'application/json' }
           })
 
-          if (res.ok || res.status === 200 || res.status === 404) {
+          if (res.type === 'opaque' || res.ok || res.status === 200 || res.status === 404) {
             redirected = true
             statusMsg.textContent = '✓ Bereit!'
             statusMsg.style.color = '#c9f269'
