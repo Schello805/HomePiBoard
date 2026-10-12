@@ -277,7 +277,8 @@ export function renderWasteEvents(events: CalendarFeedEvent[], now = new Date())
     return '<div class="calendar-feed-empty" role="status">Keine anstehenden Müllabfuhren gefunden.</div>'
   }
 
-  const lines = upcoming.map((e) => `${e.summary.replace(/[:|]/g, ' - ')}: ${e.start.slice(0, 10)}`).join('\n')
+  const germanDate = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const lines = upcoming.map((e) => `${e.summary.replace(/[:|]/g, ' - ')}: ${germanDate.format(new Date(e.start))}`).join('\n')
   const items = parseWasteItems(lines, now)
   return renderWasteItemsHtml(items)
 }
