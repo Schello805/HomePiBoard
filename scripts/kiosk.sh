@@ -80,6 +80,10 @@ while true; do
   fi
 
   echo "[$(date --iso-8601=seconds)] Starte ${CHROMIUM_BIN} mit ${LAUNCH_URL}" >> "$KIOSK_LOG_FILE"
+  # Keep this deliberately close to the verified manual launch command.  Several
+  # legacy Chromium flags (notably --fast and --fast-start) are no longer useful
+  # on current Raspberry Pi OS builds and can make the browser exit at startup.
+  set +e
   "$CHROMIUM_BIN" \
     --kiosk \
     --disable-gpu \
@@ -87,20 +91,12 @@ while true; do
     --enable-logging=stderr \
     --noerrdialogs \
     --disable-infobars \
-    --disable-translate \
     --no-first-run \
-    --fast \
-    --fast-start \
-    --disable-features=Translate,TranslateUI,PreloadMediaEngagementData,MediaEngagementBypassAutoplayPolicies \
     --touch-events=enabled \
-    --overscroll-history-navigation=0 \
-    --check-for-update-interval=31536000 \
     --autoplay-policy=no-user-gesture-required \
-    --disable-gesture-requirement-for-media-playback \
-    --alsa-output-device=default \
-    --allow-running-insecure-content \
-    "$LAUNCH_URL" >> "$KIOSK_LOG_FILE" 2>&1 || true
+    "$LAUNCH_URL" >> "$KIOSK_LOG_FILE" 2>&1
   CHROMIUM_STATUS=$?
+  set -e
   echo "[$(date --iso-8601=seconds)] Chromium wurde beendet (Status ${CHROMIUM_STATUS}). Neustart in 2 Sekunden." >> "$KIOSK_LOG_FILE"
   sleep 2
 done
