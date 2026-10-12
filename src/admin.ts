@@ -522,7 +522,7 @@ export async function renderAdminPage(app: HTMLElement) {
       if (widget.type === 'text') {
         content.placeholder = 'Text eingeben'
       } else if (widget.type === 'slideshow') {
-        content.placeholder = 'https://example.com/bild1.jpg\nhttps://example.com/bild2.jpg'
+        content.placeholder = 'https://example.com/bild.jpg\nhttps://example.com/video.mp4'
       } else if (widget.type === 'waste') {
         content.placeholder = 'https://.../abfall.ics oder webcal://...'
       } else if (widget.type === 'calendar') {
@@ -534,7 +534,7 @@ export async function renderAdminPage(app: HTMLElement) {
     }
     const contentLabel = editor.querySelector<HTMLElement>('[data-content-label]')
     if (contentLabel) {
-      contentLabel.textContent = widget.type === 'slideshow' ? 'Bild-URLs (eine pro Zeile)' : 'Inhalt / URL'
+      contentLabel.textContent = widget.type === 'slideshow' ? 'Bild- und Video-URLs (eine pro Zeile)' : 'Inhalt / URL'
     }
     if (refreshPreview) {
       const preview = editor.querySelector<HTMLElement>('[data-widget-preview]')!
@@ -711,7 +711,7 @@ export async function renderAdminPage(app: HTMLElement) {
       if (!crudSection || !urlInput) return
       const urls = parseSlideshowUrls(urlInput.value).slice(0, 10)
       const countBadge = crudSection.querySelector<HTMLElement>('[data-slideshow-count]')
-      if (countBadge) countBadge.textContent = `Bilder (${urls.length} / 10)`
+      if (countBadge) countBadge.textContent = `Medien (${urls.length} / 10)`
       const list = crudSection.querySelector<HTMLElement>('[data-slideshow-list]')
       if (list) {
         list.innerHTML = renderSlideshowCrudList(urls)
@@ -765,7 +765,7 @@ export async function renderAdminPage(app: HTMLElement) {
         if (!val) return
         const urls = parseSlideshowUrls(urlInput.value)
         if (urls.length >= 10) {
-          if (uploadStatus) uploadStatus.textContent = 'Maximal 10 Bilder pro Diashow erreicht.'
+          if (uploadStatus) uploadStatus.textContent = 'Maximal 10 Medien pro Diashow erreicht.'
           return
         }
         urls.push(val)
@@ -813,7 +813,7 @@ export async function renderAdminPage(app: HTMLElement) {
       const existingUrls = currentType === 'slideshow' && urlInput ? parseSlideshowUrls(urlInput.value) : []
 
       if (currentType === 'slideshow' && existingUrls.length >= 10) {
-        if (uploadStatus) uploadStatus.textContent = 'Maximal 10 Bilder pro Diashow erreicht.'
+        if (uploadStatus) uploadStatus.textContent = 'Maximal 10 Medien pro Diashow erreicht.'
         fileInput.value = ''
         return
       }
@@ -821,13 +821,15 @@ export async function renderAdminPage(app: HTMLElement) {
       let addedCount = 0
       for (let i = 0; i < files.length; i++) {
         if (currentType === 'slideshow' && existingUrls.length >= 10) {
-          if (uploadStatus) uploadStatus.textContent = `Maximal 10 Bilder erreicht (${addedCount} hinzugefügt).`
+          if (uploadStatus) uploadStatus.textContent = `Maximal 10 Medien erreicht (${addedCount} hinzugefügt).`
           break
         }
 
         const file = files[i]!
-        if (file.size > 5 * 1024 * 1024) {
-          if (uploadStatus) uploadStatus.textContent = `„${file.name}“ ist größer als 5 MB.`
+        const isVideoFile = file.type.startsWith('video/') || /\.(?:mp4|m4v|webm|ogv|ogg)$/i.test(file.name)
+        const maxFileSize = isVideoFile ? 100 * 1024 * 1024 : 5 * 1024 * 1024
+        if (file.size > maxFileSize) {
+          if (uploadStatus) uploadStatus.textContent = `„${file.name}“ ist größer als ${isVideoFile ? '100' : '5'} MB.`
           continue
         }
         if (uploadStatus) {

@@ -369,6 +369,10 @@ export function parseSlideshowUrls(content: string): string[] {
     .filter((line) => line.length > 0)
 }
 
+function isSlideshowVideo(url: string) {
+  return /\.(?:mp4|webm|ogv|ogg|m4v)(?:[?#]|$)/i.test(url)
+}
+
 function frameContent(widget: DashboardWidget) {
   const url = safeResourceUrl(widget.url, widget.type)
   if (url === null) return '<span class="placeholder-icon">!</span><strong>URL nicht erlaubt</strong><span>Bitte HTTP oder HTTPS verwenden.</span>'
@@ -388,16 +392,19 @@ function slideshowContent(widget: DashboardWidget) {
     .filter((url): url is string => Boolean(url))
 
   if (!validUrls.length) {
-    return '<span class="placeholder-icon">▨</span><strong>Diashow</strong><span>Bild-URLs eintragen (eine pro Zeile)</span>'
+    return '<span class="placeholder-icon">▨</span><strong>Diashow</strong><span>Bild- oder Video-URLs eintragen (eine pro Zeile)</span>'
   }
 
   const interval = widget.intervalSeconds || 8
-  const slidesHtml = validUrls.map((url, i) =>
-    `<div class="slideshow-slide ${i === 0 ? 'is-active' : ''}" style="background-image: url('${escapeHtml(url)}')"><img class="visually-hidden" src="${escapeHtml(url)}" alt="${escapeHtml(widget.title)} (Bild ${i + 1})" /></div>`
-  ).join('')
+  const slidesHtml = validUrls.map((url, i) => {
+    const isVideo = isSlideshowVideo(url)
+    return isVideo
+      ? `<div class="slideshow-slide slideshow-video-slide ${i === 0 ? 'is-active' : ''}" data-slide-type="video"><video src="${escapeHtml(url)}" aria-label="${escapeHtml(widget.title)} (Video ${i + 1})" muted playsinline preload="metadata"></video></div>`
+      : `<div class="slideshow-slide ${i === 0 ? 'is-active' : ''}" style="background-image: url('${escapeHtml(url)}')" data-slide-type="image"><img class="visually-hidden" src="${escapeHtml(url)}" alt="${escapeHtml(widget.title)} (Bild ${i + 1})" /></div>`
+  }).join('')
 
   const indicatorsHtml = validUrls.length > 1
-    ? `<div class="slideshow-indicators">${validUrls.map((_, i) => `<span class="slideshow-dot ${i === 0 ? 'is-active' : ''}"></span>`).join('')}</div>`
+    ? `<div class="slideshow-indicators">${validUrls.map((url, i) => `<span class="slideshow-dot ${i === 0 ? 'is-active' : ''}" aria-label="${isSlideshowVideo(url) ? 'Video' : 'Bild'} ${i + 1}"></span>`).join('')}</div>`
     : ''
 
   return `<div class="slideshow-container" data-slideshow-widget data-slideshow-interval="${interval}">${slidesHtml}${indicatorsHtml}</div>`
@@ -467,7 +474,7 @@ export function renderWidgetContent(widget: DashboardWidget) {
 
 export function renderSlideshowCrudList(urls: string[]): string {
   if (urls.length === 0) {
-    return '<div class="slideshow-empty-state">Noch keine Bilder hinzugefügt. Lade oben Bilder hoch (max. 10) oder füge Bild-URLs ein.</div>'
+    return '<div class="slideshow-empty-state">Noch keine Medien hinzugefügt. Lade oben Bilder oder Videos hoch (max. 10) oder füge URLs ein.</div>'
   }
   return urls.map((url, i) => {
     let displayName = url
@@ -477,9 +484,10 @@ export function renderSlideshowCrudList(urls: string[]): string {
     } catch {
       displayName = url.slice(0, 30)
     }
+    const isVideo = isSlideshowVideo(url)
     return `<div class="slideshow-image-item" data-index="${i}">
       <span class="image-order">#${i + 1}</span>
-      <img class="image-thumb" src="${escapeHtml(url)}" alt="Bild ${i + 1}" loading="lazy" onerror="this.style.opacity='0.3'" />
+      ${isVideo ? '<span class="image-thumb slideshow-video-thumb" aria-label="Video">▶</span>' : `<img class="image-thumb" src="${escapeHtml(url)}" alt="Bild ${i + 1}" loading="lazy" onerror="this.style.opacity='0.3'" />`}
       <span class="image-name" title="${escapeHtml(url)}">${escapeHtml(displayName)}</span>
       <div class="image-item-actions">
         <button type="button" class="icon-button" data-action="slide-up" data-index="${i}" title="Nach oben" ${i === 0 ? 'disabled' : ''}>↑</button>
@@ -496,9 +504,9 @@ function editorMarkup(widget: DashboardWidget, index: number) {
   const urlPlaceholder = widget.type === 'text'
     ? 'Text eingeben'
     : widget.type === 'slideshow'
-      ? 'https://example.com/bild1.jpg\nhttps://example.com/bild2.jpg'
+      ? 'https://example.com/bild.jpg\nhttps://example.com/video.mp4'
       : 'https://example.com'
-  const urlLabel = widget.type === 'slideshow' ? 'Bild-URLs (eine pro Zeile)' : 'Inhalt / URL'
+  const urlLabel = widget.type === 'slideshow' ? 'Bild- und Video-URLs (eine pro Zeile)' : 'Inhalt / URL'
 
   const extraSettingField = widget.type === 'web'
     ? `<label class="refresh-field" for="${controlId}-refresh">Aktualisierung<span>in Minuten (0 = aus)</span><input id="${controlId}-refresh" data-field="refreshIntervalMinutes" type="number" min="0" max="1440" value="${widget.refreshIntervalMinutes || 0}" /></label>`
@@ -641,7 +649,7 @@ function editorMarkup(widget: DashboardWidget, index: number) {
             <p class="editor-field-hint">💡 Unterstützt RTSP-Streams (z.B. rtsp://192.168.1.50:554/live oder /av_stream/ch0), IP-Kameras, Webcams, MJPEG-Streams und öffentliche Webcams.</p>
           </div>
           ` : `
-          ${(widget.type === 'image' || widget.type === 'slideshow') ? `<div class="content-field upload-field"><label class="upload-zone" for="${controlId}-upload"><input type="file" id="${controlId}-upload" data-action="upload" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" ${widget.type === 'slideshow' ? 'multiple' : ''} style="display: none;" /><span class="upload-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>${widget.type === 'slideshow' ? 'Bilder hochladen (max. 10 Bilder, je max. 5 MB)' : 'Bild hochladen (max. 5 MB)'}</span></span><span class="upload-status" data-upload-status aria-live="polite"></span></label></div>` : ''}
+          ${(widget.type === 'image' || widget.type === 'slideshow') ? `<div class="content-field upload-field"><label class="upload-zone" for="${controlId}-upload"><input type="file" id="${controlId}-upload" data-action="upload" accept="${widget.type === 'slideshow' ? 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml,video/mp4,video/x-m4v,video/webm,video/ogg,.m4v,.ogv,.ogg' : 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml'}" ${widget.type === 'slideshow' ? 'multiple' : ''} style="display: none;" /><span class="upload-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>${widget.type === 'slideshow' ? 'Bilder &amp; Videos hochladen (max. 10 Medien; Bilder 5 MB, Videos 100 MB)' : 'Bild hochladen (max. 5 MB)'}</span></span><span class="upload-status" data-upload-status aria-live="polite"></span></label></div>` : ''}
           ${widget.type === 'image' && widget.url ? `
           <div class="single-image-item" data-single-image-item>
             <img class="single-image-thumb" src="${escapeHtml(widget.url)}" alt="Aktuelles Bild" onerror="this.style.opacity='0.3'" />
@@ -652,13 +660,13 @@ function editorMarkup(widget: DashboardWidget, index: number) {
           ${widget.type === 'slideshow' ? `
           <div class="slideshow-crud-section" data-slideshow-crud>
             <div class="slideshow-crud-header">
-              <span class="slideshow-count-badge" data-slideshow-count>Bilder (${slideshowUrls.length} / 10)</span>
+              <span class="slideshow-count-badge" data-slideshow-count>Medien (${slideshowUrls.length} / 10)</span>
             </div>
             <div class="slideshow-crud-list" data-slideshow-list>
               ${renderSlideshowCrudList(slideshowUrls)}
             </div>
             <div class="slideshow-add-url-row">
-              <input type="url" class="slideshow-url-input" data-slideshow-url-input placeholder="https://example.com/bild.jpg" />
+              <input type="url" class="slideshow-url-input" data-slideshow-url-input placeholder="Bild- oder Video-URL" />
               <button type="button" class="slideshow-add-url-btn" data-action="add-slideshow-url">+ URL hinzufügen</button>
             </div>
           </div>
@@ -740,18 +748,39 @@ export function bindWidgetFrames(root: ParentNode = document) {
     container.dataset.slideshowBound = 'true'
     const slides = container.querySelectorAll<HTMLElement>('.slideshow-slide')
     const dots = container.querySelectorAll<HTMLElement>('.slideshow-dot')
-    if (slides.length <= 1) return
-
     const intervalSeconds = Math.max(2, Number(container.dataset.slideshowInterval) || 8)
     let currentIndex = 0
-
-    window.setInterval(() => {
+    let timer = 0
+    const activate = (index: number) => {
+      window.clearTimeout(timer)
+      const previousVideo = slides[currentIndex]?.querySelector('video')
+      if (previousVideo) {
+        previousVideo.onended = null
+        previousVideo.onerror = null
+        previousVideo.pause()
+        previousVideo.currentTime = 0
+      }
       slides[currentIndex]?.classList.remove('is-active')
       dots[currentIndex]?.classList.remove('is-active')
-      currentIndex = (currentIndex + 1) % slides.length
+      currentIndex = index
       slides[currentIndex]?.classList.add('is-active')
       dots[currentIndex]?.classList.add('is-active')
-    }, intervalSeconds * 1000)
+      const video = slides[currentIndex]?.querySelector('video')
+      if (video) {
+        const videoIndex = currentIndex
+        video.onended = () => activate((videoIndex + 1) % slides.length)
+        video.onerror = () => activate((videoIndex + 1) % slides.length)
+        void video.play().catch(() => {
+          if (currentIndex !== videoIndex) return
+          window.clearTimeout(timer)
+          timer = window.setTimeout(() => activate((videoIndex + 1) % slides.length), intervalSeconds * 1000)
+        })
+      } else if (slides.length > 1) {
+        window.clearTimeout(timer)
+        timer = window.setTimeout(() => activate((currentIndex + 1) % slides.length), intervalSeconds * 1000)
+      }
+    }
+    activate(0)
   })
 
   root.querySelectorAll<HTMLElement>('[data-calendar-feed]').forEach((container) => {

@@ -15,7 +15,7 @@ Eine schlanke Digital-Signage-Anzeige für zu Hause. HomePiBoard ist für einen 
 - Raspberry Pi Live-Telemetrie (CPU-Temperatur, RAM, CPU-Load, lokale IP, Uptime)
 - Einstellbare Zeitzone, Sprache/Datumsformat und Sekundenanzeige
 - Wetterdaten über Open-Meteo
-- Direkter Bilder-Upload (PNG, JPG, WebP, GIF, SVG bis 5 MB)
+- Diashows mit Bildern und Videos (MP4, WebM, Ogg; Bilder bis 5 MB, Videos bis 100 MB) und direktem Upload
 - zentrale Konfiguration in `data/settings.json`
 - lokaler Browser-Cache als Offline-Rückfall
 - PIN-Schutz für Änderungen
@@ -84,7 +84,7 @@ Das Repository enthält eine `captain-definition` und ein mehrstufiges Produktio
    Label: homepiboard-data
    ```
 
-   In diesem Verzeichnis liegen `settings.json`, `auth.json`, `presets.json` und alle hochgeladenen Bilder. Ohne dieses Mapping gehen diese Daten beim nächsten Deployment verloren.
+   In diesem Verzeichnis liegen `settings.json`, `auth.json`, `presets.json` und alle hochgeladenen Bilder und Videos. Ohne dieses Mapping gehen diese Daten beim nächsten Deployment verloren.
 5. Verbinde unter **Deployment** das GitHub-Repository oder lade den Quellcode als Tarball hoch und starte **Deploy**. Der Container lauscht intern auf Port `80`; in CapRover ist keine zusätzliche Port-Konfiguration nötig.
 
 Alternativ lässt sich das Image lokal testen:
@@ -242,7 +242,7 @@ sudo apt update && sudo apt upgrade -y
 - `POST /api/auth` – Admin-PIN prüfen
 - `PUT /api/settings` – Konfiguration mit Header `x-admin-pin` speichern
 - `PUT /api/admin-pin` – Admin-PIN mit aktueller PIN im Header `x-admin-pin` ändern
-- `POST /api/upload` – Bilddatei hochladen (PNG, JPG, WebP, GIF, SVG bis 5 MB, erfordert `x-admin-pin`)
+- `POST /api/upload` – Bilddatei (PNG, JPG, WebP, GIF, SVG bis 5 MB) oder Video (MP4, WebM, Ogg bis 100 MB) hochladen; erfordert `x-admin-pin`
 - `GET /uploads/:file` – hochgeladene Mediendateien abrufen
 - `POST /api/notify` – Live-Push-Benachrichtigung mit akustischem Gong senden (`{"title": "...", "message": "...", "sound": "doorbell"|"chime"|"alert", "duration": 10, "image": "..."}`)
 - `GET /api/notify/stream` – Server-Sent Events (SSE) Stream für Push-Benachrichtigungen

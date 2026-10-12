@@ -1,9 +1,10 @@
 import { execFile as execFileCallback, spawn as spawnProcess } from 'node:child_process'
+import { createReadStream } from 'node:fs'
 import http, { createServer } from 'node:http'
 import https from 'node:https'
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import { lookup as dnsLookup } from 'node:dns/promises'
-import { mkdir, open, readFile, realpath, rename, unlink } from 'node:fs/promises'
+import { mkdir, open, readFile, realpath, rename, stat, unlink } from 'node:fs/promises'
 import { isIP } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -27,6 +28,11 @@ const mimeTypes = new Map([
   ['.gif', 'image/gif'],
   ['.svg', 'image/svg+xml'],
   ['.webp', 'image/webp'],
+  ['.mp4', 'video/mp4'],
+  ['.m4v', 'video/mp4'],
+  ['.webm', 'video/webm'],
+  ['.ogv', 'video/ogg'],
+  ['.ogg', 'video/ogg'],
 ])
 
 class RequestBodyError extends Error {
@@ -1390,6 +1396,51 @@ export function createHomePiBoardServer({
           return
         }
         try {
+          if (mime.startsWith('video/')) {
+            const fileStat = await stat(filePath)
+            if (fileStat.size === 0) {
+              response.writeHead(200, { 'content-type': mime, 'content-length': 0, 'accept-ranges': 'bytes' })
+              response.end()
+              return
+            }
+            const range = request.headers.range
+            const rangeMatch = typeof range === 'string' ? /^bytes=(\d*)-(\d*)$/.exec(range) : null
+            if (range && !rangeMatch) {
+              response.writeHead(416, { 'content-range': `bytes */${fileStat.size}` })
+              response.end()
+              return
+            }
+
+            let start = 0
+            let end = fileStat.size - 1
+            if (rangeMatch) {
+              if (rangeMatch[1]) {
+                start = Number(rangeMatch[1])
+                end = rangeMatch[2] ? Number(rangeMatch[2]) : end
+              } else {
+                const suffixLength = Number(rangeMatch[2])
+                start = Math.max(0, fileStat.size - suffixLength)
+              }
+              if (start >= fileStat.size || end < start) {
+                response.writeHead(416, { 'content-range': `bytes */${fileStat.size}` })
+                response.end()
+                return
+              }
+              end = Math.min(end, fileStat.size - 1)
+            }
+
+            response.writeHead(rangeMatch ? 206 : 200, {
+              'content-type': mime,
+              'accept-ranges': 'bytes',
+              'content-length': end - start + 1,
+              'cache-control': 'public, max-age=31536000, immutable',
+              ...(rangeMatch ? { 'content-range': `bytes ${start}-${end}/${fileStat.size}` } : {}),
+            })
+            const videoStream = createReadStream(filePath, { start, end })
+            videoStream.on('error', (error) => response.destroy(error))
+            videoStream.pipe(response)
+            return
+          }
           const content = await readFile(filePath)
           response.writeHead(200, {
             'content-type': mime,
@@ -1422,19 +1473,22 @@ export function createHomePiBoardServer({
             return { status: 400, error: 'Keine Datei übertragen.' }
           }
 
-          const maxSizeBytes = 5 * 1024 * 1024
-          if (file.size > maxSizeBytes) {
-            return { status: 413, error: 'Die Datei ist größer als 5 MB.' }
-          }
-
           const name = file.name || 'image.png'
           const rawExt = path.extname(name).toLowerCase()
-          const allowedExts = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'])
-          const ext = allowedExts.has(rawExt) ? rawExt : '.png'
+          const imageExts = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'])
+          const videoExts = new Set(['.mp4', '.m4v', '.webm', '.ogv', '.ogg'])
+          if (!imageExts.has(rawExt) && !videoExts.has(rawExt)) {
+            return { status: 415, error: 'Dateityp nicht unterstützt.' }
+          }
+          const ext = rawExt
+          const maxSizeBytes = (videoExts.has(rawExt) ? 100 : 5) * 1024 * 1024
+          if (file.size > maxSizeBytes) {
+            return { status: 413, error: `Die Datei ist größer als ${videoExts.has(rawExt) ? '100' : '5'} MB.` }
+          }
 
           const buffer = Buffer.from(await file.arrayBuffer())
           if (buffer.length > maxSizeBytes) {
-            return { status: 413, error: 'Die Datei ist größer als 5 MB.' }
+            return { status: 413, error: `Die Datei ist größer als ${videoExts.has(rawExt) ? '100' : '5'} MB.` }
           }
 
           const uploadDir = path.join(dataDirectory, 'uploads')

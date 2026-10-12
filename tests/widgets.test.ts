@@ -137,7 +137,7 @@ test('slideshow shows placeholder when no URLs are configured', () => {
     rows: 4,
   })
 
-  assert.match(content, /Bild-URLs eintragen/)
+  assert.match(content, /Bild- oder Video-URLs eintragen/)
 })
 
 test('renderWidget includes data-refresh-interval for web widgets when configured', () => {
@@ -162,7 +162,7 @@ test('editable widget includes interval fields for web and slideshow', () => {
   const slideEditor = renderWidget({ id: 'slide-1', type: 'slideshow', title: 'Diashow', url: '', columns: 8, rows: 3, intervalSeconds: 12 }, true)
   assert.match(slideEditor, /data-field="intervalSeconds"/)
   assert.match(slideEditor, /value="12"/)
-  assert.match(slideEditor, /Bild-URLs \(eine pro Zeile\)/)
+  assert.match(slideEditor, /Bild- und Video-URLs \(eine pro Zeile\)/)
 })
 
 test('renderWidget and editorMarkup apply 1 / span and data-break-before when breakBefore is true', () => {
@@ -197,7 +197,7 @@ test('renderWidget supports showTitle option for visible header in kiosk and pre
 test('renderSlideshowCrudList outputs empty state when no urls present', () => {
   const empty = renderSlideshowCrudList([])
   assert.match(empty, /slideshow-empty-state/)
-  assert.match(empty, /Noch keine Bilder hinzugefügt/)
+  assert.match(empty, /Noch keine Medien hinzugefügt/)
 })
 
 test('renderSlideshowCrudList outputs items with order, thumb, and action buttons', () => {
@@ -211,6 +211,21 @@ test('renderSlideshowCrudList outputs items with order, thumb, and action button
   assert.match(html, /#2/)
 })
 
+test('slideshow renders video URLs as muted inline video slides', () => {
+  const html = renderWidgetContent({
+    id: 'slideshow-video',
+    type: 'slideshow',
+    title: 'Urlaub',
+    url: 'https://example.com/photo.jpg\n/uploads/clip.mp4?version=1',
+    columns: 8,
+    rows: 4,
+  })
+
+  assert.match(html, /data-slide-type="image"/)
+  assert.match(html, /<video[^>]+muted[^>]+playsinline/)
+  assert.match(html, /\/uploads\/clip\.mp4\?version=1/)
+})
+
 test('editorMarkup includes slideshow CRUD section, upload button, and raw url details', () => {
   const editor = renderWidget({
     id: 'slideshow-edit',
@@ -222,7 +237,8 @@ test('editorMarkup includes slideshow CRUD section, upload button, and raw url d
   }, true)
 
   assert.match(editor, /data-slideshow-crud/)
-  assert.match(editor, /Bilder \(2 \/ 10\)/)
+  assert.match(editor, /Medien \(2 \/ 10\)/)
+  assert.match(editor, /video\/mp4/)
   assert.match(editor, /data-action="upload"/)
   assert.match(editor, /data-action="add-slideshow-url"/)
   assert.match(editor, /data-slideshow-url-input/)

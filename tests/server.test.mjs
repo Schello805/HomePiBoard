@@ -418,6 +418,23 @@ test('upload API saves images up to 5MB and serves them via /uploads/', async (c
   assert.equal(getRes.status, 200)
   assert.equal(getRes.headers.get('content-type'), 'image/png')
   assert.equal(await getRes.text(), 'fake-png-data')
+
+  const videoFormData = new FormData()
+  videoFormData.append('file', new File(['fake-video-data'], 'test-video.mp4', { type: 'video/mp4' }))
+  const videoUploadRes = await fetch(`${running.url}/api/upload`, {
+    method: 'POST',
+    headers: { 'x-admin-pin': '2468' },
+    body: videoFormData,
+  })
+  assert.equal(videoUploadRes.status, 200)
+  const videoBody = await videoUploadRes.json()
+  assert.match(videoBody.url, /^\/uploads\/\d+-[a-f0-9]+\.mp4$/)
+
+  const videoRes = await fetch(`${running.url}${videoBody.url}`, { headers: { range: 'bytes=5-9' } })
+  assert.equal(videoRes.status, 206)
+  assert.equal(videoRes.headers.get('content-type'), 'video/mp4')
+  assert.equal(videoRes.headers.get('content-range'), 'bytes 5-9/15')
+  assert.equal(await videoRes.text(), 'video')
 })
 
 test('upload API rejects unauthenticated requests or files exceeding 5MB', async (context) => {
