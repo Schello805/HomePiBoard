@@ -73,6 +73,7 @@ while true; do
 
   "$CHROMIUM_BIN" \
     --kiosk \
+    --disable-gpu \
     --noerrdialogs \
     --disable-infobars \
     --disable-translate \
