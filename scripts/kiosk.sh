@@ -42,6 +42,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SPLASH_FILE="$SCRIPT_DIR/../public/splash.html"
 KIOSK_PROFILE_DIR="${HOME}/.config/homepiboard-chromium"
+KIOSK_LOG_FILE="${KIOSK_PROFILE_DIR}/chromium.log"
 mkdir -p "$KIOSK_PROFILE_DIR"
 
 # HDMI Audio entmuten und Ausgang konfigurieren
@@ -73,10 +74,17 @@ while true; do
     fi
   fi
 
+  # Keep Chromium diagnostics available over SSH without growing the log forever.
+  if [ -f "$KIOSK_LOG_FILE" ] && [ "$(wc -c < "$KIOSK_LOG_FILE")" -gt 1048576 ]; then
+    mv "$KIOSK_LOG_FILE" "${KIOSK_LOG_FILE}.1"
+  fi
+
+  echo "[$(date --iso-8601=seconds)] Starte ${CHROMIUM_BIN} mit ${LAUNCH_URL}" >> "$KIOSK_LOG_FILE"
   "$CHROMIUM_BIN" \
     --kiosk \
     --disable-gpu \
     --user-data-dir="$KIOSK_PROFILE_DIR" \
+    --enable-logging=stderr \
     --noerrdialogs \
     --disable-infobars \
     --disable-translate \
@@ -91,6 +99,8 @@ while true; do
     --disable-gesture-requirement-for-media-playback \
     --alsa-output-device=default \
     --allow-running-insecure-content \
-    "$LAUNCH_URL" || true
+    "$LAUNCH_URL" >> "$KIOSK_LOG_FILE" 2>&1 || true
+  CHROMIUM_STATUS=$?
+  echo "[$(date --iso-8601=seconds)] Chromium wurde beendet (Status ${CHROMIUM_STATUS}). Neustart in 2 Sekunden." >> "$KIOSK_LOG_FILE"
   sleep 2
 done
