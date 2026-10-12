@@ -123,6 +123,49 @@ function cameraInputArgs(targetUrl) {
     : ['-i', targetUrl]
 }
 
+function isDirectCameraSnapshotUrl(targetUrl) {
+  try {
+    const url = new URL(targetUrl)
+    return url.protocol !== 'rtsp:'
+      && (url.searchParams.get('cmd')?.toLowerCase() === 'snap'
+        || /(?:^|\/)snapshot(?:\.[a-z0-9]+)?$/i.test(url.pathname)
+        || /\.(?:jpe?g|png|webp|gif)$/i.test(url.pathname))
+  } catch {
+    return false
+  }
+}
+
+async function fetchCameraSnapshot(targetUrl, fetchFunction) {
+  const result = await fetchFunction(targetUrl, {
+    redirect: 'error',
+    signal: AbortSignal.timeout(8000),
+  })
+  if (!result.ok) throw new Error(`Kamera antwortete mit HTTP ${result.status}.`)
+  const contentLength = Number(result.headers.get('content-length'))
+  if (Number.isFinite(contentLength) && contentLength > 10 * 1024 * 1024) {
+    throw new Error('Das Kamerabild ist größer als 10 MB.')
+  }
+  const image = Buffer.from(await result.arrayBuffer())
+  if (!image.length || image.length > 10 * 1024 * 1024) {
+    throw new Error('Die Kamera lieferte kein gültiges Bild oder das Bild ist zu groß.')
+  }
+
+  const contentType = result.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase()
+  const detectedType = image[0] === 0xff && image[1] === 0xd8 && image[2] === 0xff
+    ? 'image/jpeg'
+    : image.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+      ? 'image/png'
+      : image.subarray(0, 4).toString('ascii') === 'RIFF' && image.subarray(8, 12).toString('ascii') === 'WEBP'
+        ? 'image/webp'
+        : image.subarray(0, 4).toString('ascii') === 'GIF8'
+          ? 'image/gif'
+          : null
+  if (!detectedType || (contentType?.startsWith('image/') && contentType !== detectedType)) {
+    throw new Error('Die Kamera-Antwort enthält kein unterstütztes Bildformat.')
+  }
+  return { stdout: image, contentType: detectedType }
+}
+
 const icyMetadataCache = new Map()
 
 export async function fetchIcyMetadata(streamUrl, { lookupFunction = dnsLookup, timeoutMs = 5000 } = {}) {
@@ -767,6 +810,7 @@ export function createHomePiBoardServer({
   adminPin = process.env.HOMEPIBOARD_PIN || '0000',
   scryptFunction = scrypt,
   calendarFetch = fetch,
+  cameraFetch = fetch,
   lookupFunction = dnsLookup,
   thermalPath = '/sys/class/thermal/thermal_zone0/temp',
   updateStatusHandler,
@@ -1091,30 +1135,36 @@ export function createHomePiBoardServer({
               return
             }
             activeCameraSnapshots += 1
-            snapshot = Promise.resolve().then(() => cameraExec('ffmpeg', [
-              '-y',
-              '-hide_banner',
-              '-loglevel', 'error',
-              ...cameraInputArgs(targetUrl),
-              '-vframes', '1',
-              '-c:v', 'mjpeg',
-              '-q:v', '2',
-              '-f', 'image2pipe',
-              'pipe:1',
-            ], {
-              timeout: 8000,
-              maxBuffer: 10 * 1024 * 1024,
-              encoding: 'buffer',
-            })).finally(() => {
+            snapshot = Promise.resolve().then(async () => {
+              if (isDirectCameraSnapshotUrl(targetUrl)) {
+                return await fetchCameraSnapshot(targetUrl, cameraFetch)
+              }
+              const { stdout } = await cameraExec('ffmpeg', [
+                '-y',
+                '-hide_banner',
+                '-loglevel', 'error',
+                ...cameraInputArgs(targetUrl),
+                '-vframes', '1',
+                '-c:v', 'mjpeg',
+                '-q:v', '2',
+                '-f', 'image2pipe',
+                'pipe:1',
+              ], {
+                timeout: 8000,
+                maxBuffer: 10 * 1024 * 1024,
+                encoding: 'buffer',
+              })
+              return { stdout, contentType: 'image/jpeg' }
+            }).finally(() => {
               activeCameraSnapshots -= 1
               pendingSnapshots.delete(targetUrl)
             })
             pendingSnapshots.set(targetUrl, snapshot)
           }
           try {
-            const { stdout } = await snapshot
+            const { stdout, contentType } = await snapshot
             response.writeHead(200, {
-              'Content-Type': 'image/jpeg',
+              'Content-Type': contentType,
               'Cache-Control': 'no-cache, no-store, must-revalidate',
               'Pragma': 'no-cache',
               'Expires': '0',

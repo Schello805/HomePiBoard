@@ -24,6 +24,7 @@ async function startServer({
   scryptFunction,
   calendarFetch,
   lookupFunction,
+  cameraFetch,
   updateStatusHandler,
   updateExecuteHandler,
   cameraExec,
@@ -37,6 +38,7 @@ async function startServer({
     adminPin,
     scryptFunction,
     calendarFetch,
+    cameraFetch,
     lookupFunction,
     updateStatusHandler,
     updateExecuteHandler,
@@ -789,13 +791,39 @@ test('camera snapshot endpoint does not apply RTSP options to HTTP cameras', asy
   })
   context.after(() => running.server.close())
 
-  const cameraUrl = 'http://192.168.1.50/snapshot.jpg'
+  const cameraUrl = 'http://192.168.1.50/cgi-bin/mjpeg'
   await writeCameraSettings(running.dataDirectory, [[cameraUrl, 'snapshot']])
   const response = await fetch(`${running.url}/api/camera/snapshot?url=${encodeURIComponent(cameraUrl)}`)
 
   assert.equal(response.status, 200)
   assert.ok(capturedArgs.includes(cameraUrl))
   assert.ok(!capturedArgs.includes('-rtsp_transport'))
+})
+
+test('camera snapshot endpoint proxies Reolink Snap JPEG responses directly without FFmpeg', async (context) => {
+  const fakeJpegBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46])
+  let requestedUrl = null
+  let ffmpegCalled = false
+  const cameraUrl = 'http://192.168.1.205/cgi-bin/api.cgi?cmd=Snap&channel=0&user=admin&password=secret!'
+  const running = await startServer({
+    cameraFetch: async (url) => {
+      requestedUrl = url
+      return new Response(fakeJpegBuffer, { headers: { 'content-type': 'image/jpeg' } })
+    },
+    cameraExec: async () => {
+      ffmpegCalled = true
+      throw new Error('FFmpeg must not be used for direct Snap URLs')
+    },
+  })
+  context.after(() => running.server.close())
+  await writeCameraSettings(running.dataDirectory, [[cameraUrl, 'snapshot']])
+
+  const response = await fetch(`${running.url}/api/camera/snapshot?url=${encodeURIComponent(cameraUrl)}`)
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get('content-type'), 'image/jpeg')
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), fakeJpegBuffer)
+  assert.equal(requestedUrl, cameraUrl)
+  assert.equal(ffmpegCalled, false)
 })
 
 test('camera mjpeg endpoint validates URL and streams multipart MJPEG via ffmpeg', async (context) => {
