@@ -761,6 +761,18 @@ export function bindQrWidgets(root: ParentNode = document) {
     canvas.dataset.qrBound = 'true'
     const payload = canvas.dataset.qrCode || ''
     if (!payload) return
+    const container = canvas.closest<HTMLElement>('.qr-widget-container')
+    const sizeToContainer = () => {
+      if (!container) return
+      const labelHeight = container.querySelector<HTMLElement>('.qr-code-label')?.offsetHeight || 0
+      const size = Math.max(64, Math.floor(Math.min(container.clientWidth * 0.9, container.clientHeight - labelHeight - 28)))
+      canvas.style.width = `${size}px`
+      canvas.style.height = `${size}px`
+    }
+    sizeToContainer()
+    if (typeof ResizeObserver !== 'undefined' && container) {
+      new ResizeObserver(sizeToContainer).observe(container)
+    }
     void QRCode.toCanvas(canvas, payload, {
       errorCorrectionLevel: 'M',
       margin: 1,
