@@ -575,7 +575,7 @@ export async function renderAdminPage(app: HTMLElement) {
       const previewContent = editor.querySelector<HTMLElement>('[data-widget-preview-content]')!
       preview.setAttribute('aria-label', `Vorschau ${widget.title}`)
       preview.classList.toggle('has-title', Boolean(widget.showTitle))
-      previewContent.innerHTML = `${widget.showTitle ? `<header class="kiosk-widget-header preview-header"><h2 class="kiosk-widget-title">${escapeHtml(widget.title)}</h2></header>` : ''}<div class="iframe-placeholder">${renderWidgetContent(widget)}</div>`
+      previewContent.innerHTML = `${widget.showTitle ? `<header class="kiosk-widget-header preview-header"><h2 class="kiosk-widget-title">${escapeHtml(widget.title)}</h2></header>` : ''}<div class="iframe-placeholder">${renderWidgetContent(widget, true)}</div>`
       bindWidgetFrames(previewContent)
       bindQrWidgets(previewContent)
       bindRssWidgets(previewContent)

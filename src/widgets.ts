@@ -480,19 +480,26 @@ function qrContent(widget: DashboardWidget) {
   return `<div class="qr-widget-container"><canvas class="qr-code-canvas" data-qr-code="${escapeHtml(payload)}" aria-label="${escapeHtml(label)}"></canvas><span class="qr-code-label">${escapeHtml(label)}</span></div>`
 }
 
-function rssContent(widget: DashboardWidget) {
+function editorDataPreview(label: string) {
+  return `<div class="widget-data-empty"><strong>${escapeHtml(label)}</strong><span>Live-Daten werden nach dem Speichern auf dem Display geladen.</span></div>`
+}
+
+function rssContent(widget: DashboardWidget, editorPreview = false) {
+  if (editorPreview) return editorDataPreview('Nachrichten-Vorschau')
   return `<div class="rss-widget-container" data-rss-widget data-widget-id="${escapeHtml(widget.id)}" data-refresh-minutes="${widget.rssRefreshMinutes || 15}"><div class="widget-loading-status"><span class="loading-spinner" aria-hidden="true"></span> Nachrichten werden geladen …</div></div>`
 }
 
-function dwdContent(widget: DashboardWidget) {
+function dwdContent(widget: DashboardWidget, editorPreview = false) {
+  if (editorPreview) return editorDataPreview('DWD-Warnungs-Vorschau')
   return `<div class="dwd-widget-container" data-dwd-widget data-widget-id="${escapeHtml(widget.id)}"><div class="widget-loading-status"><span class="loading-spinner" aria-hidden="true"></span> DWD-Warnungen werden geladen …</div></div>`
 }
 
-function ioBrokerContent(widget: DashboardWidget) {
+function ioBrokerContent(widget: DashboardWidget, editorPreview = false) {
+  if (editorPreview) return editorDataPreview('Smart-Home-Vorschau')
   return `<div class="iobroker-widget-container" data-iobroker-widget data-widget-id="${escapeHtml(widget.id)}" data-refresh-seconds="${widget.iobrokerRefreshSeconds || 15}"><div class="widget-loading-status"><span class="loading-spinner" aria-hidden="true"></span> Smart-Home-Status wird geladen …</div></div>`
 }
 
-export function renderWidgetContent(widget: DashboardWidget) {
+export function renderWidgetContent(widget: DashboardWidget, editorPreview = false) {
   if (widget.type === 'calendar') return isBuiltInCalendar(widget.type, widget.url) ? calendarMarkup() : calendarFeedContent(widget)
   if (widget.type === 'text') return `<p class="text-widget-content">${escapeHtml(widget.url || 'Deinen Text hier eintragen')}</p>`
   if (widget.type === 'image') {
@@ -507,9 +514,9 @@ export function renderWidgetContent(widget: DashboardWidget) {
   if (widget.type === 'media') return mediaContent(widget)
   if (widget.type === 'camera') return cameraContent(widget)
   if (widget.type === 'qr') return qrContent(widget)
-  if (widget.type === 'rss') return rssContent(widget)
-  if (widget.type === 'dwd') return dwdContent(widget)
-  if (widget.type === 'iobroker') return ioBrokerContent(widget)
+  if (widget.type === 'rss') return rssContent(widget, editorPreview)
+  if (widget.type === 'dwd') return dwdContent(widget, editorPreview)
+  if (widget.type === 'iobroker') return ioBrokerContent(widget, editorPreview)
   return frameContent(widget)
 }
 
@@ -577,7 +584,7 @@ function editorMarkup(widget: DashboardWidget, index: number) {
       <div class="widget-preview${widget.showTitle ? ' has-title' : ''}" data-widget-preview aria-label="Vorschau ${escapeHtml(widget.title)}">
         <div class="widget-preview-content" data-widget-preview-content>
           ${widget.showTitle ? `<header class="kiosk-widget-header preview-header"><h2 class="kiosk-widget-title">${escapeHtml(widget.title)}</h2></header>` : ''}
-          <div class="iframe-placeholder">${renderWidgetContent(widget)}</div>
+          <div class="iframe-placeholder">${renderWidgetContent(widget, true)}</div>
         </div>
       </div>
     </div>
