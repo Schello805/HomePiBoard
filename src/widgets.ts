@@ -739,14 +739,10 @@ function editorMarkup(widget: DashboardWidget, index: number) {
           ` : widget.type === 'iobroker' ? `
           <div class="iobroker-form-group">
             <label class="content-field" for="${controlId}-iobroker-url"><span>ioBroker Simple API URL</span><input type="url" id="${controlId}-iobroker-url" data-field="iobrokerUrl" value="${escapeHtml(widget.iobrokerUrl || '')}" placeholder="http://192.168.1.20:8087" /></label>
-            <div class="grid-2-cols">
-              <label for="${controlId}-iobroker-user">Benutzer (optional)<input id="${controlId}-iobroker-user" data-field="iobrokerUser" value="${escapeHtml(widget.iobrokerUser || '')}" /></label>
-              <label for="${controlId}-iobroker-password">Passwort (optional)<input id="${controlId}-iobroker-password" data-field="iobrokerPassword" type="password" value="${escapeHtml(widget.iobrokerPassword || '')}" /></label>
-            </div>
             <label class="content-field" for="${controlId}-iobroker-states"><span>Datenpunkte (eine Zeile: Anzeige | Datenpunkt-ID)</span><textarea id="${controlId}-iobroker-states" data-field="iobrokerStates" rows="5" placeholder="Haustür | hm-rpc.0.12345678.1.STATE&#10;Wohnzimmer Licht | hm-rpc.0.12345678.1.LEVEL">${escapeHtml(widget.iobrokerStates || '')}</textarea></label>
             <label for="${controlId}-iobroker-refresh">Aktualisierung <input id="${controlId}-iobroker-refresh" data-field="iobrokerRefreshSeconds" type="number" min="5" max="3600" value="${widget.iobrokerRefreshSeconds || 15}" /> <small>Sekunden</small></label>
           </div>
-          <p class="editor-field-hint">💡 Benötigt den ioBroker-Adapter „Simple API“ (standardmäßig Port 8087). HomePiBoard liest nur die hier eingetragenen Datenpunkte.</p>
+          <p class="editor-field-hint">💡 Benötigt den ioBroker-Adapter „Simple API“ (standardmäßig Port 8087) im lokalen Netzwerk. HomePiBoard liest nur die hier eingetragenen Datenpunkte.</p>
           ` : `
           ${(widget.type === 'image' || widget.type === 'slideshow') ? `<div class="content-field upload-field"><label class="upload-zone" for="${controlId}-upload"><input type="file" id="${controlId}-upload" data-action="upload" accept="${widget.type === 'slideshow' ? 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml,video/mp4,video/x-m4v,video/webm,video/ogg,.m4v,.ogv,.ogg' : 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml'}" ${widget.type === 'slideshow' ? 'multiple' : ''} style="display: none;" /><span class="upload-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>${widget.type === 'slideshow' ? 'Bilder &amp; Videos hochladen (max. 10 Medien; Bilder 5 MB, Videos 100 MB)' : 'Bild hochladen (max. 5 MB)'}</span></span><span class="upload-status" data-upload-status aria-live="polite"></span></label></div>` : ''}
           ${widget.type === 'image' && widget.url ? `

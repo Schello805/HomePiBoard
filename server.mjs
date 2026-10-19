@@ -436,12 +436,11 @@ async function loadIoBrokerStates(widget, ioBrokerFetch) {
     throw new CalendarFeedError(422, 'Die ioBroker-Adresse muss HTTP oder HTTPS ohne Zugangsdaten in der URL verwenden.')
   }
   const entries = parseIoBrokerStates(widget.iobrokerStates)
-  const authorization = widget.iobrokerUser ? `Basic ${Buffer.from(`${widget.iobrokerUser}:${widget.iobrokerPassword || ''}`).toString('base64')}` : ''
   const states = await Promise.all(entries.map(async ({ label, id }) => {
     const target = new URL(`get/${encodeURIComponent(id)}`, baseUrl.href.endsWith('/') ? baseUrl.href : `${baseUrl.href}/`)
     let response
     try {
-      response = await ioBrokerFetch(target, { headers: authorization ? { authorization } : {}, signal: AbortSignal.timeout(5000) })
+      response = await ioBrokerFetch(target, { redirect: 'error', signal: AbortSignal.timeout(5000) })
     } catch {
       return { label, value: 'Nicht erreichbar', updated: 0 }
     }

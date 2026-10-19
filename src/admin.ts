@@ -410,13 +410,9 @@ export async function renderAdminPage(app: HTMLElement) {
     const dwdRegionInput = editor.querySelector<HTMLInputElement>('[data-field="dwdRegion"]')
     const dwdRegion = type === 'dwd' && dwdRegionInput ? dwdRegionInput.value.trim() : undefined
     const ioUrlInput = editor.querySelector<HTMLInputElement>('[data-field="iobrokerUrl"]')
-    const ioUserInput = editor.querySelector<HTMLInputElement>('[data-field="iobrokerUser"]')
-    const ioPasswordInput = editor.querySelector<HTMLInputElement>('[data-field="iobrokerPassword"]')
     const ioStatesInput = editor.querySelector<HTMLTextAreaElement>('[data-field="iobrokerStates"]')
     const ioRefreshInput = editor.querySelector<HTMLInputElement>('[data-field="iobrokerRefreshSeconds"]')
     const iobrokerUrl = type === 'iobroker' && ioUrlInput ? ioUrlInput.value.trim() : undefined
-    const iobrokerUser = type === 'iobroker' && ioUserInput ? ioUserInput.value.trim() : undefined
-    const iobrokerPassword = type === 'iobroker' && ioPasswordInput ? ioPasswordInput.value : undefined
     const iobrokerStates = type === 'iobroker' && ioStatesInput ? ioStatesInput.value.trim() : undefined
     const iobrokerRefreshSeconds = type === 'iobroker' && ioRefreshInput ? Math.max(5, Math.min(3600, Number(ioRefreshInput.value) || 15)) : undefined
 
@@ -453,8 +449,6 @@ export async function renderAdminPage(app: HTMLElement) {
       ...(rssRefreshMinutes !== undefined ? { rssRefreshMinutes } : {}),
       ...(dwdRegion !== undefined ? { dwdRegion } : {}),
       ...(iobrokerUrl !== undefined ? { iobrokerUrl } : {}),
-      ...(iobrokerUser !== undefined ? { iobrokerUser } : {}),
-      ...(iobrokerPassword !== undefined ? { iobrokerPassword } : {}),
       ...(iobrokerStates !== undefined ? { iobrokerStates } : {}),
       ...(iobrokerRefreshSeconds !== undefined ? { iobrokerRefreshSeconds } : {}),
     }

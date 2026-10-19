@@ -77,8 +77,6 @@ export type DashboardWidget = {
   rssRefreshMinutes?: number
   dwdRegion?: string
   iobrokerUrl?: string
-  iobrokerUser?: string
-  iobrokerPassword?: string
   iobrokerStates?: string
   iobrokerRefreshSeconds?: number
 }
@@ -409,8 +407,6 @@ export function normalizeSettings(value: unknown): DisplaySettings {
       ...(type === 'dwd' ? { dwdRegion: text(widget.dwdRegion).slice(0, 120) } : {}),
       ...(type === 'iobroker' ? {
         iobrokerUrl: text(widget.iobrokerUrl).slice(0, 512),
-        iobrokerUser: text(widget.iobrokerUser).slice(0, 128),
-        iobrokerPassword: text(widget.iobrokerPassword).slice(0, 256),
         iobrokerStates: text(widget.iobrokerStates).slice(0, 4000),
         iobrokerRefreshSeconds: Math.max(5, Math.min(3600, Math.round(Number(widget.iobrokerRefreshSeconds) || 15))),
       } : {}),
