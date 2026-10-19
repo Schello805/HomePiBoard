@@ -420,8 +420,9 @@ async function downloadRssFeed(value, rssFetch, lookupFunction) {
 function parseIoBrokerStates(value) {
   return String(value || '').split(/\r?\n/).map((line) => {
     const [label, ...idParts] = line.split('|')
-    const id = idParts.join('|').trim()
-    return { label: (id ? label : '').trim() || id, id }
+    const id = (idParts.length ? idParts.join('|') : label).trim()
+    const fallbackLabel = id.split('.').at(-1) || id
+    return { label: (idParts.length ? label : '').trim() || fallbackLabel, id }
   }).filter(({ id }) => id && /^[a-zA-Z0-9_.-]+$/.test(id)).slice(0, 24)
 }
 
@@ -464,17 +465,29 @@ async function downloadDwdWarnings(region, dwdFetch) {
     throw new CalendarFeedError(502, 'DWD-Warnungen sind nicht erreichbar.')
   }
   if (!response.ok) throw new CalendarFeedError(502, `DWD antwortet mit HTTP ${response.status}.`)
-  const data = await response.json()
+  const raw = await response.text()
+  const start = raw.indexOf('(')
+  const end = raw.lastIndexOf(')')
+  let data
+  try {
+    // The legacy DWD warning feed is JSONP (warnWetter.loadWarnings({...})),
+    // not a JSON document despite its .json filename.
+    data = JSON.parse(start >= 0 && end > start ? raw.slice(start + 1, end) : raw)
+  } catch {
+    throw new CalendarFeedError(502, 'DWD lieferte ein ungültiges Warnungsformat.')
+  }
   const needle = String(region || '').trim().toLocaleLowerCase('de-DE')
-  const warnings = Object.values(data?.warnings || data || {}).flatMap((value) => Array.isArray(value) ? value : [])
-    .filter((warning) => !needle || String(warning.REGIONNAME || '').toLocaleLowerCase('de-DE').includes(needle))
+  const sourceWarnings = [data?.warnings, data?.vorabInformation].flatMap((collection) => Object.values(collection || {}).flatMap((value) => Array.isArray(value) ? value : []))
+  const warnings = sourceWarnings
+    .filter((warning) => warning && typeof warning === 'object')
+    .filter((warning) => !needle || String(warning.regionName || warning.REGIONNAME || '').toLocaleLowerCase('de-DE').includes(needle))
     .slice(0, 8)
     .map((warning) => ({
-      headline: String(warning.HEADLINE || warning.EVENT || 'DWD-Warnung').slice(0, 220),
-      event: String(warning.EVENT || '').slice(0, 160),
-      severity: String(warning.SEVERITY || 'Moderate').slice(0, 40),
-      description: String(warning.DESCRIPTION || '').replace(/\s+/g, ' ').slice(0, 420),
-      expires: String(warning.EXPIRES || ''),
+      headline: String(warning.headline || warning.HEADLINE || warning.event || warning.EVENT || 'DWD-Warnung').slice(0, 220),
+      event: String(warning.event || warning.EVENT || '').slice(0, 160),
+      severity: warning.severity || warning.SEVERITY || (Number(warning.level || warning.LEVEL) >= 4 ? 'Extreme' : (Number(warning.level || warning.LEVEL) >= 3 ? 'Severe' : 'Moderate')),
+      description: String(warning.description || warning.DESCRIPTION || '').replace(/\s+/g, ' ').slice(0, 420),
+      expires: String(warning.end || warning.EXPIRES || ''),
     }))
   return warnings
 }
