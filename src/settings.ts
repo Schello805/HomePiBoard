@@ -1,4 +1,4 @@
-export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow' | 'waste' | 'media' | 'camera' | 'qr'
+export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow' | 'waste' | 'media' | 'camera' | 'qr' | 'rss' | 'dwd' | 'iobroker'
 
 export type HeaderItemType =
   | 'clock'
@@ -73,6 +73,14 @@ export type DashboardWidget = {
   qrSsid?: string
   qrPassword?: string
   qrEncryption?: 'WPA' | 'WEP' | 'nopass'
+  rssFeed?: string
+  rssRefreshMinutes?: number
+  dwdRegion?: string
+  iobrokerUrl?: string
+  iobrokerUser?: string
+  iobrokerPassword?: string
+  iobrokerStates?: string
+  iobrokerRefreshSeconds?: number
 }
 
 export type DisplaySettings = {
@@ -141,7 +149,7 @@ export const defaultSettings: DisplaySettings = {
   widgets: [],
 }
 
-const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image', 'slideshow', 'waste', 'media', 'camera', 'qr'])
+const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image', 'slideshow', 'waste', 'media', 'camera', 'qr', 'rss', 'dwd', 'iobroker'])
 
 export const widgetConstraints: Record<WidgetType, { minColumns: number; minRows: number; defaultColumns: number; defaultRows: number }> = {
   web: { minColumns: 4, minRows: 2, defaultColumns: 12, defaultRows: 3 },
@@ -153,6 +161,9 @@ export const widgetConstraints: Record<WidgetType, { minColumns: number; minRows
   media: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
   camera: { minColumns: 4, minRows: 3, defaultColumns: 8, defaultRows: 4 },
   qr: { minColumns: 3, minRows: 3, defaultColumns: 6, defaultRows: 5 },
+  rss: { minColumns: 5, minRows: 2, defaultColumns: 10, defaultRows: 3 },
+  dwd: { minColumns: 5, minRows: 2, defaultColumns: 8, defaultRows: 3 },
+  iobroker: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
 }
 
 const widgetTitles: Record<WidgetType, string> = {
@@ -165,6 +176,9 @@ const widgetTitles: Record<WidgetType, string> = {
   media: 'Radio',
   camera: 'Kamera',
   qr: 'QR-Code',
+  rss: 'Nachrichten',
+  dwd: 'DWD-Wetterwarnungen',
+  iobroker: 'Smart Home',
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -211,6 +225,18 @@ export function createWidget(type: WidgetType, index: number, id = `widget-${ind
     widget.qrSsid = ''
     widget.qrPassword = ''
     widget.qrEncryption = 'WPA'
+  } else if (type === 'rss') {
+    widget.title = 'Nachrichten'
+    widget.rssFeed = 'tagesschau'
+    widget.rssRefreshMinutes = 15
+  } else if (type === 'dwd') {
+    widget.title = 'DWD-Wetterwarnungen'
+    widget.dwdRegion = ''
+  } else if (type === 'iobroker') {
+    widget.title = 'Smart Home'
+    widget.iobrokerUrl = 'http://iobroker:8087'
+    widget.iobrokerStates = 'Haustür | hm-rpc.0.00000000.1.STATE\nWohnzimmer Licht | hm-rpc.0.00000000.1.LEVEL'
+    widget.iobrokerRefreshSeconds = 15
   }
   return widget
 }
@@ -375,6 +401,18 @@ export function normalizeSettings(value: unknown): DisplaySettings {
         qrSsid: text(widget.qrSsid).slice(0, 128),
         qrPassword: text(widget.qrPassword).slice(0, 128),
         qrEncryption: widget.qrEncryption === 'WEP' ? 'WEP' : (widget.qrEncryption === 'nopass' ? 'nopass' : 'WPA'),
+      } : {}),
+      ...(type === 'rss' ? {
+        rssFeed: text(widget.rssFeed, 'tagesschau').slice(0, 2048),
+        rssRefreshMinutes: Math.max(1, Math.min(1440, Math.round(Number(widget.rssRefreshMinutes) || 15))),
+      } : {}),
+      ...(type === 'dwd' ? { dwdRegion: text(widget.dwdRegion).slice(0, 120) } : {}),
+      ...(type === 'iobroker' ? {
+        iobrokerUrl: text(widget.iobrokerUrl).slice(0, 512),
+        iobrokerUser: text(widget.iobrokerUser).slice(0, 128),
+        iobrokerPassword: text(widget.iobrokerPassword).slice(0, 256),
+        iobrokerStates: text(widget.iobrokerStates).slice(0, 4000),
+        iobrokerRefreshSeconds: Math.max(5, Math.min(3600, Math.round(Number(widget.iobrokerRefreshSeconds) || 15))),
       } : {}),
     }
   })

@@ -23,6 +23,9 @@ async function startServer({
   adminPin = '2468',
   scryptFunction,
   calendarFetch,
+  rssFetch,
+  dwdFetch,
+  ioBrokerFetch,
   lookupFunction,
   cameraFetch,
   updateStatusHandler,
@@ -38,6 +41,9 @@ async function startServer({
     adminPin,
     scryptFunction,
     calendarFetch,
+    rssFetch,
+    dwdFetch,
+    ioBrokerFetch,
     cameraFetch,
     lookupFunction,
     updateStatusHandler,
@@ -246,6 +252,42 @@ test('calendar API refuses feeds resolving to private network addresses', async 
   const response = await fetch(`${running.url}/api/calendar/private`)
   assert.equal(response.status, 422)
   assert.equal(fetched, false)
+})
+
+test('RSS widget API returns headlines from a saved preset feed', async (context) => {
+  const dataDirectory = await mkdtemp(path.join(tmpdir(), 'homepiboard-rss-'))
+  await writeFile(path.join(dataDirectory, 'settings.json'), JSON.stringify({ version: 3, widgets: [{ id: 'news', type: 'rss', title: 'News', rssFeed: 'tagesschau', columns: 8, rows: 3 }] }))
+  const running = await startServer({
+    dataDirectory,
+    lookupFunction: async () => [{ address: '93.184.216.34', family: 4 }],
+    rssFetch: async () => new Response('<rss><channel><item><title>Aktuelle Meldung</title><description>Zusammenfassung</description></item></channel></rss>'),
+  })
+  context.after(() => running.server.close())
+  const response = await fetch(`${running.url}/api/rss/news`)
+  assert.equal(response.status, 200)
+  assert.equal((await response.json()).items[0].title, 'Aktuelle Meldung')
+})
+
+test('DWD widget API filters warnings for the configured region', async (context) => {
+  const dataDirectory = await mkdtemp(path.join(tmpdir(), 'homepiboard-dwd-'))
+  await writeFile(path.join(dataDirectory, 'settings.json'), JSON.stringify({ version: 3, widgets: [{ id: 'warning', type: 'dwd', title: 'DWD', dwdRegion: 'Köln', columns: 8, rows: 3 }] }))
+  const running = await startServer({ dataDirectory, dwdFetch: async () => new Response(JSON.stringify({ warnings: { a: [{ REGIONNAME: 'Stadt Köln', HEADLINE: 'Starkregen', EVENT: 'Regen', SEVERITY: 'Severe', DESCRIPTION: 'Viel Regen' }] } })), })
+  context.after(() => running.server.close())
+  const response = await fetch(`${running.url}/api/dwd/warning`)
+  assert.equal(response.status, 200)
+  assert.equal((await response.json()).warnings[0].headline, 'Starkregen')
+})
+
+test('ioBroker widget API reads only the configured state ids', async (context) => {
+  const dataDirectory = await mkdtemp(path.join(tmpdir(), 'homepiboard-iobroker-'))
+  await writeFile(path.join(dataDirectory, 'settings.json'), JSON.stringify({ version: 3, widgets: [{ id: 'home', type: 'iobroker', title: 'Haus', iobrokerUrl: 'http://192.168.1.20:8087', iobrokerStates: 'Tür | hm-rpc.0.door.STATE', columns: 8, rows: 3 }] }))
+  let requestedUrl = ''
+  const running = await startServer({ dataDirectory, ioBrokerFetch: async (url) => { requestedUrl = String(url); return new Response(JSON.stringify({ val: true, ts: 1 })) } })
+  context.after(() => running.server.close())
+  const response = await fetch(`${running.url}/api/iobroker/home`)
+  assert.equal(response.status, 200)
+  assert.match(requestedUrl, /get\/hm-rpc\.0\.door\.STATE$/)
+  assert.equal((await response.json()).states[0].value, 'An / Offen')
 })
 
 test('concurrent settings writes all complete without temporary-file collisions', async (context) => {

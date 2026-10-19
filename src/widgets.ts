@@ -15,6 +15,9 @@ const typeLabels: Record<WidgetType, string> = {
   media: 'RADIO',
   camera: 'KAMERA',
   qr: 'QR-CODE',
+  rss: 'NEWS',
+  dwd: 'DWD',
+  iobroker: 'SMART HOME',
 }
 
 export interface RadioStationPreset {
@@ -477,6 +480,18 @@ function qrContent(widget: DashboardWidget) {
   return `<div class="qr-widget-container"><canvas class="qr-code-canvas" data-qr-code="${escapeHtml(payload)}" aria-label="${escapeHtml(label)}"></canvas><span class="qr-code-label">${escapeHtml(label)}</span></div>`
 }
 
+function rssContent(widget: DashboardWidget) {
+  return `<div class="rss-widget-container" data-rss-widget data-widget-id="${escapeHtml(widget.id)}" data-refresh-minutes="${widget.rssRefreshMinutes || 15}"><div class="widget-loading-status"><span class="loading-spinner" aria-hidden="true"></span> Nachrichten werden geladen …</div></div>`
+}
+
+function dwdContent(widget: DashboardWidget) {
+  return `<div class="dwd-widget-container" data-dwd-widget data-widget-id="${escapeHtml(widget.id)}"><div class="widget-loading-status"><span class="loading-spinner" aria-hidden="true"></span> DWD-Warnungen werden geladen …</div></div>`
+}
+
+function ioBrokerContent(widget: DashboardWidget) {
+  return `<div class="iobroker-widget-container" data-iobroker-widget data-widget-id="${escapeHtml(widget.id)}" data-refresh-seconds="${widget.iobrokerRefreshSeconds || 15}"><div class="widget-loading-status"><span class="loading-spinner" aria-hidden="true"></span> Smart-Home-Status wird geladen …</div></div>`
+}
+
 export function renderWidgetContent(widget: DashboardWidget) {
   if (widget.type === 'calendar') return isBuiltInCalendar(widget.type, widget.url) ? calendarMarkup() : calendarFeedContent(widget)
   if (widget.type === 'text') return `<p class="text-widget-content">${escapeHtml(widget.url || 'Deinen Text hier eintragen')}</p>`
@@ -492,6 +507,9 @@ export function renderWidgetContent(widget: DashboardWidget) {
   if (widget.type === 'media') return mediaContent(widget)
   if (widget.type === 'camera') return cameraContent(widget)
   if (widget.type === 'qr') return qrContent(widget)
+  if (widget.type === 'rss') return rssContent(widget)
+  if (widget.type === 'dwd') return dwdContent(widget)
+  if (widget.type === 'iobroker') return ioBrokerContent(widget)
   return frameContent(widget)
 }
 
@@ -590,6 +608,9 @@ function editorMarkup(widget: DashboardWidget, index: number) {
             <option value="media" ${widget.type === 'media' ? 'selected' : ''}>Radio (Live-Stream)</option>
             <option value="camera" ${widget.type === 'camera' ? 'selected' : ''}>Kamera (Live / Snapshot)</option>
             <option value="qr" ${widget.type === 'qr' ? 'selected' : ''}>QR-Code (WLAN / Webseite)</option>
+            <option value="rss" ${widget.type === 'rss' ? 'selected' : ''}>Nachrichten-Ticker (RSS)</option>
+            <option value="dwd" ${widget.type === 'dwd' ? 'selected' : ''}>DWD-Wetterwarnungen</option>
+            <option value="iobroker" ${widget.type === 'iobroker' ? 'selected' : ''}>Smart Home (ioBroker)</option>
           </select></label>
           <label for="${controlId}-title">Titel<input id="${controlId}-title" data-field="title" value="${escapeHtml(widget.title)}" maxlength="30" /></label>
           <label class="content-field checkbox-label" for="${controlId}-show-title"><input type="checkbox" id="${controlId}-show-title" data-field="showTitle" ${widget.showTitle ? 'checked' : ''} /><span>Titel in der Anzeige anzeigen</span></label>
@@ -696,6 +717,36 @@ function editorMarkup(widget: DashboardWidget, index: number) {
             </div>
           </div>
           <p class="editor-field-hint">💡 Der QR-Code wird direkt auf dem Display erzeugt. WLAN-Zugangsdaten werden nicht an einen externen Dienst übertragen.</p>
+          ` : widget.type === 'rss' ? `
+          <div class="rss-form-group">
+            <label for="${controlId}-rss-feed">Nachrichtenquelle
+              <select id="${controlId}-rss-feed" data-field="rssFeed">
+                <option value="tagesschau" ${widget.rssFeed === 'tagesschau' ? 'selected' : ''}>Tagesschau – Alle Meldungen</option>
+                <option value="spiegel" ${widget.rssFeed === 'spiegel' ? 'selected' : ''}>DER SPIEGEL – Schlagzeilen</option>
+                <option value="heise" ${widget.rssFeed === 'heise' ? 'selected' : ''}>heise online – Technik</option>
+                <option value="custom" ${widget.rssFeed && !['tagesschau', 'spiegel', 'heise'].includes(widget.rssFeed) ? 'selected' : ''}>Eigener RSS-Feed</option>
+              </select>
+            </label>
+            <label class="content-field" for="${controlId}-rss-custom"><span>Eigene RSS-URL (nur bei „Eigener RSS-Feed“)</span><input type="url" id="${controlId}-rss-custom" data-field="rssCustomUrl" value="${escapeHtml(widget.rssFeed && !['tagesschau', 'spiegel', 'heise'].includes(widget.rssFeed) ? widget.rssFeed : '')}" placeholder="https://example.com/feed.xml" /></label>
+            <label for="${controlId}-rss-refresh">Aktualisierung <input id="${controlId}-rss-refresh" data-field="rssRefreshMinutes" type="number" min="1" max="1440" value="${widget.rssRefreshMinutes || 15}" /> <small>Minuten</small></label>
+          </div>
+          <p class="editor-field-hint">💡 Drei deutschsprachige Quellen sind direkt auswählbar. Alternativ kannst du einen öffentlichen HTTPS-RSS- oder Atom-Feed eintragen.</p>
+          ` : widget.type === 'dwd' ? `
+          <div class="dwd-form-group">
+            <label class="content-field" for="${controlId}-dwd-region"><span>DWD-Warngebiet</span><input id="${controlId}-dwd-region" data-field="dwdRegion" value="${escapeHtml(widget.dwdRegion || '')}" placeholder="z. B. Köln, München oder Landkreis" maxlength="120" /></label>
+          </div>
+          <p class="editor-field-hint">💡 Suche nach dem Namen des DWD-Warngebiets. Bleibt das Feld leer, wird dein eingestellter Display-Standort verwendet.</p>
+          ` : widget.type === 'iobroker' ? `
+          <div class="iobroker-form-group">
+            <label class="content-field" for="${controlId}-iobroker-url"><span>ioBroker Simple API URL</span><input type="url" id="${controlId}-iobroker-url" data-field="iobrokerUrl" value="${escapeHtml(widget.iobrokerUrl || '')}" placeholder="http://192.168.1.20:8087" /></label>
+            <div class="grid-2-cols">
+              <label for="${controlId}-iobroker-user">Benutzer (optional)<input id="${controlId}-iobroker-user" data-field="iobrokerUser" value="${escapeHtml(widget.iobrokerUser || '')}" /></label>
+              <label for="${controlId}-iobroker-password">Passwort (optional)<input id="${controlId}-iobroker-password" data-field="iobrokerPassword" type="password" value="${escapeHtml(widget.iobrokerPassword || '')}" /></label>
+            </div>
+            <label class="content-field" for="${controlId}-iobroker-states"><span>Datenpunkte (eine Zeile: Anzeige | Datenpunkt-ID)</span><textarea id="${controlId}-iobroker-states" data-field="iobrokerStates" rows="5" placeholder="Haustür | hm-rpc.0.12345678.1.STATE&#10;Wohnzimmer Licht | hm-rpc.0.12345678.1.LEVEL">${escapeHtml(widget.iobrokerStates || '')}</textarea></label>
+            <label for="${controlId}-iobroker-refresh">Aktualisierung <input id="${controlId}-iobroker-refresh" data-field="iobrokerRefreshSeconds" type="number" min="5" max="3600" value="${widget.iobrokerRefreshSeconds || 15}" /> <small>Sekunden</small></label>
+          </div>
+          <p class="editor-field-hint">💡 Benötigt den ioBroker-Adapter „Simple API“ (standardmäßig Port 8087). HomePiBoard liest nur die hier eingetragenen Datenpunkte.</p>
           ` : `
           ${(widget.type === 'image' || widget.type === 'slideshow') ? `<div class="content-field upload-field"><label class="upload-zone" for="${controlId}-upload"><input type="file" id="${controlId}-upload" data-action="upload" accept="${widget.type === 'slideshow' ? 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml,video/mp4,video/x-m4v,video/webm,video/ogg,.m4v,.ogv,.ogg' : 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml'}" ${widget.type === 'slideshow' ? 'multiple' : ''} style="display: none;" /><span class="upload-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>${widget.type === 'slideshow' ? 'Bilder &amp; Videos hochladen (max. 10 Medien; Bilder 5 MB, Videos 100 MB)' : 'Bild hochladen (max. 5 MB)'}</span></span><span class="upload-status" data-upload-status aria-live="polite"></span></label></div>` : ''}
           ${widget.type === 'image' && widget.url ? `
@@ -781,6 +832,73 @@ export function bindQrWidgets(root: ParentNode = document) {
     }).catch(() => {
       canvas.replaceWith(Object.assign(document.createElement('span'), { className: 'qr-error-state', textContent: 'QR-Code konnte nicht erstellt werden.' }))
     })
+  })
+}
+
+function widgetError(container: HTMLElement, message: string) {
+  container.innerHTML = `<div class="widget-data-error">⚠️ ${escapeHtml(message)}</div>`
+}
+
+export function bindRssWidgets(root: ParentNode = document) {
+  root.querySelectorAll<HTMLElement>('[data-rss-widget]').forEach((container) => {
+    if (container.dataset.bound === 'true') return
+    container.dataset.bound = 'true'
+    const widgetId = container.dataset.widgetId || ''
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/rss/${encodeURIComponent(widgetId)}`, { cache: 'no-store' })
+        const data = await response.json() as { items?: Array<{ title: string; description: string; published: string }>; error?: string }
+        if (!response.ok) throw new Error(data.error || 'Nachrichten konnten nicht geladen werden.')
+        const items = (data.items || []).slice(0, 5)
+        container.innerHTML = items.length
+          ? `<div class="rss-list">${items.map((item) => `<article class="rss-item"><strong>${escapeHtml(item.title)}</strong>${item.description ? `<span>${escapeHtml(item.description)}</span>` : ''}</article>`).join('')}</div>`
+          : '<div class="widget-data-empty">Keine aktuellen Meldungen.</div>'
+      } catch (error) { widgetError(container, error instanceof Error ? error.message : 'Nachrichten nicht erreichbar.') }
+    }
+    void load()
+    window.setInterval(() => void load(), Math.max(1, Number(container.dataset.refreshMinutes) || 15) * 60_000)
+  })
+}
+
+export function bindDwdWidgets(root: ParentNode = document) {
+  root.querySelectorAll<HTMLElement>('[data-dwd-widget]').forEach((container) => {
+    if (container.dataset.bound === 'true') return
+    container.dataset.bound = 'true'
+    const widgetId = container.dataset.widgetId || ''
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/dwd/${encodeURIComponent(widgetId)}`, { cache: 'no-store' })
+        const data = await response.json() as { warnings?: Array<{ headline: string; event: string; severity: string; description: string; expires: string }>; region?: string; error?: string }
+        if (!response.ok) throw new Error(data.error || 'DWD-Warnungen konnten nicht geladen werden.')
+        const warnings = data.warnings || []
+        container.innerHTML = warnings.length
+          ? `<div class="dwd-list">${warnings.slice(0, 3).map((warning) => `<article class="dwd-warning severity-${escapeHtml(warning.severity.toLowerCase())}"><strong>${escapeHtml(warning.headline || warning.event)}</strong><span>${escapeHtml(warning.description || warning.event)}</span></article>`).join('')}</div>`
+          : `<div class="widget-data-empty">✓ Keine DWD-Warnungen${data.region ? ` für ${escapeHtml(data.region)}` : ''}.</div>`
+      } catch (error) { widgetError(container, error instanceof Error ? error.message : 'DWD nicht erreichbar.') }
+    }
+    void load()
+    window.setInterval(() => void load(), 10 * 60_000)
+  })
+}
+
+export function bindIoBrokerWidgets(root: ParentNode = document) {
+  root.querySelectorAll<HTMLElement>('[data-iobroker-widget]').forEach((container) => {
+    if (container.dataset.bound === 'true') return
+    container.dataset.bound = 'true'
+    const widgetId = container.dataset.widgetId || ''
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/iobroker/${encodeURIComponent(widgetId)}`, { cache: 'no-store' })
+        const data = await response.json() as { states?: Array<{ label: string; value: string; updated: number }>; refreshSeconds?: number; error?: string }
+        if (!response.ok) throw new Error(data.error || 'ioBroker nicht erreichbar.')
+        const states = data.states || []
+        container.innerHTML = states.length
+          ? `<div class="iobroker-state-list">${states.map((state) => `<div class="iobroker-state"><span>${escapeHtml(state.label)}</span><strong>${escapeHtml(state.value)}</strong></div>`).join('')}</div>`
+          : '<div class="widget-data-empty">Keine Datenpunkte eingerichtet.</div>'
+      } catch (error) { widgetError(container, error instanceof Error ? error.message : 'ioBroker nicht erreichbar.') }
+    }
+    void load()
+    window.setInterval(() => void load(), Math.max(5, Number(container.dataset.refreshSeconds) || 15) * 1000)
   })
 }
 

@@ -362,6 +362,124 @@ async function downloadCalendarFeed(value, calendarFetch, lookupFunction) {
   throw new CalendarFeedError(502, 'Der Kalender-Feed konnte nicht geladen werden.')
 }
 
+const DEFAULT_RSS_FEEDS = {
+  tagesschau: 'https://www.tagesschau.de/infoservices/alle-meldungen-100~rss2.xml',
+  spiegel: 'https://www.spiegel.de/schlagzeilen/index.rss',
+  heise: 'https://www.heise.de/rss/heise-atom.xml',
+}
+
+function decodeXml(value = '') {
+  return String(value)
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ').trim()
+}
+
+function xmlField(block, names) {
+  for (const name of names) {
+    const match = block.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`, 'i'))
+    if (match) return decodeXml(match[1])
+  }
+  return ''
+}
+
+function parseRssFeed(content) {
+  const blocks = [...String(content).matchAll(/<(?:item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/(?:item|entry)>/gi)].map((match) => match[1])
+  return blocks.slice(0, 12).map((block) => ({
+    title: xmlField(block, ['title']).slice(0, 240),
+    description: xmlField(block, ['description', 'summary', 'content']).slice(0, 360),
+    published: xmlField(block, ['pubDate', 'published', 'updated']).slice(0, 80),
+  })).filter((item) => item.title)
+}
+
+async function downloadRssFeed(value, rssFetch, lookupFunction) {
+  const feedUrl = DEFAULT_RSS_FEEDS[value] || value
+  let url = await validateCalendarFeedUrl(feedUrl, lookupFunction)
+  for (let redirects = 0; redirects <= 3; redirects += 1) {
+    let response
+    try {
+      response = await rssFetch(url, { redirect: 'manual', signal: AbortSignal.timeout(10_000) })
+    } catch {
+      throw new CalendarFeedError(502, 'Der Nachrichten-Feed ist nicht erreichbar.')
+    }
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location')
+      if (!location) throw new CalendarFeedError(502, 'Der Nachrichten-Feed leitet ungültig weiter.')
+      url = await validateCalendarFeedUrl(new URL(location, url).toString(), lookupFunction)
+      continue
+    }
+    if (!response.ok) throw new CalendarFeedError(502, `Der Nachrichten-Feed antwortet mit HTTP ${response.status}.`)
+    const body = await response.text()
+    if (body.length > 2_000_000) throw new CalendarFeedError(502, 'Der Nachrichten-Feed ist zu groß.')
+    return parseRssFeed(body)
+  }
+  throw new CalendarFeedError(502, 'Zu viele Weiterleitungen beim Nachrichten-Feed.')
+}
+
+function parseIoBrokerStates(value) {
+  return String(value || '').split(/\r?\n/).map((line) => {
+    const [label, ...idParts] = line.split('|')
+    const id = idParts.join('|').trim()
+    return { label: (id ? label : '').trim() || id, id }
+  }).filter(({ id }) => id && /^[a-zA-Z0-9_.-]+$/.test(id)).slice(0, 24)
+}
+
+async function loadIoBrokerStates(widget, ioBrokerFetch) {
+  let baseUrl
+  try {
+    baseUrl = new URL(String(widget.iobrokerUrl || '').trim())
+  } catch {
+    throw new CalendarFeedError(422, 'Die ioBroker-Adresse ist ungültig.')
+  }
+  if (!['http:', 'https:'].includes(baseUrl.protocol) || baseUrl.username || baseUrl.password) {
+    throw new CalendarFeedError(422, 'Die ioBroker-Adresse muss HTTP oder HTTPS ohne Zugangsdaten in der URL verwenden.')
+  }
+  const entries = parseIoBrokerStates(widget.iobrokerStates)
+  const authorization = widget.iobrokerUser ? `Basic ${Buffer.from(`${widget.iobrokerUser}:${widget.iobrokerPassword || ''}`).toString('base64')}` : ''
+  const states = await Promise.all(entries.map(async ({ label, id }) => {
+    const target = new URL(`get/${encodeURIComponent(id)}`, baseUrl.href.endsWith('/') ? baseUrl.href : `${baseUrl.href}/`)
+    let response
+    try {
+      response = await ioBrokerFetch(target, { headers: authorization ? { authorization } : {}, signal: AbortSignal.timeout(5000) })
+    } catch {
+      return { label, value: 'Nicht erreichbar', updated: 0 }
+    }
+    if (!response.ok) return { label, value: `Fehler ${response.status}`, updated: 0 }
+    try {
+      const data = await response.json()
+      const value = data?.val
+      return { label, value: value === true ? 'An / Offen' : (value === false ? 'Aus / Geschlossen' : String(value ?? '—')), updated: Number(data?.ts) || 0 }
+    } catch {
+      return { label, value: 'Ungültige Antwort', updated: 0 }
+    }
+  }))
+  return states
+}
+
+async function downloadDwdWarnings(region, dwdFetch) {
+  let response
+  try {
+    response = await dwdFetch('https://www.dwd.de/DWD/warnungen/warnapp/json/warnings.json', { signal: AbortSignal.timeout(12_000) })
+  } catch {
+    throw new CalendarFeedError(502, 'DWD-Warnungen sind nicht erreichbar.')
+  }
+  if (!response.ok) throw new CalendarFeedError(502, `DWD antwortet mit HTTP ${response.status}.`)
+  const data = await response.json()
+  const needle = String(region || '').trim().toLocaleLowerCase('de-DE')
+  const warnings = Object.values(data?.warnings || data || {}).flatMap((value) => Array.isArray(value) ? value : [])
+    .filter((warning) => !needle || String(warning.REGIONNAME || '').toLocaleLowerCase('de-DE').includes(needle))
+    .slice(0, 8)
+    .map((warning) => ({
+      headline: String(warning.HEADLINE || warning.EVENT || 'DWD-Warnung').slice(0, 220),
+      event: String(warning.EVENT || '').slice(0, 160),
+      severity: String(warning.SEVERITY || 'Moderate').slice(0, 40),
+      description: String(warning.DESCRIPTION || '').replace(/\s+/g, ' ').slice(0, 420),
+      expires: String(warning.EXPIRES || ''),
+    }))
+  return warnings
+}
+
 function json(response, status, body) {
   response.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
   response.end(JSON.stringify(body))
@@ -810,6 +928,9 @@ export function createHomePiBoardServer({
   adminPin = process.env.HOMEPIBOARD_PIN || '0000',
   scryptFunction = scrypt,
   calendarFetch = fetch,
+  rssFetch = fetch,
+  dwdFetch = fetch,
+  ioBrokerFetch = fetch,
   cameraFetch = fetch,
   lookupFunction = dnsLookup,
   thermalPath = '/sys/class/thermal/thermal_zone0/temp',
@@ -1260,6 +1381,58 @@ export function createHomePiBoardServer({
         try {
           const events = await downloadCalendarFeed(widget.url, calendarFetch, lookupFunction)
           json(response, 200, { events })
+        } catch (error) {
+          if (error instanceof CalendarFeedError) json(response, error.status, { error: error.message })
+          else throw error
+        }
+        return
+      }
+
+      if (url.pathname.startsWith('/api/rss/') && request.method === 'GET') {
+        const widgetId = decodeURIComponent(url.pathname.slice('/api/rss/'.length))
+        const settings = await loadSettings(settingsFile)
+        const widget = settings.widgets.find((candidate) => candidate.id === widgetId && candidate.type === 'rss' && candidate.rssFeed)
+        if (!widget) {
+          json(response, 404, { error: 'Nachrichten-Widget nicht gefunden.' })
+          return
+        }
+        try {
+          json(response, 200, { items: await downloadRssFeed(widget.rssFeed, rssFetch, lookupFunction) })
+        } catch (error) {
+          if (error instanceof CalendarFeedError) json(response, error.status, { error: error.message })
+          else throw error
+        }
+        return
+      }
+
+      if (url.pathname.startsWith('/api/dwd/') && request.method === 'GET') {
+        const widgetId = decodeURIComponent(url.pathname.slice('/api/dwd/'.length))
+        const settings = await loadSettings(settingsFile)
+        const widget = settings.widgets.find((candidate) => candidate.id === widgetId && candidate.type === 'dwd')
+        if (!widget) {
+          json(response, 404, { error: 'DWD-Widget nicht gefunden.' })
+          return
+        }
+        const region = widget.dwdRegion || settings.location
+        try {
+          json(response, 200, { region, warnings: await downloadDwdWarnings(region, dwdFetch) })
+        } catch (error) {
+          if (error instanceof CalendarFeedError) json(response, error.status, { error: error.message })
+          else throw error
+        }
+        return
+      }
+
+      if (url.pathname.startsWith('/api/iobroker/') && request.method === 'GET') {
+        const widgetId = decodeURIComponent(url.pathname.slice('/api/iobroker/'.length))
+        const settings = await loadSettings(settingsFile)
+        const widget = settings.widgets.find((candidate) => candidate.id === widgetId && candidate.type === 'iobroker')
+        if (!widget) {
+          json(response, 404, { error: 'ioBroker-Widget nicht gefunden.' })
+          return
+        }
+        try {
+          json(response, 200, { states: await loadIoBrokerStates(widget, ioBrokerFetch), refreshSeconds: widget.iobrokerRefreshSeconds || 15 })
         } catch (error) {
           if (error instanceof CalendarFeedError) json(response, error.status, { error: error.message })
           else throw error

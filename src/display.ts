@@ -2,7 +2,7 @@ import { formatUptime } from './admin.ts'
 import { escapeHtml, weatherSymbol } from './dashboard-utils.ts'
 import { DEFAULT_HEADER_ITEMS, type DisplaySettings, type HeaderItemType } from './settings.ts'
 import { createSettingsStore } from './settings-store.ts'
-import { bindQrWidgets, bindWidgetFrames, renderWidget } from './widgets.ts'
+import { bindDwdWidgets, bindIoBrokerWidgets, bindQrWidgets, bindRssWidgets, bindWidgetFrames, renderWidget } from './widgets.ts'
 
 export function isNightTime(start: string, end: string, now = new Date()): boolean {
   const parseMinutes = (timeStr: string) => {
@@ -556,6 +556,9 @@ export async function renderDisplayPage(app: HTMLElement) {
   if (networkStatus) initNetworkStatus(networkStatus, source)
   bindWidgetFrames(app)
   bindQrWidgets(app)
+  bindRssWidgets(app)
+  bindDwdWidgets(app)
+  bindIoBrokerWidgets(app)
   bindRadioWidgets(app)
   if (weather && settings.weatherCity) {
     window.setInterval(() => void loadWeather(settings.weatherCity, weather), WEATHER_REFRESH_MS)

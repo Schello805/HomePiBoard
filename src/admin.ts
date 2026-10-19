@@ -3,7 +3,7 @@ import { bindRadioWidgets } from './display.ts'
 import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type WidgetType } from './settings.ts'
 import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
 import { parseCalendarFeed, type CalendarFeedEvent } from './calendar-feed.ts'
-import { bindCameraWidgets, bindQrWidgets, bindWidgetFrames, isBuiltInCalendar, normalizeCameraUrl, parseSlideshowUrls, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
+import { bindCameraWidgets, bindDwdWidgets, bindIoBrokerWidgets, bindQrWidgets, bindRssWidgets, bindWidgetFrames, isBuiltInCalendar, normalizeCameraUrl, parseSlideshowUrls, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
 
 const pinKey = 'homepiboard-admin-pin'
 
@@ -248,6 +248,9 @@ export async function renderAdminPage(app: HTMLElement) {
           <button type="button" data-add-type="media">📻 Radio</button>
           <button type="button" data-add-type="camera">📷 Kamera</button>
           <button type="button" data-add-type="qr">▦ QR-Code</button>
+          <button type="button" data-add-type="rss">▤ Nachrichten</button>
+          <button type="button" data-add-type="dwd">⚠ DWD</button>
+          <button type="button" data-add-type="iobroker">⌂ Smart Home</button>
         </div>
       </div>
       <p class="layout-warning" id="layout-warning" role="alert"></p>
@@ -397,6 +400,26 @@ export async function renderAdminPage(app: HTMLElement) {
       ? (qrEncryptionInput.value === 'WEP' ? 'WEP' : (qrEncryptionInput.value === 'nopass' ? 'nopass' : 'WPA'))
       : undefined
 
+    const rssFeedInput = editor.querySelector<HTMLSelectElement>('[data-field="rssFeed"]')
+    const rssCustomUrlInput = editor.querySelector<HTMLInputElement>('[data-field="rssCustomUrl"]')
+    const rssRefreshInput = editor.querySelector<HTMLInputElement>('[data-field="rssRefreshMinutes"]')
+    const rssFeed = type === 'rss' && rssFeedInput
+      ? (rssFeedInput.value === 'custom' ? rssCustomUrlInput?.value.trim() || '' : rssFeedInput.value)
+      : undefined
+    const rssRefreshMinutes = type === 'rss' && rssRefreshInput ? Math.max(1, Math.min(1440, Number(rssRefreshInput.value) || 15)) : undefined
+    const dwdRegionInput = editor.querySelector<HTMLInputElement>('[data-field="dwdRegion"]')
+    const dwdRegion = type === 'dwd' && dwdRegionInput ? dwdRegionInput.value.trim() : undefined
+    const ioUrlInput = editor.querySelector<HTMLInputElement>('[data-field="iobrokerUrl"]')
+    const ioUserInput = editor.querySelector<HTMLInputElement>('[data-field="iobrokerUser"]')
+    const ioPasswordInput = editor.querySelector<HTMLInputElement>('[data-field="iobrokerPassword"]')
+    const ioStatesInput = editor.querySelector<HTMLTextAreaElement>('[data-field="iobrokerStates"]')
+    const ioRefreshInput = editor.querySelector<HTMLInputElement>('[data-field="iobrokerRefreshSeconds"]')
+    const iobrokerUrl = type === 'iobroker' && ioUrlInput ? ioUrlInput.value.trim() : undefined
+    const iobrokerUser = type === 'iobroker' && ioUserInput ? ioUserInput.value.trim() : undefined
+    const iobrokerPassword = type === 'iobroker' && ioPasswordInput ? ioPasswordInput.value : undefined
+    const iobrokerStates = type === 'iobroker' && ioStatesInput ? ioStatesInput.value.trim() : undefined
+    const iobrokerRefreshSeconds = type === 'iobroker' && ioRefreshInput ? Math.max(5, Math.min(3600, Number(ioRefreshInput.value) || 15)) : undefined
+
     const titleVal = editor.querySelector<HTMLInputElement>('[data-field="title"]')?.value
     const colVal = editor.querySelector<HTMLInputElement>('[data-field="columns"]')?.value
     const rowVal = editor.querySelector<HTMLInputElement>('[data-field="rows"]')?.value
@@ -426,6 +449,14 @@ export async function renderAdminPage(app: HTMLElement) {
       ...(qrSsid !== undefined ? { qrSsid } : {}),
       ...(qrPassword !== undefined ? { qrPassword } : {}),
       ...(qrEncryption !== undefined ? { qrEncryption } : {}),
+      ...(rssFeed !== undefined ? { rssFeed } : {}),
+      ...(rssRefreshMinutes !== undefined ? { rssRefreshMinutes } : {}),
+      ...(dwdRegion !== undefined ? { dwdRegion } : {}),
+      ...(iobrokerUrl !== undefined ? { iobrokerUrl } : {}),
+      ...(iobrokerUser !== undefined ? { iobrokerUser } : {}),
+      ...(iobrokerPassword !== undefined ? { iobrokerPassword } : {}),
+      ...(iobrokerStates !== undefined ? { iobrokerStates } : {}),
+      ...(iobrokerRefreshSeconds !== undefined ? { iobrokerRefreshSeconds } : {}),
     }
   }
 
@@ -560,6 +591,9 @@ export async function renderAdminPage(app: HTMLElement) {
       previewContent.innerHTML = `${widget.showTitle ? `<header class="kiosk-widget-header preview-header"><h2 class="kiosk-widget-title">${escapeHtml(widget.title)}</h2></header>` : ''}<div class="iframe-placeholder">${renderWidgetContent(widget)}</div>`
       bindWidgetFrames(previewContent)
       bindQrWidgets(previewContent)
+      bindRssWidgets(previewContent)
+      bindDwdWidgets(previewContent)
+      bindIoBrokerWidgets(previewContent)
       bindRadioWidgets(previewContent, { allowAutoplay: false })
       bindCameraWidgets(previewContent)
     }
@@ -574,6 +608,9 @@ export async function renderAdminPage(app: HTMLElement) {
     bindEditor(editor)
     bindWidgetFrames(editor)
     bindQrWidgets(editor)
+    bindRssWidgets(editor)
+    bindDwdWidgets(editor)
+    bindIoBrokerWidgets(editor)
     bindRadioWidgets(editor, { allowAutoplay: false })
     bindCameraWidgets(editor)
     updateEditorIndexes()
@@ -595,6 +632,9 @@ export async function renderAdminPage(app: HTMLElement) {
     bindEditor(copy)
     bindWidgetFrames(copy)
     bindQrWidgets(copy)
+    bindRssWidgets(copy)
+    bindDwdWidgets(copy)
+    bindIoBrokerWidgets(copy)
     bindRadioWidgets(copy, { allowAutoplay: false })
     bindCameraWidgets(copy)
     updateEditorIndexes()
@@ -1141,6 +1181,9 @@ export async function renderAdminPage(app: HTMLElement) {
       bindEditor(newEditor)
       bindWidgetFrames(newEditor)
       bindQrWidgets(newEditor)
+      bindRssWidgets(newEditor)
+      bindDwdWidgets(newEditor)
+      bindIoBrokerWidgets(newEditor)
       bindRadioWidgets(newEditor, { allowAutoplay: false })
       bindCameraWidgets(newEditor)
       markDirty()
@@ -1378,6 +1421,9 @@ export async function renderAdminPage(app: HTMLElement) {
   })
   bindWidgetFrames(editorList)
   bindQrWidgets(editorList)
+  bindRssWidgets(editorList)
+  bindDwdWidgets(editorList)
+  bindIoBrokerWidgets(editorList)
   bindRadioWidgets(editorList, { allowAutoplay: false })
   bindCameraWidgets(editorList)
   updateEditorIndexes()
