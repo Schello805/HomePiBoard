@@ -237,21 +237,14 @@ export async function renderAdminPage(app: HTMLElement) {
           <span class="widget-count" id="widget-count"></span>
           <span class="grid-hint">${GRID_COLUMNS} × ${GRID_ROWS} Raster • Ecke ↘ ziehen</span>
         </div>
-        <div class="add-widget-menu" aria-label="Widget hinzufügen">
-          <span class="add-label">+ Widget:</span>
-          <button type="button" data-add-type="web">↗ Webseite</button>
-          <button type="button" data-add-type="calendar">▦ Kalender</button>
-          <button type="button" data-add-type="text">≡ Text</button>
-          <button type="button" data-add-type="image">▧ Bild</button>
-          <button type="button" data-add-type="slideshow">▨ Diashow</button>
-          <button type="button" data-add-type="waste">🗑️ Müll</button>
-          <button type="button" data-add-type="media">📻 Radio</button>
-          <button type="button" data-add-type="camera">📷 Kamera</button>
-          <button type="button" data-add-type="qr">▦ QR-Code</button>
-          <button type="button" data-add-type="rss">▤ Nachrichten</button>
-          <button type="button" data-add-type="dwd">⚠ DWD</button>
-          <button type="button" data-add-type="iobroker">⌂ Smart Home</button>
-        </div>
+        <details class="add-widget-menu" aria-label="Widget hinzufügen">
+          <summary>＋ Widget hinzufügen</summary>
+          <div class="add-widget-dropdown">
+            <section><h3>Inhalt</h3><button type="button" data-add-type="web">↗ Webseite</button><button type="button" data-add-type="text">≡ Text</button><button type="button" data-add-type="image">▧ Bild</button><button type="button" data-add-type="slideshow">▨ Diashow</button><button type="button" data-add-type="qr">▦ QR-Code</button></section>
+            <section><h3>Informationen</h3><button type="button" data-add-type="calendar">▦ Kalender</button><button type="button" data-add-type="waste">🗑️ Müll</button><button type="button" data-add-type="rss">▤ Nachrichten</button><button type="button" data-add-type="dwd">⚠ DWD-Warnungen</button></section>
+            <section><h3>Medien &amp; Smart Home</h3><button type="button" data-add-type="media">📻 Radio</button><button type="button" data-add-type="camera">📷 Kamera</button><button type="button" data-add-type="iobroker">⌂ Smart Home</button></section>
+          </div>
+        </details>
       </div>
       <p class="layout-warning" id="layout-warning" role="alert"></p>
       <div class="admin-canvas">
@@ -1422,7 +1415,10 @@ export async function renderAdminPage(app: HTMLElement) {
   bindCameraWidgets(editorList)
   updateEditorIndexes()
 
-  app.querySelectorAll<HTMLButtonElement>('[data-add-type]').forEach((button) => button.addEventListener('click', () => addWidget(button.dataset.addType as WidgetType)))
+  app.querySelectorAll<HTMLButtonElement>('[data-add-type]').forEach((button) => button.addEventListener('click', () => {
+    addWidget(button.dataset.addType as WidgetType)
+    button.closest<HTMLDetailsElement>('.add-widget-menu')?.removeAttribute('open')
+  }))
   async function checkUpdateStatus(fetchRemote = false) {
     try {
       const res = await fetch(`/api/system/update-status${fetchRemote ? '?check=1' : ''}`, { method: 'GET', cache: 'no-store' })

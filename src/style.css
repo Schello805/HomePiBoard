@@ -448,10 +448,16 @@ button:has(.loading-spinner) {
 .admin-subbar-info { display: flex; align-items: center; gap: 10px; color: var(--muted); }
 .widget-count { color: var(--acid); font-weight: 700; font-size: 0.78rem; }
 .grid-hint { color: var(--muted); font-size: 0.72rem; }
-.add-widget-menu { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.add-label { color: var(--muted); font-size: 0.72rem; font-weight: 600; text-transform: uppercase; margin-right: 2px; }
-.add-widget-menu button { height: 26px; padding: 0 8px; font-size: 0.72rem; font-weight: 600; border: 1px dashed rgba(201, 242, 105, 0.4); border-radius: 4px; color: var(--acid); background: transparent; cursor: pointer; }
-.add-widget-menu button:hover { border-style: solid; border-color: var(--acid); background: rgba(201, 242, 105, 0.08); }
+.add-widget-menu { position: relative; }
+.add-widget-menu summary { height: 28px; display: inline-flex; align-items: center; padding: 0 10px; border: 1px dashed rgba(201, 242, 105, .5); border-radius: 4px; color: var(--acid); cursor: pointer; font-size: .74rem; font-weight: 700; list-style: none; }
+.add-widget-menu summary::-webkit-details-marker { display: none; }
+.add-widget-menu[open] summary { border-style: solid; background: rgba(201, 242, 105, .1); }
+.add-widget-dropdown { position: absolute; right: 0; top: calc(100% + 7px); z-index: 70; display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 14px; width: min(560px, calc(100vw - 28px)); padding: 13px; border: 1px solid var(--line); border-radius: 7px; background: #171a17; box-shadow: 0 16px 34px rgba(0,0,0,.48); }
+.add-widget-dropdown section { display: grid; align-content: start; gap: 5px; }
+.add-widget-dropdown h3 { margin: 0 0 3px; color: var(--muted); font-size: .67rem; letter-spacing: .08em; text-transform: uppercase; }
+.add-widget-menu button { min-height: 29px; padding: 5px 8px; border: 1px solid transparent; border-radius: 4px; color: var(--ink); background: rgba(255,255,255,.035); cursor: pointer; font-size: .76rem; text-align: left; }
+.add-widget-menu button:hover { border-color: rgba(201,242,105,.5); color: var(--acid); background: rgba(201,242,105,.1); }
+@media (max-width: 620px) { .add-widget-dropdown { grid-template-columns: 1fr; max-height: min(70vh, 500px); overflow: auto; } }
 
 .layout-warning:not(:empty) { margin: 6px 14px; border: 1px solid rgba(242, 155, 136, 0.35); border-radius: 5px; padding: 8px 12px; background: rgba(242, 155, 136, 0.08); font-size: 0.76rem; }
 .admin-canvas { flex: 1; min-height: 0; padding: 10px 14px; overflow: auto; }
