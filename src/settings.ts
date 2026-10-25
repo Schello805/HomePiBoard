@@ -46,6 +46,7 @@ export const ALL_HEADER_ITEMS_META: HeaderItemMeta[] = [
 
 export type DateFormat = 'short' | 'medium' | 'long'
 export type TimeFormat = '24h' | '12h'
+export type DesignTheme = 'free' | 'liquid-glass'
 
 export type DashboardWidget = {
   id: string
@@ -85,6 +86,7 @@ export type DisplaySettings = {
   version: 3
   location: string
   weatherCity: string
+  designTheme?: DesignTheme
   timezone?: string
   locale?: string
   dateFormat?: DateFormat
@@ -127,6 +129,7 @@ export const defaultSettings: DisplaySettings = {
   version: SETTINGS_VERSION,
   location: 'Zuhause',
   weatherCity: '',
+  designTheme: 'free',
   timezone: 'auto',
   locale: 'de-DE',
   dateFormat: 'medium',
@@ -424,6 +427,7 @@ export function normalizeSettings(value: unknown): DisplaySettings {
     })
   }
 
+  const designTheme: DesignTheme = parsed.designTheme === 'liquid-glass' ? 'liquid-glass' : 'free'
   const timezone = typeof parsed.timezone === 'string' && parsed.timezone.trim() ? parsed.timezone.trim().slice(0, 50) : defaultSettings.timezone
   const locale = typeof parsed.locale === 'string' && parsed.locale.trim() ? parsed.locale.trim().slice(0, 20) : defaultSettings.locale
   const dateFormat: DateFormat = parsed.dateFormat === 'short' || parsed.dateFormat === 'long' ? parsed.dateFormat : 'medium'
@@ -451,6 +455,7 @@ export function normalizeSettings(value: unknown): DisplaySettings {
     version: SETTINGS_VERSION,
     location: text(parsed.location) || defaultSettings.location,
     weatherCity: text(parsed.weatherCity),
+    designTheme,
     timezone,
     locale,
     dateFormat,

@@ -19,3 +19,9 @@ test('the editor grid uses 24 columns and dynamic column spans for widget cards'
   assert.match(css, /\.slideshow-container\s*\{[^}]*position:\s*relative/s)
   assert.match(css, /\.connection-status\.is-offline\s*\{[^}]*color:\s*var\(--danger\)/s)
 })
+
+test('liquid glass card theme defines translucent glassmorphic cards and floating header pill', () => {
+  assert.match(css, /\.signage-shell\.theme-liquid-glass,\s*\.admin-shell\.theme-liquid-glass\s*\{/s)
+  assert.match(css, /\.signage-shell\.theme-liquid-glass\s+\.header-bar\s*\{[^}]*backdrop-filter:\s*blur/s)
+  assert.match(css, /\.signage-shell\.theme-liquid-glass\s+\.widget,\s*\.admin-shell\.theme-liquid-glass\s+\.widget-editor\s*\{[^}]*backdrop-filter:\s*blur/s)
+})

@@ -378,4 +378,16 @@ test('normalizeSettings supports RTSP camera stream URLs and rtsp cameraType', (
   assert.equal(normalized.widgets[0]?.cameraFit, 'cover')
 })
 
+test('normalizeSettings preserves designTheme and defaults to free', () => {
+  const defaultTheme = normalizeSettings({ version: 3, widgets: [] })
+  assert.equal(defaultTheme.designTheme, 'free')
+
+  const glassTheme = normalizeSettings({ version: 3, designTheme: 'liquid-glass', widgets: [] })
+  assert.equal(glassTheme.designTheme, 'liquid-glass')
+
+  const invalidTheme = normalizeSettings({ version: 3, designTheme: 'unknown-theme', widgets: [] })
+  assert.equal(invalidTheme.designTheme, 'free')
+})
+
+
 

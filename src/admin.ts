@@ -1,6 +1,6 @@
 import { escapeHtml } from './dashboard-utils.ts'
 import { bindRadioWidgets } from './display.ts'
-import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type WidgetType } from './settings.ts'
+import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type DesignTheme, type WidgetType } from './settings.ts'
 import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
 import { parseCalendarFeed, type CalendarFeedEvent } from './calendar-feed.ts'
 import { bindCameraWidgets, bindDwdWidgets, bindIoBrokerWidgets, bindQrWidgets, bindRssWidgets, bindWidgetFrames, isBuiltInCalendar, normalizeCameraUrl, parseSlideshowUrls, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
@@ -215,8 +215,9 @@ export async function renderAdminPage(app: HTMLElement) {
   const store = createSettingsStore()
   const loaded = await store.load()
   const settings = loaded.settings
+  let currentDesignTheme: DesignTheme = settings.designTheme === 'liquid-glass' ? 'liquid-glass' : 'free'
 
-  app.innerHTML = `<main class="admin-shell">
+  app.innerHTML = `<main class="admin-shell theme-${currentDesignTheme}" data-design-theme="${currentDesignTheme}">
     <form class="admin-form" id="admin-form">
       <header class="admin-topbar">
         <div class="admin-topbar-brand">
@@ -224,6 +225,10 @@ export async function renderAdminPage(app: HTMLElement) {
           <span class="admin-brand-title">HomePiBoard <em>EDIT</em></span>
         </div>
         <div class="admin-global-fields">
+          <div class="design-theme-segmented" role="group" aria-label="Grunddesign wählen">
+            <button type="button" class="theme-segment-btn ${currentDesignTheme === 'free' ? 'is-active' : ''}" data-theme-select="free" aria-pressed="${currentDesignTheme === 'free'}" title="Freies Design (Standard)">▣ Frei</button>
+            <button type="button" class="theme-segment-btn ${currentDesignTheme === 'liquid-glass' ? 'is-active' : ''}" data-theme-select="liquid-glass" aria-pressed="${currentDesignTheme === 'liquid-glass'}" title="Apple Liquid Glass Kartendesign">✨ Liquid Glass</button>
+          </div>
           <a class="topbar-btn" id="display-settings-button" href="/settings" title="Einstellungen öffnen">⚙ Einstellungen</a>
         </div>
         <div class="admin-header-actions">
@@ -293,8 +298,26 @@ export async function renderAdminPage(app: HTMLElement) {
   const pinInput = app.querySelector<HTMLInputElement>('#admin-pin')!
   const pinError = app.querySelector<HTMLElement>('#pin-error')!
   const displaySettingsButton = app.querySelector<HTMLElement>('#display-settings-button')
+  const adminShell = app.querySelector<HTMLElement>('.admin-shell')!
   let dirty = false
   let pinRequest: Promise<string | null> | null = null
+
+  app.querySelectorAll<HTMLButtonElement>('[data-theme-select]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const nextTheme: DesignTheme = btn.dataset.themeSelect === 'liquid-glass' ? 'liquid-glass' : 'free'
+      if (nextTheme === currentDesignTheme) return
+      currentDesignTheme = nextTheme
+      adminShell.classList.toggle('theme-liquid-glass', currentDesignTheme === 'liquid-glass')
+      adminShell.classList.toggle('theme-free', currentDesignTheme === 'free')
+      adminShell.dataset.designTheme = currentDesignTheme
+      app.querySelectorAll<HTMLButtonElement>('[data-theme-select]').forEach((b) => {
+        const active = b.dataset.themeSelect === currentDesignTheme
+        b.classList.toggle('is-active', active)
+        b.setAttribute('aria-pressed', String(active))
+      })
+      markDirty()
+    })
+  })
 
   function bindCompactFields(root: ParentNode) {
     root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea').forEach((control) => {
@@ -1455,6 +1478,7 @@ export async function renderAdminPage(app: HTMLElement) {
     const nextSettings = normalizeSettings({
       ...settings,
       version: SETTINGS_VERSION,
+      designTheme: currentDesignTheme,
       widgets: readWidgets(),
     })
     saveButton.disabled = true

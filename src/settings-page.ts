@@ -1,7 +1,7 @@
 import { adminErrorMessage, clearPinError, createConfirmModal, formatCpuTemp, formatUptime, validatePinChange } from './admin.ts'
 import { downloadJson, escapeHtml } from './dashboard-utils.ts'
 import { playNotificationSound } from './display.ts'
-import { ALL_HEADER_ITEMS_META, DEFAULT_HEADER_ITEMS, type DisplaySettings, type HeaderItemType, normalizeSettings, SETTINGS_VERSION } from './settings.ts'
+import { ALL_HEADER_ITEMS_META, DEFAULT_HEADER_ITEMS, type DesignTheme, type DisplaySettings, type HeaderItemType, normalizeSettings, SETTINGS_VERSION } from './settings.ts'
 import { createSettingsStore } from './settings-store.ts'
 import { widgetTypeLabel } from './widgets.ts'
 
@@ -84,6 +84,34 @@ export async function renderSettingsPage(app: HTMLElement) {
                   <span class="label-title">Wetter-Standort (Stadt)</span>
                   <input class="settings-input" id="settings-weather-city" maxlength="40" value="${escapeHtml(settings.weatherCity)}" placeholder="Berlin" />
                 </label>
+              </div>
+
+              <div class="setting-group-box span-full-row">
+                <span class="label-title">Grunddesign &amp; Darstellung</span>
+                <div class="design-theme-cards" role="radiogroup" aria-label="Grunddesign wählen">
+                  <label class="design-theme-option ${(settings.designTheme || 'free') === 'free' ? 'is-selected' : ''}" for="settings-theme-free">
+                    <input type="radio" name="settings-design-theme" id="settings-theme-free" value="free" ${(settings.designTheme || 'free') === 'free' ? 'checked' : ''} />
+                    <div class="theme-option-preview preview-free" aria-hidden="true">
+                      <div class="mini-header"></div>
+                      <div class="mini-grid"><span></span><span></span><span></span></div>
+                    </div>
+                    <div class="theme-option-info">
+                      <strong class="theme-option-title">▣ Freies Design (Standard)</strong>
+                      <span class="theme-option-desc">Klare Kanten, kontrastreiches dunkles Panel-Layout mit Limetten-Akzenten</span>
+                    </div>
+                  </label>
+                  <label class="design-theme-option ${settings.designTheme === 'liquid-glass' ? 'is-selected' : ''}" for="settings-theme-liquid-glass">
+                    <input type="radio" name="settings-design-theme" id="settings-theme-liquid-glass" value="liquid-glass" ${settings.designTheme === 'liquid-glass' ? 'checked' : ''} />
+                    <div class="theme-option-preview preview-liquid-glass" aria-hidden="true">
+                      <div class="mini-header"></div>
+                      <div class="mini-grid"><span></span><span></span><span></span></div>
+                    </div>
+                    <div class="theme-option-info">
+                      <strong class="theme-option-title">✨ Liquid Glass (Apple Kartendesign)</strong>
+                      <span class="theme-option-desc">Transluzente Milchglas-Karten mit Lichtkanten, Tiefenunschärfe und Ambient-Hintergrund</span>
+                    </div>
+                  </label>
+                </div>
               </div>
 
               <div class="setting-group-box">
@@ -528,6 +556,7 @@ export async function renderSettingsPage(app: HTMLElement) {
   // Element Queries
   const locationInput = app.querySelector<HTMLInputElement>('#settings-location')
   const weatherCityInput = app.querySelector<HTMLInputElement>('#settings-weather-city')
+  const themeRadios = [...app.querySelectorAll<HTMLInputElement>('input[name="settings-design-theme"]')]
   const displayScaleSelect = app.querySelector<HTMLSelectElement>('#settings-display-scale')!
   const detectedResolutionEl = app.querySelector<HTMLElement>('#settings-detected-resolution')!
   const hideCursorCheckbox = app.querySelector<HTMLInputElement>('#settings-hide-cursor')!
@@ -1062,6 +1091,12 @@ export async function renderSettingsPage(app: HTMLElement) {
   function applySettingsToForm(s: DisplaySettings) {
     if (locationInput) locationInput.value = s.location || 'Zuhause'
     if (weatherCityInput) weatherCityInput.value = s.weatherCity || ''
+    const activeTheme: DesignTheme = s.designTheme === 'liquid-glass' ? 'liquid-glass' : 'free'
+    themeRadios.forEach((radio) => {
+      const checked = radio.value === activeTheme
+      radio.checked = checked
+      radio.closest('.design-theme-option')?.classList.toggle('is-selected', checked)
+    })
     if (timezoneSelect) timezoneSelect.value = s.timezone || 'auto'
     if (localeSelect) localeSelect.value = s.locale || 'de-DE'
     if (dateFormatSelect) dateFormatSelect.value = s.dateFormat || 'medium'
@@ -1089,11 +1124,14 @@ export async function renderSettingsPage(app: HTMLElement) {
   }
 
   function getCurrentFormSettings(): DisplaySettings {
+    const selectedThemeRadio = themeRadios.find((r) => r.checked)
+    const designTheme: DesignTheme = selectedThemeRadio?.value === 'liquid-glass' ? 'liquid-glass' : 'free'
     return normalizeSettings({
       ...settings,
       version: SETTINGS_VERSION,
       location: locationInput ? locationInput.value.trim() || 'Zuhause' : settings.location,
       weatherCity: weatherCityInput ? weatherCityInput.value.trim() : settings.weatherCity,
+      designTheme,
       timezone: timezoneSelect.value,
       locale: localeSelect.value,
       dateFormat: (dateFormatSelect.value as 'short' | 'medium' | 'long') || 'medium',
@@ -1362,6 +1400,13 @@ export async function renderSettingsPage(app: HTMLElement) {
   })
 
   // Event Listeners
+  themeRadios.forEach((radio) => {
+    radio.addEventListener('change', () => {
+      themeRadios.forEach((r) => {
+        r.closest('.design-theme-option')?.classList.toggle('is-selected', r.checked)
+      })
+    })
+  })
   locationInput?.addEventListener('input', () => {
     renderHeaderBuilderUI()
   })

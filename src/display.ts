@@ -252,9 +252,10 @@ export async function renderDisplayPage(app: HTMLElement) {
 
   const headerItems = settings.headerItems && settings.headerItems.length ? settings.headerItems : DEFAULT_HEADER_ITEMS
   const headerHtml = headerItems.map((item) => renderHeaderItemHtml(item, settings, isOnline, source)).join('')
+  const designTheme = settings.designTheme === 'liquid-glass' ? 'liquid-glass' : 'free'
 
   app.innerHTML = `
-    <main class="signage-shell">
+    <main class="signage-shell theme-${designTheme}" data-design-theme="${designTheme}">
       <header class="header-bar">
         <div class="brand-mark"><img class="brand-logo" src="/homepiboard-logo.svg" alt="HomePiBoard" /></div>
         <div class="header-status">
