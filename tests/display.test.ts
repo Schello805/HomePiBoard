@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { bindRadioWidgets, calculatePixelShift, initScreenWakeLock, isNightTime, renderHeaderItemHtml } from '../src/display.ts'
+import { bindRadioWidgets, calculatePixelShift, initScreenWakeLock, isNightTime, renderHeaderItemHtml, resolveHeaderLayout } from '../src/display.ts'
 
 test('isNightTime detects nighttime within standard window', () => {
   const at1am = new Date(2026, 8, 26, 1, 30)
@@ -295,6 +295,21 @@ test('renderHeaderItemHtml correctly outputs markup for all supported header ite
 
 
 
+
+test('resolveHeaderLayout preserves 3-zone layout and supports left, center, right distribution', () => {
+  const layout = resolveHeaderLayout({
+    version: 3,
+    widgets: [],
+    headerLayout: {
+      left: ['logo', 'weather'],
+      center: ['date', 'clock'],
+      right: ['ip', 'settings'],
+    },
+  })
+  assert.deepEqual(layout.left, ['logo', 'weather'])
+  assert.deepEqual(layout.center, ['date', 'clock'])
+  assert.deepEqual(layout.right, ['ip', 'settings'])
+})
 
 test('msUntilNightlyReload schedules the next 04:00 reload', async () => {
   const { msUntilNightlyReload } = await import('../src/display.ts')

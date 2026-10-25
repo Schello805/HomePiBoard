@@ -293,9 +293,9 @@ export async function renderDisplayPage(app: HTMLElement) {
   app.innerHTML = `
     <main class="signage-shell theme-${designTheme}" data-design-theme="${designTheme}">
       <header class="header-bar header-bar-zoned" ${hasAnyHeaderItems ? '' : 'hidden'}>
-        <div class="header-zone header-zone-left header-status">${leftHtml}</div>
-        <div class="header-zone header-zone-center header-status">${centerHtml}</div>
-        <div class="header-zone header-zone-right header-status">${rightHtml}</div>
+        <div class="header-zone header-zone-left">${leftHtml}</div>
+        <div class="header-zone header-zone-center">${centerHtml}</div>
+        <div class="header-zone header-zone-right">${rightHtml}</div>
       </header>
       <section class="widget-grid" aria-label="Anzeigen-Widgets">${widgets}</section>
       <div class="night-clock-overlay" id="night-clock-overlay" aria-hidden="true">
