@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { adminErrorMessage, clearPinError, compactFieldCharacters, createConfirmModal, formatCpuTemp, formatUptime, loadingSpinnerHtml, lostPointerCaptureAction, resizeChangedFromStart, resizeKeyboardDelta, resizePointerDelta, resizeWidgetDimensions, syncCompactField, validatePinChange, widgetPreviewAspectRatio } from '../src/admin.ts'
+import { adminErrorMessage, calculateDropPlacement, clearPinError, compactFieldCharacters, createConfirmModal, findClosestDropTarget, formatCpuTemp, formatUptime, loadingSpinnerHtml, lostPointerCaptureAction, resizeChangedFromStart, resizeKeyboardDelta, resizePointerDelta, resizeWidgetDimensions, syncCompactField, validatePinChange, widgetPreviewAspectRatio } from '../src/admin.ts'
 import { MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS } from '../src/settings.ts'
 import { RateLimitError } from '../src/settings-store.ts'
 
@@ -209,5 +209,61 @@ test('loadingSpinnerHtml produces accessible loading spinner markup', () => {
   const spinner = loadingSpinnerHtml()
   assert.match(spinner, /class="loading-spinner"/)
   assert.match(spinner, /aria-hidden="true"/)
+})
+
+test('calculateDropPlacement detects before vs after and horizontal vs vertical layout', () => {
+  // Wide card (width = 600, height = 200)
+  const wideRect = { left: 100, top: 100, width: 600, height: 200 }
+  // Top region -> before, horizontal line
+  assert.deepEqual(calculateDropPlacement(300, 130, wideRect), { isAfter: false, isHorizontal: true })
+  // Bottom region -> after, horizontal line
+  assert.deepEqual(calculateDropPlacement(300, 280, wideRect), { isAfter: true, isHorizontal: true })
+  // Middle left region -> before, vertical line
+  assert.deepEqual(calculateDropPlacement(200, 200, wideRect), { isAfter: false, isHorizontal: false })
+  // Middle right region -> after, vertical line
+  assert.deepEqual(calculateDropPlacement(500, 200, wideRect), { isAfter: true, isHorizontal: false })
+
+  // Tall card (width = 200, height = 600)
+  const tallRect = { left: 50, top: 50, width: 200, height: 600 }
+  // Left region -> before, vertical line
+  assert.deepEqual(calculateDropPlacement(70, 300, tallRect), { isAfter: false, isHorizontal: false })
+  // Right region -> after, vertical line
+  assert.deepEqual(calculateDropPlacement(230, 300, tallRect), { isAfter: true, isHorizontal: false })
+  // Middle top region -> before, horizontal line
+  assert.deepEqual(calculateDropPlacement(150, 150, tallRect), { isAfter: false, isHorizontal: true })
+  // Middle bottom region -> after, horizontal line
+  assert.deepEqual(calculateDropPlacement(150, 450, tallRect), { isAfter: true, isHorizontal: true })
+
+  // Square-ish card (width = 300, height = 300)
+  const squareRect = { left: 0, top: 0, width: 300, height: 300 }
+  // Top-left diagonal -> before
+  assert.deepEqual(calculateDropPlacement(50, 50, squareRect), { isAfter: false, isHorizontal: false })
+  // Bottom-right diagonal -> after
+  assert.deepEqual(calculateDropPlacement(250, 250, squareRect), { isAfter: true, isHorizontal: false })
+})
+
+test('findClosestDropTarget accurately identifies nearest widget and insertion direction', () => {
+  const widgets = [
+    { id: 'w1', rect: { left: 0, top: 0, right: 300, bottom: 200, width: 300, height: 200 } },
+    { id: 'w2', rect: { left: 320, top: 0, right: 620, bottom: 200, width: 300, height: 200 } },
+  ]
+
+  assert.equal(findClosestDropTarget(100, 100, []), null)
+
+  // Near left edge of w1
+  const nearW1Left = findClosestDropTarget(50, 100, widgets)
+  assert.deepEqual(nearW1Left, { id: 'w1', isAfter: false })
+
+  // Near gap but closer to w1 right half
+  const nearW1Right = findClosestDropTarget(250, 100, widgets)
+  assert.deepEqual(nearW1Right, { id: 'w1', isAfter: true })
+
+  // Near w2 left half
+  const nearW2Left = findClosestDropTarget(350, 100, widgets)
+  assert.deepEqual(nearW2Left, { id: 'w2', isAfter: false })
+
+  // Below w2
+  const belowW2 = findClosestDropTarget(500, 250, widgets)
+  assert.deepEqual(belowW2, { id: 'w2', isAfter: true })
 })
 

@@ -207,6 +207,66 @@ export function createConfirmModal(root: ParentNode) {
   }
 }
 
+export interface DropPlacement {
+  isAfter: boolean
+  isHorizontal: boolean
+}
+
+export function calculateDropPlacement(
+  clientX: number,
+  clientY: number,
+  rect: { left: number; top: number; width: number; height: number },
+): DropPlacement {
+  const relX = rect.width > 0 ? (clientX - rect.left) / rect.width : 0.5
+  const relY = rect.height > 0 ? (clientY - rect.top) / rect.height : 0.5
+
+  const isWide = rect.width > rect.height * 1.5
+  if (isWide) {
+    if (relY > 0.65) return { isAfter: true, isHorizontal: true }
+    if (relY < 0.35) return { isAfter: false, isHorizontal: true }
+    return { isAfter: relX > 0.5, isHorizontal: false }
+  }
+
+  const isTall = rect.height > rect.width * 1.5
+  if (isTall) {
+    if (relX > 0.65) return { isAfter: true, isHorizontal: false }
+    if (relX < 0.35) return { isAfter: false, isHorizontal: false }
+    return { isAfter: relY > 0.5, isHorizontal: true }
+  }
+
+  return { isAfter: (relX + relY) > 1.0, isHorizontal: false }
+}
+
+export interface WidgetDropTargetEntry {
+  id: string
+  rect: { left: number; top: number; right: number; bottom: number; width: number; height: number }
+}
+
+export function findClosestDropTarget(
+  clientX: number,
+  clientY: number,
+  widgets: WidgetDropTargetEntry[],
+): { id: string; isAfter: boolean } | null {
+  if (widgets.length === 0) return null
+
+  let closestId = widgets[0]!.id
+  let minDistance = Infinity
+  let isAfter = false
+
+  for (const w of widgets) {
+    const cx = w.rect.left + w.rect.width / 2
+    const cy = w.rect.top + w.rect.height / 2
+    const dist = Math.hypot(clientX - cx, clientY - cy)
+    if (dist < minDistance) {
+      minDistance = dist
+      closestId = w.id
+      isAfter = clientX > cx || clientY > (w.rect.bottom - 10)
+    }
+  }
+
+  return { id: closestId, isAfter }
+}
+
 function renderWidgetEditor(widget: DashboardWidget, index: number) {
   return renderWidget(widget, true, index)
 }
@@ -721,6 +781,15 @@ export async function renderAdminPage(app: HTMLElement) {
     updateEditorIndexes()
     markDirty()
     editor.querySelector<HTMLButtonElement>(`[data-action="move-${action}"]`)?.focus()
+  }
+
+  function flashDropped(element: HTMLElement) {
+    element.classList.remove('just-dropped')
+    void element.offsetWidth
+    element.classList.add('just-dropped')
+    setTimeout(() => {
+      element.classList.remove('just-dropped')
+    }, 700)
   }
 
   function bindEditor(editor: HTMLElement) {
@@ -1319,28 +1388,82 @@ export async function renderAdminPage(app: HTMLElement) {
       window.addEventListener('keydown', cancelWithEscape)
     })
     const dragHandle = editor.querySelector<HTMLElement>('.drag-handle')
-    dragHandle?.addEventListener('dragstart', (event) => {
+    const cardTitle = editor.querySelector<HTMLElement>('.widget-card-title')
+
+    const startDrag = (event: DragEvent) => {
       editor.classList.add('is-dragging')
-      event.dataTransfer?.setData('text/plain', editor.dataset.widgetId || '')
+      document.body.classList.add('is-widget-dragging')
       if (event.dataTransfer) {
+        event.dataTransfer.setData('text/plain', editor.dataset.widgetId || '')
         event.dataTransfer.effectAllowed = 'move'
+
+        const title = editor.querySelector<HTMLElement>('[data-editor-title]')?.textContent?.trim() || 'Widget'
+        const typeBadge = editor.querySelector<HTMLElement>('[data-type-badge]')?.textContent?.trim() || ''
+        const dimLabel = editor.querySelector<HTMLElement>('[data-dimension-label]')?.textContent?.trim() || ''
+
+        const ghost = document.createElement('div')
+        ghost.className = 'widget-drag-ghost'
+        ghost.innerHTML = `
+          <span class="ghost-handle">⠿</span>
+          <strong class="ghost-title">${escapeHtml(title)}</strong>
+          ${typeBadge ? `<span class="ghost-badge">${escapeHtml(typeBadge)}</span>` : ''}
+          <span class="ghost-dim">${escapeHtml(dimLabel)}</span>
+        `
+        document.body.appendChild(ghost)
+        event.dataTransfer.setDragImage(ghost, 24, 18)
+        setTimeout(() => {
+          ghost.remove()
+        }, 0)
       }
+    }
+
+    dragHandle?.addEventListener('dragstart', startDrag)
+    if (cardTitle) {
+      cardTitle.setAttribute('draggable', 'true')
+      cardTitle.addEventListener('dragstart', startDrag)
+    }
+
+    editor.addEventListener('dragend', () => {
+      editor.classList.remove('is-dragging')
+      document.body.classList.remove('is-widget-dragging')
+      editorList.querySelectorAll<HTMLElement>('.widget-editor').forEach((item) => {
+        item.classList.remove('is-drop-target', 'is-drop-before', 'is-drop-after', 'is-drop-horizontal')
+      })
     })
-    editor.addEventListener('dragend', () => editor.classList.remove('is-dragging'))
+
     editor.addEventListener('dragover', (event) => {
       event.preventDefault()
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'move'
+      }
+      const { isAfter, isHorizontal } = calculateDropPlacement(event.clientX, event.clientY, editor.getBoundingClientRect())
       editor.classList.add('is-drop-target')
+      editor.classList.toggle('is-drop-before', !isAfter)
+      editor.classList.toggle('is-drop-after', isAfter)
+      editor.classList.toggle('is-drop-horizontal', isHorizontal)
     })
-    editor.addEventListener('dragleave', () => editor.classList.remove('is-drop-target'))
+
+    editor.addEventListener('dragleave', (event) => {
+      if (event.relatedTarget && editor.contains(event.relatedTarget as Node)) return
+      editor.classList.remove('is-drop-target', 'is-drop-before', 'is-drop-after', 'is-drop-horizontal')
+    })
+
     editor.addEventListener('drop', (event) => {
       event.preventDefault()
-      editor.classList.remove('is-drop-target')
+      const { isAfter } = calculateDropPlacement(event.clientX, event.clientY, editor.getBoundingClientRect())
+      editor.classList.remove('is-drop-target', 'is-drop-before', 'is-drop-after', 'is-drop-horizontal')
+      document.body.classList.remove('is-widget-dragging')
+
       const sourceId = event.dataTransfer?.getData('text/plain')
       const source = sourceId ? editorList.querySelector<HTMLElement>(`[data-widget-id="${CSS.escape(sourceId)}"]`) : null
-      if (source && source !== editor) {
-        editorList.insertBefore(source, editor)
+      if (!source || source === editor) return
+
+      const targetSibling = isAfter ? editor.nextElementSibling : editor
+      if (source !== targetSibling && source.nextElementSibling !== targetSibling) {
+        editorList.insertBefore(source, targetSibling)
         updateEditorIndexes()
         markDirty()
+        flashDropped(source)
       }
     })
   }
@@ -1437,6 +1560,76 @@ export async function renderAdminPage(app: HTMLElement) {
   bindRadioWidgets(editorList, { allowAutoplay: false })
   bindCameraWidgets(editorList)
   updateEditorIndexes()
+
+  editorList.addEventListener('dragover', (event) => {
+    if (event.target === editorList) {
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+
+      const widgets = [...editorList.querySelectorAll<HTMLElement>('.widget-editor:not(.is-dragging)')].map((ed) => ({
+        id: ed.dataset.widgetId || '',
+        rect: ed.getBoundingClientRect(),
+      }))
+      const closest = findClosestDropTarget(event.clientX, event.clientY, widgets)
+      editorList.querySelectorAll<HTMLElement>('.widget-editor').forEach((ed) => {
+        if (closest && ed.dataset.widgetId === closest.id) {
+          ed.classList.add('is-drop-target')
+          ed.classList.toggle('is-drop-before', !closest.isAfter)
+          ed.classList.toggle('is-drop-after', closest.isAfter)
+          ed.classList.remove('is-drop-horizontal')
+        } else {
+          ed.classList.remove('is-drop-target', 'is-drop-before', 'is-drop-after', 'is-drop-horizontal')
+        }
+      })
+    }
+  })
+
+  editorList.addEventListener('dragleave', (event) => {
+    if (event.relatedTarget && editorList.contains(event.relatedTarget as Node)) return
+    editorList.querySelectorAll<HTMLElement>('.widget-editor').forEach((ed) => {
+      ed.classList.remove('is-drop-target', 'is-drop-before', 'is-drop-after', 'is-drop-horizontal')
+    })
+  })
+
+  editorList.addEventListener('drop', (event) => {
+    if (event.target === editorList) {
+      event.preventDefault()
+      document.body.classList.remove('is-widget-dragging')
+      editorList.querySelectorAll<HTMLElement>('.widget-editor').forEach((ed) => {
+        ed.classList.remove('is-drop-target', 'is-drop-before', 'is-drop-after', 'is-drop-horizontal')
+      })
+
+      const sourceId = event.dataTransfer?.getData('text/plain')
+      const source = sourceId ? editorList.querySelector<HTMLElement>(`[data-widget-id="${CSS.escape(sourceId)}"]`) : null
+      if (!source) return
+
+      const widgets = [...editorList.querySelectorAll<HTMLElement>('.widget-editor:not(.is-dragging)')].map((ed) => ({
+        id: ed.dataset.widgetId || '',
+        rect: ed.getBoundingClientRect(),
+      }))
+      const closest = findClosestDropTarget(event.clientX, event.clientY, widgets)
+      if (closest) {
+        const targetEd = editorList.querySelector<HTMLElement>(`[data-widget-id="${CSS.escape(closest.id)}"]`)
+        if (targetEd) {
+          const targetSibling = closest.isAfter ? targetEd.nextElementSibling : targetEd
+          if (source !== targetSibling && source.nextElementSibling !== targetSibling) {
+            editorList.insertBefore(source, targetSibling)
+            updateEditorIndexes()
+            markDirty()
+            flashDropped(source)
+          }
+          return
+        }
+      }
+
+      if (source !== editorList.lastElementChild) {
+        editorList.appendChild(source)
+        updateEditorIndexes()
+        markDirty()
+        flashDropped(source)
+      }
+    }
+  })
 
   app.querySelectorAll<HTMLButtonElement>('[data-add-type]').forEach((button) => button.addEventListener('click', () => {
     addWidget(button.dataset.addType as WidgetType)
