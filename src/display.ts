@@ -1,6 +1,6 @@
 import { formatUptime } from './admin.ts'
 import { escapeHtml, weatherSymbol } from './dashboard-utils.ts'
-import { DEFAULT_HEADER_ITEMS, type DisplaySettings, type HeaderItemType } from './settings.ts'
+import { DEFAULT_HEADER_LAYOUT, type DisplaySettings, type HeaderItemType, type HeaderLayout } from './settings.ts'
 import { createSettingsStore } from './settings-store.ts'
 import { bindDwdWidgets, bindIoBrokerWidgets, bindQrWidgets, bindRssWidgets, bindWidgetFrames, renderWidget } from './widgets.ts'
 
@@ -217,6 +217,8 @@ export function initNetworkStatus(target: HTMLElement, initialSource: 'server' |
 
 export function renderHeaderItemHtml(item: HeaderItemType, settings: DisplaySettings, isOnline: boolean, source: 'server' | 'local'): string {
   switch (item) {
+    case 'logo':
+      return '<div class="brand-mark"><img class="brand-logo" src="/homepiboard-logo.svg" alt="HomePiBoard" /></div>'
     case 'network':
       return `<span class="connection-status ${isOnline ? 'is-online' : 'is-offline'}" id="network-status" title="Netzwerkstatus">${isOnline ? 'ONLINE' : (source === 'local' ? 'LOKAL' : 'OFFLINE')}</span>`
     case 'location': {
@@ -237,8 +239,39 @@ export function renderHeaderItemHtml(item: HeaderItemType, settings: DisplaySett
       return '<span class="header-chip header-chip-uptime" id="header-uptime" title="System-Betriebszeit"><span class="chip-icon">⏱️</span> <span class="chip-label">Uptime:</span> <span class="chip-val" id="header-uptime-val">--</span></span>'
     case 'ip':
       return '<span class="header-chip header-chip-ip" id="header-ip" title="Lokale IP-Adresse"><span class="chip-icon">🌐</span> <span class="chip-label">IP:</span> <span class="chip-val" id="header-ip-val">--</span></span>'
+    case 'settings':
+      return '<a class="settings-button" href="/settings" aria-label="Einstellungen" title="Einstellungen">⚙</a>'
+    case 'spacer':
+      return '<span class="header-spacer" aria-hidden="true"></span>'
+    case 'divider':
+      return '<span class="status-divider" aria-hidden="true"></span>'
     default:
       return ''
+  }
+}
+
+export function resolveHeaderLayout(settings: DisplaySettings): HeaderLayout {
+  if (settings.headerLayout) {
+    return {
+      left: [...(settings.headerLayout.left || [])],
+      center: [...(settings.headerLayout.center || [])],
+      right: [...(settings.headerLayout.right || [])],
+    }
+  }
+  if (settings.headerItems) {
+    return {
+      left: ['logo'],
+      center: [],
+      right: [
+        ...settings.headerItems.filter((item) => item !== 'logo' && item !== 'settings'),
+        'settings',
+      ],
+    }
+  }
+  return {
+    left: [...DEFAULT_HEADER_LAYOUT.left],
+    center: [...DEFAULT_HEADER_LAYOUT.center],
+    right: [...DEFAULT_HEADER_LAYOUT.right],
   }
 }
 
@@ -250,18 +283,19 @@ export async function renderDisplayPage(app: HTMLElement) {
     ? settings.widgets.map((widget) => renderWidget(widget)).join('')
     : '<div class="empty-display"><span class="widget-kicker">Noch keine Widgets</span><a href="/admin">Admin öffnen <span>↗</span></a></div>'
 
-  const headerItems = settings.headerItems && settings.headerItems.length ? settings.headerItems : DEFAULT_HEADER_ITEMS
-  const headerHtml = headerItems.map((item) => renderHeaderItemHtml(item, settings, isOnline, source)).join('')
+  const layout = resolveHeaderLayout(settings)
+  const leftHtml = layout.left.map((item) => renderHeaderItemHtml(item, settings, isOnline, source)).join('')
+  const centerHtml = layout.center.map((item) => renderHeaderItemHtml(item, settings, isOnline, source)).join('')
+  const rightHtml = layout.right.map((item) => renderHeaderItemHtml(item, settings, isOnline, source)).join('')
+  const hasAnyHeaderItems = Boolean(leftHtml || centerHtml || rightHtml)
   const designTheme = settings.designTheme === 'liquid-glass' ? 'liquid-glass' : 'free'
 
   app.innerHTML = `
     <main class="signage-shell theme-${designTheme}" data-design-theme="${designTheme}">
-      <header class="header-bar">
-        <div class="brand-mark"><img class="brand-logo" src="/homepiboard-logo.svg" alt="HomePiBoard" /></div>
-        <div class="header-status">
-          ${headerHtml}
-          <a class="settings-button" href="/settings" aria-label="Einstellungen" title="Einstellungen">⚙</a>
-        </div>
+      <header class="header-bar header-bar-zoned" ${hasAnyHeaderItems ? '' : 'hidden'}>
+        <div class="header-zone header-zone-left header-status">${leftHtml}</div>
+        <div class="header-zone header-zone-center header-status">${centerHtml}</div>
+        <div class="header-zone header-zone-right header-status">${rightHtml}</div>
       </header>
       <section class="widget-grid" aria-label="Anzeigen-Widgets">${widgets}</section>
       <div class="night-clock-overlay" id="night-clock-overlay" aria-hidden="true">

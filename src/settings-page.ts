@@ -1,7 +1,7 @@
 import { adminErrorMessage, clearPinError, createConfirmModal, formatCpuTemp, formatUptime, validatePinChange } from './admin.ts'
 import { downloadJson, escapeHtml } from './dashboard-utils.ts'
-import { playNotificationSound } from './display.ts'
-import { ALL_HEADER_ITEMS_META, DEFAULT_HEADER_ITEMS, type DesignTheme, type DisplaySettings, type HeaderItemType, normalizeSettings, SETTINGS_VERSION } from './settings.ts'
+import { playNotificationSound, resolveHeaderLayout } from './display.ts'
+import { ALL_HEADER_ITEMS_META, DEFAULT_HEADER_LAYOUT, type DesignTheme, type DisplaySettings, type HeaderItemType, type HeaderLayout, type HeaderZone, normalizeSettings, SETTINGS_VERSION } from './settings.ts'
 import { createSettingsStore } from './settings-store.ts'
 import { widgetTypeLabel } from './widgets.ts'
 
@@ -151,28 +151,35 @@ export async function renderSettingsPage(app: HTMLElement) {
             <div class="settings-card-header">
               <div class="settings-icon-badge icon-builder">📊</div>
               <div>
-                <h2 class="settings-card-title">Kiosk-Header &amp; Info-Leiste</h2>
-                <p class="settings-card-desc">Status-Infos frei anordnen (per Drag &amp; Drop oder Pfeiltasten), hinzufügen oder entfernen</p>
+                <h2 class="settings-card-title">Kiosk-Header &amp; Info-Leiste (3-Zonen-Layout)</h2>
+                <p class="settings-card-desc">Alle Header-Elemente (inkl. Logo, Uhr, Telemetrie, Abstände &amp; Einstellungs-Icon) frei auf Links, Mitte und Rechts verteilen</p>
               </div>
             </div>
             <div class="settings-card-body">
               <div class="header-builder-preview-box">
                 <div class="header-builder-preview-title">Live-Vorschau des Kiosk-Headers:</div>
-                <div class="header-builder-preview-bar" id="settings-header-preview"></div>
+                <div class="header-builder-preview-bar header-bar-zoned" id="settings-header-preview"></div>
               </div>
 
               <div class="header-builder-section">
                 <div class="header-builder-heading-row">
-                  <span class="builder-section-title">Aktive Elemente im Header (von links nach rechts):</span>
+                  <span class="builder-section-title">Header-Zonen (Elemente per Drag &amp; Drop zwischen Zonen ziehen oder mit Pfeilen/Buttons verschieben):</span>
                   <button class="settings-action-btn secondary small" id="settings-header-reset-btn" type="button" title="Standard-Header wiederherstellen">
                     <span>↺</span> <span>Standard wiederherstellen</span>
                   </button>
                 </div>
-                <div class="header-chips-list" id="active-header-chips" role="list"></div>
+                <div class="header-zones-grid" id="active-header-chips"></div>
               </div>
 
               <div class="header-builder-section">
-                <div class="builder-section-title">Verfügbare Elemente zum Hinzufügen:</div>
+                <div class="header-add-target-row">
+                  <span class="builder-section-title">Elemente &amp; Abstände hinzufügen zu Zone:</span>
+                  <div class="zone-target-pills" role="radiogroup" aria-label="Ziel-Zone für neue Elemente">
+                    <button type="button" class="zone-target-pill" data-target-zone="left">⇤ Links</button>
+                    <button type="button" class="zone-target-pill" data-target-zone="center">⇔ Mitte</button>
+                    <button type="button" class="zone-target-pill is-active" data-target-zone="right">⇥ Rechts</button>
+                  </div>
+                </div>
                 <div class="available-chips-row" id="available-header-chips"></div>
               </div>
             </div>
@@ -637,69 +644,117 @@ export async function renderSettingsPage(app: HTMLElement) {
   })
   window.addEventListener('hashchange', () => activateSettingsTopic(window.location.hash.slice(1)))
 
-  let currentHeaderItems: HeaderItemType[] = [...(settings.headerItems && settings.headerItems.length ? settings.headerItems : DEFAULT_HEADER_ITEMS)]
+  let currentHeaderLayout: HeaderLayout = resolveHeaderLayout(settings)
+  let addTargetZone: HeaderZone = 'right'
+  const zoneOrder: HeaderZone[] = ['left', 'center', 'right']
+  const zoneMeta: Record<HeaderZone, { title: string; badge: string; hint: string }> = {
+    left: { title: '⇤ Links', badge: 'Links ausgerichtet', hint: 'z. B. Logo, Standort' },
+    center: { title: '⇔ Mitte', badge: 'Zentriert', hint: 'z. B. Uhrzeit, Datum oder Wetter' },
+    right: { title: '⇥ Rechts', badge: 'Rechts ausgerichtet', hint: 'z. B. Status-Chips, ⚙ Button' },
+  }
+
+  app.querySelectorAll<HTMLButtonElement>('[data-target-zone]').forEach((pill) => {
+    pill.addEventListener('click', () => {
+      const z = pill.dataset.targetZone as HeaderZone
+      if (!z) return
+      addTargetZone = z
+      app.querySelectorAll<HTMLButtonElement>('[data-target-zone]').forEach((p) => {
+        p.classList.toggle('is-active', p.dataset.targetZone === addTargetZone)
+      })
+    })
+  })
+
+  function renderPreviewChipHtml(id: HeaderItemType): string {
+    const loc = locationInput ? locationInput.value.trim() || 'Zuhause' : (settings.location || 'Zuhause')
+    const df = dateFormatSelect ? dateFormatSelect.value : (settings.dateFormat || 'medium')
+    const tf = timeFormatSelect ? timeFormatSelect.value : (settings.timeFormat || '24h')
+    const dateSample = df === 'short' ? '28.09.' : (df === 'long' ? 'Montag, 28. Sept.' : 'Mo., 28.09.2026')
+    const timeSample = tf === '12h' ? '2:35 PM' : '14:35'
+
+    switch (id) {
+      case 'logo': return '<span class="preview-chip preview-chip-logo" title="HomePiBoard Logo"><img src="/homepiboard-logo.svg" alt="" style="width:18px;height:18px;border-radius:4px;" /> Logo</span>'
+      case 'network': return '<span class="preview-chip is-online">ONLINE</span>'
+      case 'location': return `<span class="preview-chip">📍 Ort: ${escapeHtml(loc)}</span>`
+      case 'weather': return '<span class="preview-chip">🌤️ 21°C • 45%</span>'
+      case 'date': return `<span class="preview-chip">📅 ${dateSample}</span>`
+      case 'clock': return `<span class="preview-chip is-bold">⏰ ${timeSample}</span>`
+      case 'cpu': return '<span class="preview-chip">🔥 CPU: 48.2 °C</span>'
+      case 'ram': return '<span class="preview-chip">💾 RAM: 42%</span>'
+      case 'uptime': return '<span class="preview-chip">⏱️ Uptime: 3d 4h</span>'
+      case 'ip': return '<span class="preview-chip">🌐 IP: 192.168.1.50</span>'
+      case 'settings': return '<span class="preview-chip preview-chip-settings" title="Einstellungen-Button">⚙</span>'
+      case 'spacer': return '<span class="preview-chip-spacer" title="Flexibler Abstand">↔</span>'
+      case 'divider': return '<span class="preview-chip-divider" title="Trennlinie">|</span>'
+      default: return `<span class="preview-chip">${escapeHtml(id)}</span>`
+    }
+  }
 
   function renderHeaderBuilderUI() {
     if (!headerPreviewBar || !activeChipsContainer || !availableChipsContainer) return
 
-    // 1. Live Preview Bar
-    headerPreviewBar.innerHTML = currentHeaderItems.map((id) => {
-      const loc = locationInput ? locationInput.value.trim() || 'Zuhause' : (settings.location || 'Zuhause')
-      const df = dateFormatSelect ? dateFormatSelect.value : (settings.dateFormat || 'medium')
-      const tf = timeFormatSelect ? timeFormatSelect.value : (settings.timeFormat || '24h')
-      const dateSample = df === 'short' ? '28.09.' : (df === 'long' ? 'Montag, 28. Sept.' : 'Mo., 28.09.2026')
-      const timeSample = tf === '12h' ? '2:35 PM' : '14:35'
-
-      switch (id) {
-        case 'network': return '<span class="preview-chip is-online">ONLINE</span>'
-        case 'location': return `<span class="preview-chip">📍 Ort: ${escapeHtml(loc)}</span>`
-        case 'weather': return '<span class="preview-chip">🌤️ 21°C • 45%</span>'
-        case 'date': return `<span class="preview-chip">📅 ${dateSample}</span>`
-        case 'clock': return `<span class="preview-chip is-bold">⏰ ${timeSample}</span>`
-        case 'cpu': return '<span class="preview-chip">🔥 CPU: 48.2 °C</span>'
-        case 'ram': return '<span class="preview-chip">💾 RAM: 42%</span>'
-        case 'uptime': return '<span class="preview-chip">⏱️ Uptime: 3d 4h</span>'
-        case 'ip': return '<span class="preview-chip">🌐 IP: 192.168.1.50</span>'
-        default: return `<span class="preview-chip">${escapeHtml(id)}</span>`
-      }
+    // 1. Live Preview Bar (3 Zonen)
+    headerPreviewBar.innerHTML = zoneOrder.map((zone) => {
+      const items = currentHeaderLayout[zone]
+      const content = items.length
+        ? items.map((id) => renderPreviewChipHtml(id)).join('')
+        : `<span class="preview-zone-placeholder">${zoneMeta[zone].title} (leer)</span>`
+      return `<div class="preview-header-zone preview-zone-${zone}" data-preview-zone="${zone}">${content}</div>`
     }).join('')
 
-    // 2. Active Chips List
-    if (currentHeaderItems.length === 0) {
-      activeChipsContainer.innerHTML = '<div class="empty-header-chips-hint">Keine Elemente im Header aktiv. Klicke unten auf ein Element, um es hinzuzufügen.</div>'
-    } else {
-      activeChipsContainer.innerHTML = currentHeaderItems.map((id, index) => {
-        const meta = ALL_HEADER_ITEMS_META.find((m) => m.id === id) || { id, label: id, icon: '📌', desc: '' }
-        return `
-          <div class="header-chip-item" draggable="true" data-item-id="${id}" data-item-index="${index}" role="listitem">
-            <span class="chip-drag-handle" title="Ziehen zum Neuanordnen">⋮⋮</span>
-            <span class="chip-icon">${meta.icon}</span>
-            <span class="chip-label">${escapeHtml(meta.label)}</span>
-            <div class="chip-actions">
-              <button class="chip-btn chip-btn-left" data-action="move-left" data-item-id="${id}" type="button" title="Nach links verschieben" ${index === 0 ? 'disabled' : ''}>◀</button>
-              <button class="chip-btn chip-btn-right" data-action="move-right" data-item-id="${id}" type="button" title="Nach rechts verschieben" ${index === currentHeaderItems.length - 1 ? 'disabled' : ''}>▶</button>
-              <button class="chip-btn chip-btn-remove" data-action="remove" data-item-id="${id}" type="button" title="Entfernen">✕</button>
-            </div>
+    // 2. 3-Zonen Drag & Drop Container
+    activeChipsContainer.innerHTML = zoneOrder.map((zone) => {
+      const items = currentHeaderLayout[zone]
+      const metaInfo = zoneMeta[zone]
+      const chipsHtml = items.length === 0
+        ? `<div class="empty-zone-drop-hint" data-drop-zone="${zone}">Keine Elemente in „${metaInfo.title}“. Ziehe ein Element hierher oder füge es unten hinzu.</div>`
+        : items.map((id, index) => {
+            const meta = ALL_HEADER_ITEMS_META.find((m) => m.id === id) || { id, label: id, icon: '📌', desc: '' }
+            const canMovePrevZone = zone !== 'left'
+            const canMoveNextZone = zone !== 'right'
+            return `
+              <div class="header-chip-item" draggable="true" data-zone="${zone}" data-item-id="${id}" data-item-index="${index}" role="listitem">
+                <span class="chip-drag-handle" title="Ziehen zum Verschieben (auch in andere Zonen)">⋮⋮</span>
+                <span class="chip-icon">${meta.icon}</span>
+                <span class="chip-label">${escapeHtml(meta.label)}</span>
+                <div class="chip-actions">
+                  <button class="chip-btn chip-btn-zone" data-action="zone-prev" data-zone="${zone}" data-index="${index}" type="button" title="In linke Nachbar-Zone verschieben" ${!canMovePrevZone ? 'disabled' : ''}>⇤</button>
+                  <button class="chip-btn chip-btn-left" data-action="move-left" data-zone="${zone}" data-index="${index}" type="button" title="Innerhalb der Zone nach links/oben" ${index === 0 ? 'disabled' : ''}>◀</button>
+                  <button class="chip-btn chip-btn-right" data-action="move-right" data-zone="${zone}" data-index="${index}" type="button" title="Innerhalb der Zone nach rechts/unten" ${index === items.length - 1 ? 'disabled' : ''}>▶</button>
+                  <button class="chip-btn chip-btn-zone" data-action="zone-next" data-zone="${zone}" data-index="${index}" type="button" title="In rechte Nachbar-Zone verschieben" ${!canMoveNextZone ? 'disabled' : ''}>⇥</button>
+                  <button class="chip-btn chip-btn-remove" data-action="remove" data-zone="${zone}" data-index="${index}" type="button" title="Aus Header entfernen">✕</button>
+                </div>
+              </div>
+            `
+          }).join('')
+
+      return `
+        <div class="header-zone-column" data-zone-box="${zone}">
+          <div class="header-zone-column-header">
+            <strong>${metaInfo.title}</strong>
+            <span class="header-zone-badge">${items.length} ${items.length === 1 ? 'Element' : 'Elemente'}</span>
           </div>
-        `
-      }).join('')
-    }
+          <div class="header-zone-items-list" data-drop-zone="${zone}" role="list">
+            ${chipsHtml}
+          </div>
+        </div>
+      `
+    }).join('')
 
-    // 3. Available Chips
-    const available = ALL_HEADER_ITEMS_META.filter((m) => !currentHeaderItems.includes(m.id))
-    if (available.length === 0) {
-      availableChipsContainer.innerHTML = '<span class="all-chips-active-hint">✓ Alle verfügbaren Elemente sind bereits im Header aktiv.</span>'
-    } else {
-      availableChipsContainer.innerHTML = available.map((m) => `
-        <button class="add-header-chip-btn" data-add-header-item="${m.id}" type="button" title="${escapeHtml(m.desc)}">
-          <span class="add-plus">+</span>
-          <span class="chip-icon">${m.icon}</span>
-          <span>${escapeHtml(m.label)}</span>
-        </button>
-      `).join('')
-    }
+    // 3. Available Chips (Single-Instance items not yet used + Multi-Instance items like spacer/divider)
+    const usedSet = new Set<HeaderItemType>([
+      ...currentHeaderLayout.left,
+      ...currentHeaderLayout.center,
+      ...currentHeaderLayout.right,
+    ])
+    const available = ALL_HEADER_ITEMS_META.filter((m) => m.allowMultiple || !usedSet.has(m.id))
+    availableChipsContainer.innerHTML = available.map((m) => `
+      <button class="add-header-chip-btn ${m.allowMultiple ? 'is-utility-chip' : ''}" data-add-header-item="${m.id}" type="button" title="${escapeHtml(m.desc)}">
+        <span class="add-plus">+</span>
+        <span class="chip-icon">${m.icon}</span>
+        <span>${escapeHtml(m.label)}</span>
+      </button>
+    `).join('')
 
-    // Bind event handlers
     bindHeaderBuilderEvents()
   }
 
@@ -709,64 +764,90 @@ export async function renderSettingsPage(app: HTMLElement) {
       btn.addEventListener('click', (e) => {
         e.preventDefault()
         const id = btn.dataset.addHeaderItem as HeaderItemType
-        if (id && !currentHeaderItems.includes(id)) {
-          currentHeaderItems.push(id)
+        const meta = ALL_HEADER_ITEMS_META.find((m) => m.id === id)
+        if (!id || !meta) return
+        const targetList = currentHeaderLayout[addTargetZone]
+        if (meta.allowMultiple || !targetList.includes(id)) {
+          targetList.push(id)
           renderHeaderBuilderUI()
           markDirty()
         }
       })
     })
 
-    // Action buttons (move left, right, remove)
+    // Action buttons (move-left, move-right, zone-prev, zone-next, remove)
     activeChipsContainer.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.preventDefault()
         e.stopPropagation()
         const action = btn.dataset.action
-        const id = btn.dataset.itemId as HeaderItemType
-        const index = currentHeaderItems.indexOf(id)
-        if (index === -1) return
+        const zone = btn.dataset.zone as HeaderZone
+        const index = Number(btn.dataset.index)
+        if (!zone || isNaN(index)) return
+        const list = currentHeaderLayout[zone]
+        const item = list[index]
+        if (!item) return
 
         if (action === 'move-left' && index > 0) {
-          const temp = currentHeaderItems[index - 1]!
-          currentHeaderItems[index - 1] = id
-          currentHeaderItems[index] = temp
+          list[index] = list[index - 1]!
+          list[index - 1] = item
           renderHeaderBuilderUI()
           markDirty()
-        } else if (action === 'move-right' && index < currentHeaderItems.length - 1) {
-          const temp = currentHeaderItems[index + 1]!
-          currentHeaderItems[index + 1] = id
-          currentHeaderItems[index] = temp
+        } else if (action === 'move-right' && index < list.length - 1) {
+          list[index] = list[index + 1]!
+          list[index + 1] = item
           renderHeaderBuilderUI()
           markDirty()
+        } else if (action === 'zone-prev') {
+          const zIdx = zoneOrder.indexOf(zone)
+          if (zIdx > 0) {
+            list.splice(index, 1)
+            currentHeaderLayout[zoneOrder[zIdx - 1]!].push(item)
+            renderHeaderBuilderUI()
+            markDirty()
+          }
+        } else if (action === 'zone-next') {
+          const zIdx = zoneOrder.indexOf(zone)
+          if (zIdx < zoneOrder.length - 1) {
+            list.splice(index, 1)
+            currentHeaderLayout[zoneOrder[zIdx + 1]!].unshift(item)
+            renderHeaderBuilderUI()
+            markDirty()
+          }
         } else if (action === 'remove') {
-          currentHeaderItems.splice(index, 1)
+          list.splice(index, 1)
           renderHeaderBuilderUI()
           markDirty()
         }
       })
     })
 
-    // Drag and Drop
-    let draggedIndex: number | null = null
+    // Cross-Zone & Intra-Zone Drag and Drop
+    let dragSource: { zone: HeaderZone; index: number } | null = null
     const chipItems = activeChipsContainer.querySelectorAll<HTMLElement>('.header-chip-item')
+    const dropZones = activeChipsContainer.querySelectorAll<HTMLElement>('[data-drop-zone]')
+
     chipItems.forEach((chip) => {
       chip.addEventListener('dragstart', (e) => {
-        draggedIndex = Number(chip.dataset.itemIndex)
+        const zone = chip.dataset.zone as HeaderZone
+        const index = Number(chip.dataset.itemIndex)
+        dragSource = { zone, index }
         chip.classList.add('is-dragging')
         if (e.dataTransfer) {
           e.dataTransfer.effectAllowed = 'move'
-          e.dataTransfer.setData('text/plain', String(draggedIndex))
+          e.dataTransfer.setData('text/plain', `${zone}:${index}`)
         }
       })
 
       chip.addEventListener('dragend', () => {
         chip.classList.remove('is-dragging')
         chipItems.forEach((c) => c.classList.remove('is-drop-target'))
+        dropZones.forEach((z) => z.classList.remove('is-zone-drop-target'))
       })
 
       chip.addEventListener('dragover', (e) => {
         e.preventDefault()
+        e.stopPropagation()
         if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
         chip.classList.add('is-drop-target')
       })
@@ -777,15 +858,41 @@ export async function renderSettingsPage(app: HTMLElement) {
 
       chip.addEventListener('drop', (e) => {
         e.preventDefault()
+        e.stopPropagation()
         chip.classList.remove('is-drop-target')
+        const targetZone = chip.dataset.zone as HeaderZone
         const targetIndex = Number(chip.dataset.itemIndex)
-        if (draggedIndex !== null && !isNaN(draggedIndex) && draggedIndex !== targetIndex) {
-          const [movedItem] = currentHeaderItems.splice(draggedIndex, 1)
-          if (movedItem) {
-            currentHeaderItems.splice(targetIndex, 0, movedItem)
-            renderHeaderBuilderUI()
-            markDirty()
-          }
+        if (!dragSource || !targetZone || isNaN(targetIndex)) return
+        const [movedItem] = currentHeaderLayout[dragSource.zone].splice(dragSource.index, 1)
+        if (movedItem) {
+          currentHeaderLayout[targetZone].splice(targetIndex, 0, movedItem)
+          dragSource = null
+          renderHeaderBuilderUI()
+          markDirty()
+        }
+      })
+    })
+
+    dropZones.forEach((zoneEl) => {
+      zoneEl.addEventListener('dragover', (e) => {
+        e.preventDefault()
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+        zoneEl.classList.add('is-zone-drop-target')
+      })
+      zoneEl.addEventListener('dragleave', () => {
+        zoneEl.classList.remove('is-zone-drop-target')
+      })
+      zoneEl.addEventListener('drop', (e) => {
+        e.preventDefault()
+        zoneEl.classList.remove('is-zone-drop-target')
+        const targetZone = zoneEl.dataset.dropZone as HeaderZone
+        if (!dragSource || !targetZone) return
+        const [movedItem] = currentHeaderLayout[dragSource.zone].splice(dragSource.index, 1)
+        if (movedItem) {
+          currentHeaderLayout[targetZone].push(movedItem)
+          dragSource = null
+          renderHeaderBuilderUI()
+          markDirty()
         }
       })
     })
@@ -793,7 +900,11 @@ export async function renderSettingsPage(app: HTMLElement) {
 
   headerResetBtn?.addEventListener('click', (e) => {
     e.preventDefault()
-    currentHeaderItems = [...DEFAULT_HEADER_ITEMS]
+    currentHeaderLayout = {
+      left: [...DEFAULT_HEADER_LAYOUT.left],
+      center: [...DEFAULT_HEADER_LAYOUT.center],
+      right: [...DEFAULT_HEADER_LAYOUT.right],
+    }
     renderHeaderBuilderUI()
     markDirty()
   })
@@ -1119,13 +1230,18 @@ export async function renderSettingsPage(app: HTMLElement) {
       }
     }
     if (audioOutputSelect) audioOutputSelect.value = s.audioOutput || 'hdmi'
-    currentHeaderItems = [...(s.headerItems && s.headerItems.length ? s.headerItems : DEFAULT_HEADER_ITEMS)]
+    currentHeaderLayout = resolveHeaderLayout(s)
     renderHeaderBuilderUI()
   }
 
   function getCurrentFormSettings(): DisplaySettings {
     const selectedThemeRadio = themeRadios.find((r) => r.checked)
     const designTheme: DesignTheme = selectedThemeRadio?.value === 'liquid-glass' ? 'liquid-glass' : 'free'
+    const combinedItems = [
+      ...currentHeaderLayout.left,
+      ...currentHeaderLayout.center,
+      ...currentHeaderLayout.right,
+    ]
     return normalizeSettings({
       ...settings,
       version: SETTINGS_VERSION,
@@ -1148,7 +1264,8 @@ export async function renderSettingsPage(app: HTMLElement) {
       notificationSoundEnabled: notificationSoundEnabledCheckbox.checked,
       notificationSoundVolume: Number(notificationSoundVolumeInput.value) || 0.8,
       audioOutput: (audioOutputSelect?.value as 'hdmi' | 'jack') || 'hdmi',
-      headerItems: currentHeaderItems,
+      headerItems: combinedItems,
+      headerLayout: currentHeaderLayout,
     })
   }
 

@@ -279,6 +279,18 @@ test('renderHeaderItemHtml correctly outputs markup for all supported header ite
   const networkOffline = renderHeaderItemHtml('network', settings, false, 'local')
   assert.match(networkOffline, /is-offline/)
   assert.match(networkOffline, /LOKAL/)
+
+  const logo = renderHeaderItemHtml('logo', settings, true, 'server')
+  assert.match(logo, /brand-logo/)
+
+  const settingsBtn = renderHeaderItemHtml('settings', settings, true, 'server')
+  assert.match(settingsBtn, /settings-button/)
+
+  const spacer = renderHeaderItemHtml('spacer', settings, true, 'server')
+  assert.match(spacer, /header-spacer/)
+
+  const divider = renderHeaderItemHtml('divider', settings, true, 'server')
+  assert.match(divider, /status-divider/)
 })
 
 

@@ -307,19 +307,44 @@ test('createWidget and normalizeSettings support waste and media widgets', () =>
   assert.equal(normalized.widgets[1]?.mediaPlaying, true)
 })
 
-test('normalizeSettings preserves, filters and defaults headerItems', () => {
+test('normalizeSettings preserves, filters and defaults headerItems and headerLayout', () => {
   const custom = normalizeSettings({
     version: 3,
     headerItems: ['cpu', 'ram', 'weather', 'clock', 'invalid-item', 123],
     widgets: [],
   })
   assert.deepEqual(custom.headerItems, ['cpu', 'ram', 'weather', 'clock'])
+  assert.deepEqual(custom.headerLayout, {
+    left: ['logo'],
+    center: [],
+    right: ['cpu', 'ram', 'weather', 'clock', 'settings'],
+  })
+
+  const zoned = normalizeSettings({
+    version: 3,
+    headerLayout: {
+      left: ['location', 'weather'],
+      center: ['clock', 'date'],
+      right: ['network', 'spacer', 'cpu', 'settings'],
+    },
+    widgets: [],
+  })
+  assert.deepEqual(zoned.headerLayout, {
+    left: ['location', 'weather'],
+    center: ['clock', 'date'],
+    right: ['network', 'spacer', 'cpu', 'settings'],
+  })
 
   const fallback = normalizeSettings({
     version: 3,
     widgets: [],
   })
   assert.deepEqual(fallback.headerItems, ['network', 'location', 'weather', 'date', 'clock'])
+  assert.deepEqual(fallback.headerLayout, {
+    left: ['logo'],
+    center: [],
+    right: ['network', 'location', 'weather', 'date', 'clock', 'settings'],
+  })
 
   const empty = normalizeSettings({
     version: 3,

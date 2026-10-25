@@ -1,6 +1,7 @@
 export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow' | 'waste' | 'media' | 'camera' | 'qr' | 'rss' | 'dwd' | 'iobroker'
 
 export type HeaderItemType =
+  | 'logo'
   | 'clock'
   | 'date'
   | 'weather'
@@ -10,8 +11,20 @@ export type HeaderItemType =
   | 'uptime'
   | 'network'
   | 'ip'
+  | 'settings'
+  | 'spacer'
+  | 'divider'
+
+export type HeaderZone = 'left' | 'center' | 'right'
+
+export interface HeaderLayout {
+  left: HeaderItemType[]
+  center: HeaderItemType[]
+  right: HeaderItemType[]
+}
 
 export const VALID_HEADER_ITEMS = new Set<HeaderItemType>([
+  'logo',
   'clock',
   'date',
   'weather',
@@ -21,18 +34,29 @@ export const VALID_HEADER_ITEMS = new Set<HeaderItemType>([
   'uptime',
   'network',
   'ip',
+  'settings',
+  'spacer',
+  'divider',
 ])
 
 export const DEFAULT_HEADER_ITEMS: HeaderItemType[] = ['network', 'location', 'weather', 'date', 'clock']
+
+export const DEFAULT_HEADER_LAYOUT: HeaderLayout = {
+  left: ['logo'],
+  center: [],
+  right: ['network', 'location', 'weather', 'date', 'clock', 'settings'],
+}
 
 export interface HeaderItemMeta {
   id: HeaderItemType
   label: string
   icon: string
   desc: string
+  allowMultiple?: boolean
 }
 
 export const ALL_HEADER_ITEMS_META: HeaderItemMeta[] = [
+  { id: 'logo', label: 'Board-Logo', icon: '🖼️', desc: 'HomePiBoard Logo' },
   { id: 'clock', label: 'Uhrzeit', icon: '⏰', desc: 'Digitale Uhrzeit (z. B. 14:35)' },
   { id: 'date', label: 'Datum', icon: '📅', desc: 'Wochentag & formatiertes Datum' },
   { id: 'weather', label: 'Wetter', icon: '🌤️', desc: 'Lokale Temperatur & Wetterzustand' },
@@ -42,6 +66,9 @@ export const ALL_HEADER_ITEMS_META: HeaderItemMeta[] = [
   { id: 'uptime', label: 'Laufzeit (Uptime)', icon: '⏱️', desc: 'System-Betriebszeit' },
   { id: 'network', label: 'Netzwerk-Status', icon: '🟢', desc: 'ONLINE / LOKAL Pille' },
   { id: 'ip', label: 'IP-Adresse', icon: '🌐', desc: 'Lokale IPv4-Netzwerkadresse' },
+  { id: 'settings', label: 'Einstellungen (⚙)', icon: '⚙️', desc: 'Button zu den Einstellungen (/settings)' },
+  { id: 'spacer', label: 'Flex-Abstand', icon: '↔️', desc: 'Schiebt benachbarte Elemente auseinander', allowMultiple: true },
+  { id: 'divider', label: 'Trennlinie', icon: '┃', desc: 'Optischer vertikaler Trenner (|)', allowMultiple: true },
 ]
 
 export type DateFormat = 'short' | 'medium' | 'long'
@@ -104,6 +131,7 @@ export type DisplaySettings = {
   notificationSoundVolume?: number
   audioOutput?: 'hdmi' | 'jack'
   headerItems?: HeaderItemType[]
+  headerLayout?: HeaderLayout
   widgets: DashboardWidget[]
 }
 
@@ -147,6 +175,11 @@ export const defaultSettings: DisplaySettings = {
   notificationSoundVolume: 80,
   audioOutput: 'hdmi',
   headerItems: [...DEFAULT_HEADER_ITEMS],
+  headerLayout: {
+    left: [...DEFAULT_HEADER_LAYOUT.left],
+    center: [...DEFAULT_HEADER_LAYOUT.center],
+    right: [...DEFAULT_HEADER_LAYOUT.right],
+  },
   widgets: [],
 }
 
@@ -451,6 +484,36 @@ export function normalizeSettings(value: unknown): DisplaySettings {
     ? rawHeaderItems.filter((item): item is HeaderItemType => typeof item === 'string' && VALID_HEADER_ITEMS.has(item as HeaderItemType))
     : [...DEFAULT_HEADER_ITEMS]
 
+  const filterZoneItems = (arr: unknown): HeaderItemType[] =>
+    Array.isArray(arr)
+      ? arr.filter((item): item is HeaderItemType => typeof item === 'string' && VALID_HEADER_ITEMS.has(item as HeaderItemType)).slice(0, 24)
+      : []
+
+  let headerLayout: HeaderLayout
+  if (parsed.headerLayout !== null && typeof parsed.headerLayout === 'object' && !Array.isArray(parsed.headerLayout)) {
+    const rawLayout = parsed.headerLayout as Record<string, unknown>
+    headerLayout = {
+      left: filterZoneItems(rawLayout.left),
+      center: filterZoneItems(rawLayout.center),
+      right: filterZoneItems(rawLayout.right),
+    }
+  } else if (rawHeaderItems !== null) {
+    headerLayout = {
+      left: ['logo'],
+      center: [],
+      right: [
+        ...headerItems.filter((item) => item !== 'logo' && item !== 'settings'),
+        'settings',
+      ],
+    }
+  } else {
+    headerLayout = {
+      left: [...DEFAULT_HEADER_LAYOUT.left],
+      center: [...DEFAULT_HEADER_LAYOUT.center],
+      right: [...DEFAULT_HEADER_LAYOUT.right],
+    }
+  }
+
   return {
     version: SETTINGS_VERSION,
     location: text(parsed.location) || defaultSettings.location,
@@ -473,6 +536,7 @@ export function normalizeSettings(value: unknown): DisplaySettings {
     notificationSoundVolume,
     audioOutput,
     headerItems,
+    headerLayout,
     widgets,
   }
 }
