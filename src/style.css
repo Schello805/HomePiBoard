@@ -431,6 +431,44 @@ button:has(.loading-spinner) {
 .admin-topbar .topbar-btn.secondary { color: var(--muted); background: transparent; border-color: var(--line); }
 .admin-topbar .topbar-btn.secondary:hover { color: var(--ink); border-color: var(--muted); }
 
+.session-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.74rem;
+  font-weight: 600;
+  transition: all 160ms ease;
+}
+
+.session-btn.is-unlocked {
+  color: var(--acid) !important;
+  border-color: rgba(201, 242, 105, 0.45) !important;
+  background: rgba(201, 242, 105, 0.1) !important;
+}
+.session-btn.is-unlocked:hover {
+  background: rgba(201, 242, 105, 0.22) !important;
+  border-color: var(--acid) !important;
+}
+
+.session-btn.is-locked {
+  color: var(--muted) !important;
+  border-color: var(--line) !important;
+  background: transparent !important;
+}
+.session-btn.is-locked:hover {
+  color: var(--ink) !important;
+  border-color: var(--muted) !important;
+}
+
+.pin-hint {
+  margin: 6px 0 2px;
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .admin-header-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; margin-left: auto; height: 32px; }
 .admin-topbar .save-button {
   height: 32px;

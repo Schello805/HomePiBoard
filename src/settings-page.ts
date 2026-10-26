@@ -1,13 +1,13 @@
 import { adminErrorMessage, clearPinError, createConfirmModal, formatCpuTemp, formatUptime, validatePinChange } from './admin.ts'
+import { clearStoredAdminPin, getSessionRemainingMinutes, getStoredAdminPin, setStoredAdminPin } from './auth-session.ts'
 import { downloadJson, escapeHtml } from './dashboard-utils.ts'
 import { playNotificationSound, resolveHeaderLayout } from './display.ts'
 import { ALL_HEADER_ITEMS_META, DEFAULT_HEADER_LAYOUT, type DesignTheme, type DisplaySettings, type HeaderItemType, type HeaderLayout, type HeaderZone, normalizeSettings, SETTINGS_VERSION } from './settings.ts'
-import { createSettingsStore } from './settings-store.ts'
+import { createSettingsStore, UnauthorizedError } from './settings-store.ts'
 import { widgetTypeLabel } from './widgets.ts'
 
 export async function renderSettingsPage(app: HTMLElement) {
   const store = createSettingsStore()
-  const pinKey = 'homepiboard-admin-pin'
   let { settings } = await store.load()
 
   app.innerHTML = `
@@ -36,6 +36,7 @@ export async function renderSettingsPage(app: HTMLElement) {
             <span>Live-Anzeige</span>
             <span class="external-arrow">↗</span>
           </a>
+          <button class="settings-action-btn secondary session-btn" id="settings-session-btn" type="button" title="PIN-Sitzung"></button>
           <button class="settings-status-chip" id="settings-status-pill" type="button" title="Telemetrie anzeigen">
             <span class="status-live-dot"></span>
             <span class="status-chip-text">Lade Telemetrie …</span>
@@ -535,6 +536,7 @@ export async function renderSettingsPage(app: HTMLElement) {
             Admin-PIN <span style="font-size: 0.8em; font-weight: normal; opacity: 0.75;">(Standard: 0000)</span>
             <input id="settings-dialog-pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="0000" required />
           </label>
+          <p class="pin-hint">Nach dem Entsperren 60 Minuten lang gültig – keine erneute PIN bei jeder Änderung nötig.</p>
           <p class="pin-error" id="settings-dialog-pin-error" role="alert"></p>
           <div class="dialog-actions">
             <button class="secondary-button" id="settings-pin-cancel" type="button">Abbrechen</button>
@@ -1030,7 +1032,8 @@ export async function renderSettingsPage(app: HTMLElement) {
           pinInput.select()
           return
         }
-        sessionStorage.setItem(pinKey, pin)
+        setStoredAdminPin(pin)
+        updateSessionButton()
         finish(pin)
       }
       const cleanup = () => {
@@ -1103,7 +1106,7 @@ export async function renderSettingsPage(app: HTMLElement) {
 
   async function triggerUpdate() {
     if (!triggerUpdateBtn) return
-    let pin = sessionStorage.getItem(pinKey)
+    let pin = getStoredAdminPin(localStorage, true)
     if (!pin) {
       pin = await requestPin()
       if (!pin) return
@@ -1128,7 +1131,8 @@ export async function renderSettingsPage(app: HTMLElement) {
       })
 
       if (res.status === 401) {
-        sessionStorage.removeItem(pinKey)
+        clearStoredAdminPin()
+        updateSessionButton()
         const retryPin = await requestPin()
         if (!retryPin) {
           throw new Error('PIN erforderlich.')
@@ -1270,7 +1274,7 @@ export async function renderSettingsPage(app: HTMLElement) {
   }
 
   async function saveSettings() {
-    let pin = sessionStorage.getItem(pinKey)
+    let pin = getStoredAdminPin(localStorage, true)
     if (!pin) {
       pin = await requestPin()
       if (!pin) return
@@ -1284,6 +1288,7 @@ export async function renderSettingsPage(app: HTMLElement) {
     try {
       const saved = await store.save(nextSettings, pin)
       settings = nextSettings
+      updateSessionButton()
       if (saved.source === 'local') {
         showFeedback('Änderungen nur lokal gespeichert (Server offline).', true)
       } else {
@@ -1291,6 +1296,10 @@ export async function renderSettingsPage(app: HTMLElement) {
         showFeedback('✓ Einstellungen erfolgreich gespeichert! Alle Anzeigen übernehmen die Änderung.')
       }
     } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        clearStoredAdminPin()
+        updateSessionButton()
+      }
       showFeedback(adminErrorMessage(error, 'Fehler beim Speichern der Einstellungen.'), true)
     } finally {
       saveBtn.disabled = false
@@ -1351,7 +1360,7 @@ export async function renderSettingsPage(app: HTMLElement) {
   }
 
   saveNewPresetBtn?.addEventListener('click', async () => {
-    let pin = sessionStorage.getItem(pinKey)
+    let pin = getStoredAdminPin(localStorage, true)
     if (!pin) {
       pin = await requestPin()
       if (!pin) return
@@ -1362,10 +1371,15 @@ export async function renderSettingsPage(app: HTMLElement) {
     try {
       const cur = getCurrentFormSettings()
       await store.savePreset(name, cur, pin)
+      updateSessionButton()
       if (newPresetNameInput) newPresetNameInput.value = ''
       showFeedback(`✓ Profil "${name}" erfolgreich gespeichert!`)
       await loadAndRenderPresets()
     } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        clearStoredAdminPin()
+        updateSessionButton()
+      }
       showFeedback(adminErrorMessage(error, 'Fehler beim Speichern der Vorlage.'), true)
     } finally {
       saveNewPresetBtn.disabled = false
@@ -1427,7 +1441,7 @@ export async function renderSettingsPage(app: HTMLElement) {
       return
     }
 
-    let pin = sessionStorage.getItem(pinKey)
+    let pin = getStoredAdminPin(localStorage, true)
     if (!pin) {
       pin = await requestPin()
       if (!pin) return
@@ -1576,7 +1590,8 @@ export async function renderSettingsPage(app: HTMLElement) {
 
     try {
       await store.changePin(currentPinInput.value, newPinInput.value)
-      sessionStorage.setItem(pinKey, newPinInput.value)
+      setStoredAdminPin(newPinInput.value)
+      updateSessionButton()
       pinChangeForm.reset()
       showFeedback('✓ Admin-PIN erfolgreich geändert.')
     } catch (error) {
@@ -1586,6 +1601,49 @@ export async function renderSettingsPage(app: HTMLElement) {
       submitBtn.textContent = 'PIN jetzt ändern'
     }
   })
+
+  // Session Status Button
+  const sessionStatusBtn = app.querySelector<HTMLButtonElement>('#settings-session-btn')
+  function updateSessionButton() {
+    if (!sessionStatusBtn) return
+    const remaining = getSessionRemainingMinutes()
+    if (remaining > 0) {
+      sessionStatusBtn.innerHTML = `🔓 ${remaining}m`
+      sessionStatusBtn.title = `Sitzung aktiv (${remaining} Min. verbleibend). Klicken zum vorzeitigen Sperren.`
+      sessionStatusBtn.classList.remove('is-locked')
+      sessionStatusBtn.classList.add('is-unlocked')
+    } else {
+      sessionStatusBtn.innerHTML = `🔒 Gesperrt`
+      sessionStatusBtn.title = `Gesperrt. Klicken zum Entsperren.`
+      sessionStatusBtn.classList.remove('is-unlocked')
+      sessionStatusBtn.classList.add('is-locked')
+    }
+  }
+
+  sessionStatusBtn?.addEventListener('click', async () => {
+    const remaining = getSessionRemainingMinutes()
+    if (remaining > 0) {
+      clearStoredAdminPin()
+      updateSessionButton()
+      showFeedback('PIN-Sitzung beendet (gesperrt).')
+    } else {
+      const pin = await requestPin()
+      if (pin) {
+        updateSessionButton()
+        showFeedback('PIN-Sitzung für 60 Minuten aktiviert.')
+      }
+    }
+  })
+
+  updateSessionButton()
+  if (typeof window !== 'undefined') {
+    window.setInterval(updateSessionButton, 60000)
+    if (!getStoredAdminPin()) {
+      window.setTimeout(() => {
+        void requestPin()
+      }, 50)
+    }
+  }
 
   // Init
   activateSettingsTopic(window.location.hash.slice(1))

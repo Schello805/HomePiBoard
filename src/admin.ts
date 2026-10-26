@@ -1,11 +1,10 @@
+import { clearStoredAdminPin, getSessionRemainingMinutes, getStoredAdminPin, setStoredAdminPin } from './auth-session.ts'
 import { escapeHtml } from './dashboard-utils.ts'
 import { bindRadioWidgets } from './display.ts'
 import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type DesignTheme, type WidgetType } from './settings.ts'
 import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
 import { parseCalendarFeed, type CalendarFeedEvent } from './calendar-feed.ts'
 import { bindCameraWidgets, bindDwdWidgets, bindIoBrokerWidgets, bindQrWidgets, bindRssWidgets, bindWidgetFrames, isBuiltInCalendar, normalizeCameraUrl, parseSlideshowUrls, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
-
-const pinKey = 'homepiboard-admin-pin'
 
 export function validatePinChange(newPin: string, confirmation: string) {
   if (!/^\d{4,64}$/.test(newPin)) return 'Die neue PIN muss aus 4 bis 64 Ziffern bestehen.'
@@ -292,6 +291,7 @@ export async function renderAdminPage(app: HTMLElement) {
           <a class="topbar-btn" id="display-settings-button" href="/settings" title="Einstellungen öffnen">⚙ Einstellungen</a>
         </div>
         <div class="admin-header-actions">
+          <button class="topbar-btn session-btn" id="session-status-btn" type="button" title="PIN-Sitzung"></button>
           <button class="topbar-btn secondary" id="reset-button" type="button" title="Werkseinstellungen: Löscht alle Widgets und setzt Einstellungen auf Standard zurück">↺ Zurücksetzen</button>
           <button class="save-button" id="save-button" type="submit">Speichern</button>
           <a class="back-link" href="/" title="Zurück zur Anzeige">Anzeige ↗</a>
@@ -322,7 +322,7 @@ export async function renderAdminPage(app: HTMLElement) {
       <p class="save-message" id="save-message" role="status"></p>
     </form>
   </main>
-  <dialog class="pin-dialog" id="pin-dialog"><form method="dialog" id="pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Admin-Bereich</span><h2>PIN eingeben</h2></div><button class="close-button" id="pin-close" type="button" aria-label="Schließen">×</button></div><label for="admin-pin">Admin-PIN<input id="admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><p class="pin-error" id="pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="pin-cancel" type="button">Abbrechen</button><button class="save-button" id="pin-submit" value="default">Entsperren</button></div></form></dialog>
+  <dialog class="pin-dialog" id="pin-dialog"><form method="dialog" id="pin-form"><div class="dialog-heading"><div><span class="widget-kicker">Admin-Bereich</span><h2>PIN eingeben</h2></div><button class="close-button" id="pin-close" type="button" aria-label="Schließen">×</button></div><label for="admin-pin">Admin-PIN<input id="admin-pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><p class="pin-hint">Nach dem Entsperren 60 Minuten lang gültig – keine erneute PIN bei jeder Änderung nötig.</p><p class="pin-error" id="pin-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" id="pin-cancel" type="button">Abbrechen</button><button class="save-button" id="pin-submit" value="default">Entsperren</button></div></form></dialog>
   <dialog class="pin-dialog confirm-dialog" id="confirm-dialog">
     <form method="dialog" id="confirm-form">
       <div class="dialog-heading">
@@ -940,7 +940,7 @@ export async function renderAdminPage(app: HTMLElement) {
       const files = fileInput.files
       if (!files || files.length === 0) return
 
-      let currentPin = sessionStorage.getItem(pinKey) || (await requestPin())
+      let currentPin = getStoredAdminPin(localStorage, true) || (await requestPin())
       if (!currentPin) {
         if (uploadStatus) uploadStatus.textContent = 'Upload abgebrochen (PIN erforderlich).'
         fileInput.value = ''
@@ -984,7 +984,8 @@ export async function renderAdminPage(app: HTMLElement) {
             body: formData,
           })
           if (res.status === 401) {
-            sessionStorage.removeItem(pinKey)
+            clearStoredAdminPin()
+            updateSessionButton()
             const retryPin = await requestPin()
             if (!retryPin) {
               if (uploadStatus) uploadStatus.textContent = 'PIN erforderlich.'
@@ -1508,7 +1509,8 @@ export async function renderAdminPage(app: HTMLElement) {
           pinInput.select()
           return
         }
-        sessionStorage.setItem(pinKey, pin)
+        setStoredAdminPin(pin)
+        updateSessionButton()
         finish(pin)
       }
       const cleanup = () => {
@@ -1527,17 +1529,20 @@ export async function renderAdminPage(app: HTMLElement) {
   }
 
   async function saveWithPin(nextSettings: typeof defaultSettings) {
-    let pin = sessionStorage.getItem(pinKey) || ''
+    let pin = getStoredAdminPin(localStorage, true) || ''
     if (loaded.source === 'server' && !pin) {
       const requestedPin = await requestPin()
       if (!requestedPin) return null
       pin = requestedPin
     }
     try {
-      return await store.save(nextSettings, pin)
+      const result = await store.save(nextSettings, pin)
+      updateSessionButton()
+      return result
     } catch (error) {
       if (!(error instanceof UnauthorizedError)) throw error
-      sessionStorage.removeItem(pinKey)
+      clearStoredAdminPin()
+      updateSessionButton()
       const requestedPin = await requestPin()
       if (!requestedPin) return null
       return store.save(nextSettings, requestedPin)
@@ -1657,9 +1662,49 @@ export async function renderAdminPage(app: HTMLElement) {
     }
   }
 
+  const sessionStatusBtn = app.querySelector<HTMLButtonElement>('#session-status-btn')
+  function updateSessionButton() {
+    if (!sessionStatusBtn) return
+    const remaining = getSessionRemainingMinutes()
+    if (remaining > 0) {
+      sessionStatusBtn.innerHTML = `🔓 ${remaining}m`
+      sessionStatusBtn.title = `Sitzung aktiv (${remaining} Min. verbleibend). Klicken zum vorzeitigen Sperren.`
+      sessionStatusBtn.classList.remove('is-locked')
+      sessionStatusBtn.classList.add('is-unlocked')
+    } else {
+      sessionStatusBtn.innerHTML = `🔒 Gesperrt`
+      sessionStatusBtn.title = `Gesperrt. Klicken zum Entsperren.`
+      sessionStatusBtn.classList.remove('is-unlocked')
+      sessionStatusBtn.classList.add('is-locked')
+    }
+  }
+
+  sessionStatusBtn?.addEventListener('click', async () => {
+    const remaining = getSessionRemainingMinutes()
+    if (remaining > 0) {
+      clearStoredAdminPin()
+      updateSessionButton()
+      showMessage('PIN-Sitzung beendet (gesperrt).')
+    } else {
+      const pin = await requestPin()
+      if (pin) {
+        updateSessionButton()
+        showMessage('PIN-Sitzung für 60 Minuten aktiviert.')
+      }
+    }
+  })
+
+  updateSessionButton()
   if (typeof window !== 'undefined') {
+    window.setInterval(updateSessionButton, 60000)
     window.setTimeout(() => checkUpdateStatus(true), 2500)
     window.setInterval(() => checkUpdateStatus(true), 10 * 60 * 1000)
+
+    if (loaded.source === 'server' && !getStoredAdminPin()) {
+      window.setTimeout(() => {
+        void requestPin()
+      }, 50)
+    }
   }
 
   app.querySelector<HTMLFormElement>('#admin-form')!.addEventListener('submit', async (event) => {
