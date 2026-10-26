@@ -25,3 +25,9 @@ test('liquid glass card theme defines translucent glassmorphic cards and floatin
   assert.match(css, /\.signage-shell\.theme-liquid-glass\s+\.header-bar\s*\{[^}]*backdrop-filter:\s*blur/s)
   assert.match(css, /\.signage-shell\.theme-liquid-glass\s+\.widget,\s*\.admin-shell\.theme-liquid-glass\s+\.widget-editor\s*\{[^}]*backdrop-filter:\s*blur/s)
 })
+
+test('header chips and status integrate seamlessly without card backgrounds or borders', () => {
+  assert.match(css, /\.header-chip\s*\{[^}]*background:\s*transparent/s)
+  assert.match(css, /\.header-chip\s*\{[^}]*border:\s*none/s)
+  assert.match(css, /\.signage-shell\.theme-liquid-glass\s+\.header-chip,\s*\.signage-shell\.theme-liquid-glass\s+\.connection-status\s*\{[^}]*background:\s*transparent/s)
+})

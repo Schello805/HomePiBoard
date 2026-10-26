@@ -152,24 +152,57 @@ button:disabled { cursor: not-allowed; opacity: 0.42; }
 .connection-status.is-online { border-color: rgba(201, 242, 105, 0.38); color: var(--acid); }
 .connection-status.is-offline { border-color: rgba(242, 155, 136, 0.45); color: var(--danger); background: rgba(242, 155, 136, 0.12); }
 .save-state { border-color: var(--line); color: var(--muted); }
+
+/* Header Bar & Zone Connection Status: Nahtlos ohne Kartenrahmen */
+.header-bar .connection-status,
+.header-zone .connection-status {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 4px !important;
+  min-height: auto !important;
+  border-radius: 0 !important;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.header-bar .connection-status::before,
+.header-zone .connection-status::before {
+  content: '●';
+  font-size: 0.8em;
+  margin-right: 4px;
+}
+.header-bar .connection-status.is-online,
+.header-zone .connection-status.is-online {
+  color: #34d399 !important;
+}
+.header-bar .connection-status.is-offline,
+.header-zone .connection-status.is-offline {
+  color: var(--danger) !important;
+  background: transparent !important;
+}
+
 .header-zone strong,
 .header-status strong { color: var(--ink); font-size: clamp(1.05rem, 1.8vw, 1.35rem); font-weight: 500; letter-spacing: -0.03em; }
 .header-zone time,
 .header-status time { color: var(--ink); font-size: clamp(0.85rem, 1.25vw, 1.05rem); font-weight: 500; letter-spacing: 0.02em; display: inline-flex; align-items: baseline; }
 .header-zone .header-weekday,
 .header-status .header-weekday { color: var(--acid); font-weight: 600; margin-right: 3px; }
-.status-divider { width: 1px; height: 18px; background: var(--line); }
+.status-divider { width: 1px; height: 16px; background: rgba(255, 255, 255, 0.16); }
 .settings-button {
   display: grid;
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
   place-items: center;
   border-radius: 50%;
   color: var(--muted);
   text-decoration: none;
+  background: transparent;
+  border: none;
+  transition: color 150ms ease, transform 150ms ease;
 }
-.settings-button:hover { color: var(--acid); background: rgba(201, 242, 105, 0.08); }
+.settings-button:hover { color: var(--acid); background: transparent; transform: rotate(45deg); }
 
 .widget-grid {
   flex: 0 0 auto;
@@ -2928,59 +2961,49 @@ body.is-widget-dragging object {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--line);
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  background: transparent;
+  border: none;
+  padding: 0 2px;
+  font-size: 0.78rem;
+  font-weight: 500;
   color: var(--ink);
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
 .header-chip .chip-icon {
-  font-size: 0.85em;
+  font-size: 0.9em;
   line-height: 1;
 }
 .header-chip .chip-label {
   font-size: 0.68rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  opacity: 0.7;
+  color: var(--muted);
+  opacity: 0.8;
+  margin-right: 1px;
 }
 .header-chip .chip-val {
-  font-weight: 700;
+  font-weight: 600;
+  color: var(--ink);
 }
-.header-chip-cpu {
+.header-chip-cpu .chip-val {
   color: #ff9d66;
-  border-color: rgba(255, 157, 102, 0.25);
-  background: rgba(255, 157, 102, 0.08);
 }
-.header-chip-ram {
+.header-chip-ram .chip-val {
   color: #60a5fa;
-  border-color: rgba(96, 165, 250, 0.25);
-  background: rgba(96, 165, 250, 0.08);
 }
-.header-chip-uptime {
-  color: #a78bfa;
-  border-color: rgba(167, 139, 250, 0.25);
-  background: rgba(167, 139, 250, 0.08);
+.header-chip-uptime .chip-val {
+  color: #c4b5fd;
 }
-.header-chip-ip {
-  color: #34d399;
-  border-color: rgba(52, 211, 153, 0.25);
-  background: rgba(52, 211, 153, 0.08);
+.header-chip-ip .chip-val {
+  color: #6ee7b7;
 }
-.header-chip-location {
-  color: #38bdf8;
-  border-color: rgba(56, 189, 248, 0.25);
-  background: rgba(56, 189, 248, 0.08);
+.header-chip-location .chip-val {
+  color: #7dd3fc;
 }
-.header-chip-weather {
-  color: #fde047;
-  border-color: rgba(253, 224, 71, 0.25);
-  background: rgba(253, 224, 71, 0.08);
+.header-chip-weather .chip-val {
+  color: var(--warm);
 }
 
 /* Card Header Builder in /settings */
@@ -3074,10 +3097,9 @@ body.is-widget-dragging object {
   gap: 4px;
   font-size: 0.74rem;
   color: var(--ink);
-  padding: 2px 7px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--line);
+  padding: 0 4px;
+  background: transparent;
+  border: none;
   white-space: nowrap;
 }
 .preview-chip-clock {
@@ -3090,27 +3112,20 @@ body.is-widget-dragging object {
 }
 .preview-chip-cpu {
   color: #ff9d66;
-  border-color: rgba(255, 157, 102, 0.3);
 }
 .preview-chip-ram {
   color: #60a5fa;
-  border-color: rgba(96, 165, 250, 0.3);
 }
 .preview-chip-uptime {
   color: #a78bfa;
-  border-color: rgba(167, 139, 250, 0.3);
 }
 .preview-chip-ip {
   color: #34d399;
-  border-color: rgba(52, 211, 153, 0.3);
-  font-family: monospace;
 }
 .preview-chip-network {
   color: var(--acid);
-  border-color: rgba(201, 242, 105, 0.3);
   font-weight: 700;
-  font-size: 0.65rem;
-  border-radius: 999px;
+  font-size: 0.68rem;
 }
 .preview-empty-hint {
   color: var(--muted);
@@ -3913,31 +3928,35 @@ body.is-widget-dragging object {
 
 .signage-shell.theme-liquid-glass .header-chip,
 .signage-shell.theme-liquid-glass .connection-status {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 0 !important;
 }
 
 .signage-shell.theme-liquid-glass .connection-status.is-online {
-  color: #6ee7b7;
-  border-color: rgba(110, 231, 183, 0.42);
-  background: rgba(16, 185, 129, 0.16);
+  color: #6ee7b7 !important;
+  background: transparent !important;
+  border: none !important;
 }
 
 .signage-shell.theme-liquid-glass .settings-button {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: var(--ink);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  transition: transform 0.2s ease, background 0.2s ease;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--muted);
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  transition: transform 0.2s ease, color 0.2s ease;
 }
 
 .signage-shell.theme-liquid-glass .settings-button:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: transparent !important;
   color: #ffffff;
-  transform: scale(1.05);
+  transform: rotate(45deg);
 }
 
 /* Liquid Glass Widget Cards */
