@@ -19,6 +19,18 @@ test('renderWidget includes loading state and reload action for web frames', () 
   assert.match(markup, /data-reload-frame/)
 })
 
+test('clock widget renders digital and analog variants with optional date', () => {
+  const digital = renderWidgetContent({ id: 'clock-1', type: 'clock', title: 'Uhr', url: '', columns: 8, rows: 5, clockStyle: 'digital', clockShowDate: true })
+  const analog = renderWidgetContent({ id: 'clock-2', type: 'clock', title: 'Uhr', url: '', columns: 8, rows: 5, clockStyle: 'analog', clockShowDate: false })
+
+  assert.match(digital, /clock-widget-digital/)
+  assert.match(digital, /data-clock-time/)
+  assert.match(digital, /data-clock-date/)
+  assert.match(analog, /clock-widget-analog/)
+  assert.match(analog, /data-clock-hour/)
+  assert.doesNotMatch(analog, /data-clock-date/)
+})
+
 test('calendar URLs containing only whitespace use the built-in calendar', () => {
   const content = renderWidgetContent({ id: 'calendar', type: 'calendar', title: 'Kalender', url: '   ', columns: 8, rows: 5 })
 

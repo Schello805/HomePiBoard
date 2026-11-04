@@ -4,7 +4,7 @@ import { bindRadioWidgets } from './display.ts'
 import { createWidget, defaultSettings, GRID_COLUMNS, GRID_ROWS, layoutFits, MAX_WIDGET_COLUMNS, MAX_WIDGET_ROWS, normalizeSettings, SETTINGS_VERSION, widgetConstraints, type DashboardWidget, type DesignTheme, type WidgetType } from './settings.ts'
 import { createSettingsStore, RateLimitError, SettingsServerError, UnauthorizedError } from './settings-store.ts'
 import { parseCalendarFeed, type CalendarFeedEvent } from './calendar-feed.ts'
-import { bindCameraWidgets, bindDwdWidgets, bindIoBrokerWidgets, bindQrWidgets, bindRssWidgets, bindWidgetFrames, isBuiltInCalendar, normalizeCameraUrl, parseSlideshowUrls, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
+import { bindCameraWidgets, bindClockWidgets, bindDwdWidgets, bindIoBrokerWidgets, bindQrWidgets, bindRssWidgets, bindWidgetFrames, isBuiltInCalendar, normalizeCameraUrl, parseSlideshowUrls, renderSlideshowCrudList, renderWasteEvents, renderWidget, renderWidgetContent, widgetTypeLabel } from './widgets.ts'
 
 export function validatePinChange(newPin: string, confirmation: string) {
   if (!/^\d{4,64}$/.test(newPin)) return 'Die neue PIN muss aus 4 bis 64 Ziffern bestehen.'
@@ -306,7 +306,7 @@ export async function renderAdminPage(app: HTMLElement) {
           <summary>＋ Widget hinzufügen</summary>
           <div class="add-widget-dropdown">
             <section><h3>Inhalt</h3><button type="button" data-add-type="web">↗ Webseite</button><button type="button" data-add-type="text">≡ Text</button><button type="button" data-add-type="image">▧ Bild</button><button type="button" data-add-type="slideshow">▨ Diashow</button><button type="button" data-add-type="qr">▦ QR-Code</button></section>
-            <section><h3>Informationen</h3><button type="button" data-add-type="calendar">▦ Kalender</button><button type="button" data-add-type="waste">🗑️ Müll</button><button type="button" data-add-type="rss">▤ Nachrichten</button><button type="button" data-add-type="dwd">⚠ DWD-Warnungen</button></section>
+            <section><h3>Informationen</h3><button type="button" data-add-type="calendar">▦ Kalender</button><button type="button" data-add-type="clock">◷ Große Uhr</button><button type="button" data-add-type="waste">🗑️ Müll</button><button type="button" data-add-type="rss">▤ Nachrichten</button><button type="button" data-add-type="dwd">⚠ DWD-Warnungen</button></section>
             <section><h3>Medien &amp; Smart Home</h3><button type="button" data-add-type="media">📻 Radio</button><button type="button" data-add-type="camera">📷 Kamera</button><button type="button" data-add-type="iobroker">⌂ Smart Home</button></section>
           </div>
         </details>
@@ -491,6 +491,10 @@ export async function renderAdminPage(app: HTMLElement) {
     const iobrokerUrl = type === 'iobroker' && ioUrlInput ? ioUrlInput.value.trim() : undefined
     const iobrokerStates = type === 'iobroker' && ioStatesInput ? ioStatesInput.value.trim() : undefined
     const iobrokerRefreshSeconds = type === 'iobroker' && ioRefreshInput ? Math.max(5, Math.min(3600, Number(ioRefreshInput.value) || 15)) : undefined
+    const clockStyleInput = editor.querySelector<HTMLSelectElement>('[data-field="clockStyle"]')
+    const clockShowDateInput = editor.querySelector<HTMLInputElement>('[data-field="clockShowDate"]')
+    const clockStyle = type === 'clock' && clockStyleInput ? (clockStyleInput.value === 'analog' ? 'analog' : 'digital') : undefined
+    const clockShowDate = type === 'clock' && clockShowDateInput ? Boolean(clockShowDateInput.checked) : undefined
 
     const titleVal = editor.querySelector<HTMLInputElement>('[data-field="title"]')?.value
     const colVal = editor.querySelector<HTMLInputElement>('[data-field="columns"]')?.value
@@ -527,6 +531,8 @@ export async function renderAdminPage(app: HTMLElement) {
       ...(iobrokerUrl !== undefined ? { iobrokerUrl } : {}),
       ...(iobrokerStates !== undefined ? { iobrokerStates } : {}),
       ...(iobrokerRefreshSeconds !== undefined ? { iobrokerRefreshSeconds } : {}),
+      ...(clockStyle !== undefined ? { clockStyle } : {}),
+      ...(clockShowDate !== undefined ? { clockShowDate } : {}),
     }
   }
 
@@ -664,6 +670,7 @@ export async function renderAdminPage(app: HTMLElement) {
       bindRssWidgets(previewContent)
       bindDwdWidgets(previewContent)
       bindIoBrokerWidgets(previewContent)
+      bindClockWidgets(previewContent)
       bindRadioWidgets(previewContent, { allowAutoplay: false })
       bindCameraWidgets(previewContent)
     }
@@ -681,6 +688,7 @@ export async function renderAdminPage(app: HTMLElement) {
     bindRssWidgets(editor)
     bindDwdWidgets(editor)
     bindIoBrokerWidgets(editor)
+    bindClockWidgets(editor)
     bindRadioWidgets(editor, { allowAutoplay: false })
     bindCameraWidgets(editor)
     updateEditorIndexes()
@@ -705,6 +713,7 @@ export async function renderAdminPage(app: HTMLElement) {
     bindRssWidgets(copy)
     bindDwdWidgets(copy)
     bindIoBrokerWidgets(copy)
+    bindClockWidgets(copy)
     bindRadioWidgets(copy, { allowAutoplay: false })
     bindCameraWidgets(copy)
     updateEditorIndexes()
@@ -1264,6 +1273,7 @@ export async function renderAdminPage(app: HTMLElement) {
       bindRssWidgets(newEditor)
       bindDwdWidgets(newEditor)
       bindIoBrokerWidgets(newEditor)
+      bindClockWidgets(newEditor)
       bindRadioWidgets(newEditor, { allowAutoplay: false })
       bindCameraWidgets(newEditor)
       markDirty()
@@ -1562,6 +1572,7 @@ export async function renderAdminPage(app: HTMLElement) {
   bindRssWidgets(editorList)
   bindDwdWidgets(editorList)
   bindIoBrokerWidgets(editorList)
+  bindClockWidgets(editorList)
   bindRadioWidgets(editorList, { allowAutoplay: false })
   bindCameraWidgets(editorList)
   updateEditorIndexes()

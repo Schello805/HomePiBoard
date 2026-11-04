@@ -307,6 +307,20 @@ test('createWidget and normalizeSettings support waste and media widgets', () =>
   assert.equal(normalized.widgets[1]?.mediaPlaying, true)
 })
 
+test('createWidget and normalizeSettings support the large clock widget', () => {
+  const clock = createWidget('clock', 1)
+  assert.equal(clock.title, 'Uhr')
+  assert.equal(clock.clockStyle, 'digital')
+  assert.equal(clock.clockShowDate, true)
+
+  const normalized = normalizeSettings({
+    version: 3,
+    widgets: [{ id: 'clock', type: 'clock', clockStyle: 'analog', clockShowDate: false }],
+  })
+  assert.equal(normalized.widgets[0]?.clockStyle, 'analog')
+  assert.equal(normalized.widgets[0]?.clockShowDate, false)
+})
+
 test('normalizeSettings preserves, filters and defaults headerItems and headerLayout', () => {
   const custom = normalizeSettings({
     version: 3,

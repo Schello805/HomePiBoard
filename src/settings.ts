@@ -1,4 +1,4 @@
-export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow' | 'waste' | 'media' | 'camera' | 'qr' | 'rss' | 'dwd' | 'iobroker'
+export type WidgetType = 'web' | 'calendar' | 'text' | 'image' | 'slideshow' | 'waste' | 'media' | 'camera' | 'qr' | 'rss' | 'dwd' | 'iobroker' | 'clock'
 
 export type HeaderItemType =
   | 'logo'
@@ -107,6 +107,8 @@ export type DashboardWidget = {
   iobrokerUrl?: string
   iobrokerStates?: string
   iobrokerRefreshSeconds?: number
+  clockStyle?: 'digital' | 'analog'
+  clockShowDate?: boolean
 }
 
 export type DisplaySettings = {
@@ -183,7 +185,7 @@ export const defaultSettings: DisplaySettings = {
   widgets: [],
 }
 
-const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image', 'slideshow', 'waste', 'media', 'camera', 'qr', 'rss', 'dwd', 'iobroker'])
+const widgetTypes = new Set<WidgetType>(['web', 'calendar', 'text', 'image', 'slideshow', 'waste', 'media', 'camera', 'qr', 'rss', 'dwd', 'iobroker', 'clock'])
 
 export const widgetConstraints: Record<WidgetType, { minColumns: number; minRows: number; defaultColumns: number; defaultRows: number }> = {
   web: { minColumns: 4, minRows: 2, defaultColumns: 12, defaultRows: 3 },
@@ -198,6 +200,7 @@ export const widgetConstraints: Record<WidgetType, { minColumns: number; minRows
   rss: { minColumns: 5, minRows: 2, defaultColumns: 10, defaultRows: 3 },
   dwd: { minColumns: 5, minRows: 2, defaultColumns: 8, defaultRows: 3 },
   iobroker: { minColumns: 4, minRows: 2, defaultColumns: 8, defaultRows: 3 },
+  clock: { minColumns: 4, minRows: 3, defaultColumns: 8, defaultRows: 5 },
 }
 
 const widgetTitles: Record<WidgetType, string> = {
@@ -213,6 +216,7 @@ const widgetTitles: Record<WidgetType, string> = {
   rss: 'Nachrichten',
   dwd: 'DWD-Wetterwarnungen',
   iobroker: 'Smart Home',
+  clock: 'Uhr',
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -271,6 +275,10 @@ export function createWidget(type: WidgetType, index: number, id = `widget-${ind
     widget.iobrokerUrl = 'http://iobroker:8087'
     widget.iobrokerStates = 'Haustür | hm-rpc.0.00000000.1.STATE\nWohnzimmer Licht | hm-rpc.0.00000000.1.LEVEL'
     widget.iobrokerRefreshSeconds = 15
+  } else if (type === 'clock') {
+    widget.title = 'Uhr'
+    widget.clockStyle = 'digital'
+    widget.clockShowDate = true
   }
   return widget
 }
@@ -445,6 +453,10 @@ export function normalizeSettings(value: unknown): DisplaySettings {
         iobrokerUrl: text(widget.iobrokerUrl).slice(0, 512),
         iobrokerStates: text(widget.iobrokerStates).slice(0, 4000),
         iobrokerRefreshSeconds: Math.max(5, Math.min(3600, Math.round(Number(widget.iobrokerRefreshSeconds) || 15))),
+      } : {}),
+      ...(type === 'clock' ? {
+        clockStyle: widget.clockStyle === 'analog' ? 'analog' : 'digital',
+        clockShowDate: widget.clockShowDate !== false,
       } : {}),
     }
   })

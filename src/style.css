@@ -268,6 +268,16 @@ button:disabled { cursor: not-allowed; opacity: 0.42; }
 .frame-container.is-slow .frame-status button { display: inline-flex; }
 .text-widget-content { width: 100%; height: 100%; max-width: 75ch; margin: 0; overflow: auto; padding: clamp(12px, 2.2vmin, 34px); color: var(--ink); font-size: clamp(0.9rem, 2.1vmin, 2.2rem); line-height: 1.2; overflow-wrap: anywhere; white-space: pre-wrap; scrollbar-width: thin; }
 .image-widget-content { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: contain; }
+.clock-widget-container { width: 100%; height: 100%; min-height: 0; display: grid; place-items: center; gap: clamp(8px, 1.5vmin, 18px); padding: clamp(14px, 3vmin, 38px); color: var(--ink); background: radial-gradient(circle at 50% 42%, rgba(201, 242, 105, .1), transparent 62%); }
+.clock-widget-digital { align-content: center; }
+.clock-widget-time { color: var(--acid); font-size: clamp(3.2rem, 11vmin, 11rem); font-variant-numeric: tabular-nums; font-weight: 650; letter-spacing: -.07em; line-height: .9; text-shadow: 0 0 30px rgba(201, 242, 105, .13); }
+.clock-widget-date { color: var(--muted); font-size: clamp(.85rem, 2.1vmin, 1.7rem); font-weight: 500; text-align: center; text-transform: capitalize; }
+.clock-widget-analog { grid-template-rows: minmax(0, 1fr) auto; }
+.analog-clock-face { position: relative; width: min(100%, 68vmin); height: min(100%, 68vmin); min-width: 110px; min-height: 110px; aspect-ratio: 1; border: clamp(3px, .65vmin, 8px) solid rgba(201, 242, 105, .84); border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.045) 0 59%, transparent 60%), var(--panel); box-shadow: inset 0 0 32px rgba(0,0,0,.36), 0 0 30px rgba(201, 242, 105, .08); }
+.analog-clock-number { position: absolute; color: var(--ink); font-size: clamp(.76rem, 2.1vmin, 1.65rem); font-weight: 700; line-height: 1; }
+.number-12 { top: 7%; left: 50%; transform: translateX(-50%); }.number-3 { top: 50%; right: 7%; transform: translateY(-50%); }.number-6 { bottom: 7%; left: 50%; transform: translateX(-50%); }.number-9 { top: 50%; left: 7%; transform: translateY(-50%); }
+.analog-clock-hand { position: absolute; bottom: 50%; left: calc(50% - 2px); width: 4px; transform-origin: 50% 100%; border-radius: 99px; background: var(--ink); will-change: transform; }
+.analog-clock-hour { width: 6px; height: 25%; left: calc(50% - 3px); background: var(--ink); }.analog-clock-minute { height: 36%; background: var(--acid); }.analog-clock-second { width: 2px; height: 41%; left: calc(50% - 1px); background: #f28c7a; }.analog-clock-pin { position: absolute; top: 50%; left: 50%; width: clamp(10px, 2vmin, 16px); height: clamp(10px, 2vmin, 16px); transform: translate(-50%, -50%); border-radius: 50%; background: var(--acid); border: 3px solid var(--panel); }
 .qr-widget-container { width: 100%; height: 100%; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; place-items: center; gap: clamp(6px, 1.2vmin, 14px); padding: clamp(10px, 2vmin, 28px); background: #121411; overflow: hidden; }
 .qr-code-canvas { display: block; max-width: 100%; max-height: 100%; aspect-ratio: 1; image-rendering: pixelated; }
 .qr-code-label { max-width: 100%; color: var(--ink); font-size: clamp(0.75rem, 1.4vmin, 1.2rem); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -294,7 +304,7 @@ button:disabled { cursor: not-allowed; opacity: 0.42; }
 .iobroker-state span, .iobroker-state strong { min-width: 0; overflow-wrap: anywhere; }
 .iobroker-state span { color: var(--muted); font-size: clamp(.72rem, 1.1vmin, .95rem); }
 .iobroker-state strong { color: var(--acid); font-size: clamp(.8rem, 1.35vmin, 1.12rem); text-align: right; }
-.rss-form-group, .dwd-form-group, .iobroker-form-group { display: grid; gap: 10px; }
+.rss-form-group, .dwd-form-group, .iobroker-form-group, .clock-form-group { display: grid; gap: 10px; }
 .calendar-widget { width: 100%; height: 100%; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); padding: clamp(10px, 2vmin, 24px); color: var(--ink); }
 .calendar-widget > strong { display: block; margin-bottom: clamp(6px, 1.3vmin, 14px); color: var(--acid); font-size: clamp(1rem, 2.2vmin, 1.8rem); font-weight: 400; }
 .calendar-weekdays, .calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }

@@ -18,6 +18,7 @@ const typeLabels: Record<WidgetType, string> = {
   rss: 'NEWS',
   dwd: 'DWD',
   iobroker: 'SMART HOME',
+  clock: 'UHR',
 }
 
 export interface RadioStationPreset {
@@ -499,6 +500,21 @@ function ioBrokerContent(widget: DashboardWidget, editorPreview = false) {
   return `<div class="iobroker-widget-container" data-iobroker-widget data-widget-id="${escapeHtml(widget.id)}" data-refresh-seconds="${widget.iobrokerRefreshSeconds || 15}"><div class="widget-loading-status"><span class="loading-spinner" aria-hidden="true"></span> Smart-Home-Status wird geladen …</div></div>`
 }
 
+function clockContent(widget: DashboardWidget) {
+  const style = widget.clockStyle === 'analog' ? 'analog' : 'digital'
+  const showDate = widget.clockShowDate !== false
+  const date = new Date()
+  const time = date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', hour12: false })
+  const formattedDate = date.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+  const dateMarkup = showDate ? `<time class="clock-widget-date" data-clock-date>${escapeHtml(formattedDate)}</time>` : ''
+
+  if (style === 'analog') {
+    return `<div class="clock-widget-container clock-widget-analog" data-clock-widget data-clock-style="analog"><div class="analog-clock-face" role="img" aria-label="${escapeHtml(time)}"><span class="analog-clock-number number-12">12</span><span class="analog-clock-number number-3">3</span><span class="analog-clock-number number-6">6</span><span class="analog-clock-number number-9">9</span><span class="analog-clock-hand analog-clock-hour" data-clock-hour></span><span class="analog-clock-hand analog-clock-minute" data-clock-minute></span><span class="analog-clock-hand analog-clock-second" data-clock-second></span><span class="analog-clock-pin"></span></div>${dateMarkup}</div>`
+  }
+
+  return `<div class="clock-widget-container clock-widget-digital" data-clock-widget data-clock-style="digital"><time class="clock-widget-time" data-clock-time>${escapeHtml(time)}</time>${dateMarkup}</div>`
+}
+
 export function renderWidgetContent(widget: DashboardWidget, editorPreview = false) {
   if (widget.type === 'calendar') return isBuiltInCalendar(widget.type, widget.url) ? calendarMarkup() : calendarFeedContent(widget)
   if (widget.type === 'text') return `<p class="text-widget-content">${escapeHtml(widget.url || 'Deinen Text hier eintragen')}</p>`
@@ -517,6 +533,7 @@ export function renderWidgetContent(widget: DashboardWidget, editorPreview = fal
   if (widget.type === 'rss') return rssContent(widget, editorPreview)
   if (widget.type === 'dwd') return dwdContent(widget, editorPreview)
   if (widget.type === 'iobroker') return ioBrokerContent(widget, editorPreview)
+  if (widget.type === 'clock') return clockContent(widget)
   return frameContent(widget)
 }
 
@@ -618,6 +635,7 @@ function editorMarkup(widget: DashboardWidget, index: number) {
             <option value="rss" ${widget.type === 'rss' ? 'selected' : ''}>Nachrichten-Ticker (RSS)</option>
             <option value="dwd" ${widget.type === 'dwd' ? 'selected' : ''}>DWD-Wetterwarnungen</option>
             <option value="iobroker" ${widget.type === 'iobroker' ? 'selected' : ''}>Smart Home (ioBroker)</option>
+            <option value="clock" ${widget.type === 'clock' ? 'selected' : ''}>Große Uhr</option>
           </select></label>
           <label for="${controlId}-title">Titel<input id="${controlId}-title" data-field="title" value="${escapeHtml(widget.title)}" maxlength="30" /></label>
           <label class="content-field checkbox-label" for="${controlId}-show-title"><input type="checkbox" id="${controlId}-show-title" data-field="showTitle" ${widget.showTitle ? 'checked' : ''} /><span>Titel in der Anzeige anzeigen</span></label>
@@ -750,6 +768,17 @@ function editorMarkup(widget: DashboardWidget, index: number) {
             <label for="${controlId}-iobroker-refresh">Aktualisierung <input id="${controlId}-iobroker-refresh" data-field="iobrokerRefreshSeconds" type="number" min="5" max="3600" value="${widget.iobrokerRefreshSeconds || 15}" /> <small>Sekunden</small></label>
           </div>
           <p class="editor-field-hint">💡 Benötigt den ioBroker-Adapter „Simple API“ (standardmäßig Port 8087) im lokalen Netzwerk. HomePiBoard liest nur die hier eingetragenen Datenpunkte.</p>
+          ` : widget.type === 'clock' ? `
+          <div class="clock-form-group">
+            <label for="${controlId}-clock-style">Darstellung
+              <select id="${controlId}-clock-style" data-field="clockStyle">
+                <option value="digital" ${widget.clockStyle !== 'analog' ? 'selected' : ''}>Digital</option>
+                <option value="analog" ${widget.clockStyle === 'analog' ? 'selected' : ''}>Analog</option>
+              </select>
+            </label>
+            <label class="content-field checkbox-label" for="${controlId}-clock-date"><input type="checkbox" id="${controlId}-clock-date" data-field="clockShowDate" ${widget.clockShowDate !== false ? 'checked' : ''} /><span>Datum anzeigen</span></label>
+          </div>
+          <p class="editor-field-hint">💡 Die Uhr übernimmt automatisch die Uhrzeit des Displays und aktualisiert sich jede Sekunde.</p>
           ` : `
           ${(widget.type === 'image' || widget.type === 'slideshow') ? `<div class="content-field upload-field"><label class="upload-zone" for="${controlId}-upload"><input type="file" id="${controlId}-upload" data-action="upload" accept="${widget.type === 'slideshow' ? 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml,video/mp4,video/x-m4v,video/webm,video/ogg,.m4v,.ogv,.ogg' : 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml'}" ${widget.type === 'slideshow' ? 'multiple' : ''} style="display: none;" /><span class="upload-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>${widget.type === 'slideshow' ? 'Bilder &amp; Videos hochladen (max. 10 Medien; Bilder 5 MB, Videos 100 MB)' : 'Bild hochladen (max. 5 MB)'}</span></span><span class="upload-status" data-upload-status aria-live="polite"></span></label></div>` : ''}
           ${widget.type === 'image' && widget.url ? `
@@ -902,6 +931,40 @@ export function bindIoBrokerWidgets(root: ParentNode = document) {
     }
     void load()
     window.setInterval(() => void load(), Math.max(5, Number(container.dataset.refreshSeconds) || 15) * 1000)
+  })
+}
+
+export function bindClockWidgets(root: ParentNode = document) {
+  root.querySelectorAll<HTMLElement>('[data-clock-widget]').forEach((container) => {
+    if (container.dataset.clockBound === 'true') return
+    container.dataset.clockBound = 'true'
+    const style = container.dataset.clockStyle || 'digital'
+    const timeElement = container.querySelector<HTMLElement>('[data-clock-time]')
+    const dateElement = container.querySelector<HTMLElement>('[data-clock-date]')
+    const hourHand = container.querySelector<HTMLElement>('[data-clock-hour]')
+    const minuteHand = container.querySelector<HTMLElement>('[data-clock-minute]')
+    const secondHand = container.querySelector<HTMLElement>('[data-clock-second]')
+
+    const update = () => {
+      const now = new Date()
+      if (style === 'digital' && timeElement) {
+        timeElement.textContent = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', hour12: false })
+      }
+      if (dateElement) {
+        dateElement.textContent = now.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+      }
+      if (style === 'analog') {
+        const seconds = now.getSeconds() + now.getMilliseconds() / 1000
+        const minutes = now.getMinutes() + seconds / 60
+        const hours = (now.getHours() % 12) + minutes / 60
+        if (hourHand) hourHand.style.transform = `rotate(${hours * 30}deg)`
+        if (minuteHand) minuteHand.style.transform = `rotate(${minutes * 6}deg)`
+        if (secondHand) secondHand.style.transform = `rotate(${seconds * 6}deg)`
+      }
+    }
+
+    update()
+    window.setInterval(update, 1000)
   })
 }
 
