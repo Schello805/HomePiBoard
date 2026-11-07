@@ -272,6 +272,8 @@ Viele Webseiten verbieten die Einbettung in fremde iframes. HomePiBoard zeigt w√
 
 **Frontend**
 <img width="1502" height="786" alt="Frontend" src="https://github.com/user-attachments/assets/b61cdfab-534f-4cef-b68d-07b04ac0e77c" />
+____
+<img width="1633" height="783" alt="Dashboard" src="https://github.com/user-attachments/assets/fff70242-add7-4511-a9c9-b5c2e3af8c6e" />
 
 
 **Edit Mode**
