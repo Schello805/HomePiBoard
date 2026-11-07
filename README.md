@@ -280,6 +280,6 @@ ____
 <img width="1506" height="799" alt="Edit" src="https://github.com/user-attachments/assets/5bce6f55-f73d-4aa6-9f69-47df8dac3b24" />
 
 **Settings**
-<img width="1323" height="724" alt="Settings" src="https://github.com/user-attachments/assets/fcf95f64-e2ee-4182-b19c-e8f36903c981" />
-
+<img width="598" height="272" alt="Bildschirmfoto 2026-11-07 um 08 51 56" src="https://github.com/user-attachments/assets/f292b0c9-6ff7-4ade-8503-01e2b8fa6c5c" />
+<img width="1602" height="766" alt="Bildschirmfoto 2026-11-07 um 08 51 25" src="https://github.com/user-attachments/assets/817592d7-e8fe-4740-8c2f-be246c9eda6f" />
 <img width="1484" height="774" alt="save" src="https://github.com/user-attachments/assets/20bcb910-8c93-48ac-8468-5b95da20142f" />
